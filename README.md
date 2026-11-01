@@ -34,7 +34,33 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
   Each transaction ID can only be used once.
 - **Withdraw:** the player enters an amount and a phone number. The amount is held right away.
   You send the money manually, then tap **Mark paid**. **Reject** refunds the player.
-- Admin commands: `/pending` lists every open request. `/id` shows your Telegram id.
+- You can approve from the **bot** or from the **web admin panel**. Whichever you click first counts.
+
+## Admin tools
+
+**In the bot** (only for ids in `ADMIN_IDS`; send `/help` to see them):
+
+| Command | What it does |
+|---|---|
+| `/stats` | Today's and all-time games, bets, house earnings, deposits, withdrawals |
+| `/pending` | All deposits/withdrawals waiting for you, with buttons |
+| `/user 123456` or `/user @name` | A player's balance, totals and last transactions |
+| `/addbalance @name 50 welcome bonus` | Add balance. Use `-50` to subtract. The player is notified. |
+| `/broadcast Your message` | Send a message to every player |
+| `/pause` / `/resume` | Stop/allow new games. Unstarted rounds are refunded; running games finish. |
+| `/admin` | Opens the admin panel inside Telegram |
+
+**Web admin panel**, in two places:
+- **Inside Telegram:** admins see a 🛠 **Admin** tab at the bottom of the Mini App, or can send `/admin`.
+- **In any browser:** go to `https://your-app-url/admin` and log in with `ADMIN_PASSWORD` from `.env`.
+
+The panel has:
+- **Overview:** earnings, deposits, withdrawals, games, active players, total player balances,
+  live rooms, and pause/resume
+- **Requests:** pending deposits and withdrawals with Approve/Reject, plus a filterable log of every transaction
+- **Players:** search, balances and stats. Tap a player to see their history and add or subtract balance.
+- **Games:** every finished game with the pot, payout, house cut and winners
+- **Broadcast:** message all players
 
 ## Setup
 
@@ -47,7 +73,7 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
 ```bash
 cp .env.example .env
 ```
-Fill in `BOT_TOKEN`, `WEBAPP_URL` (your public HTTPS address), `ADMIN_IDS` and `PAYMENT_INFO`.
+Fill in `BOT_TOKEN`, `WEBAPP_URL` (your public HTTPS address), `ADMIN_IDS`, `ADMIN_PASSWORD` and `PAYMENT_INFO`.
 To find your id, start the bot and send `/id`, then put that number in `ADMIN_IDS` and restart.
 
 ### 3. Run locally
@@ -71,9 +97,9 @@ them from the bot, or with a quick SQL update. **Never enable DEV_MODE in produc
 ```bash
 npm test
 ```
-This runs a full simulated game with real signed Telegram auth (23 checks): auth forgery,
-deposits, duplicate references, entry fees, refunds, false BINGO, payouts, house cut
-and withdrawals.
+This runs a full simulated game with real signed Telegram auth (41 checks): auth forgery,
+deposits, duplicate references, entry fees, refunds, false BINGO, payouts, house cut,
+withdrawals and every admin feature.
 
 ## Deploying
 
@@ -93,9 +119,10 @@ server/
   bingo.js    secure number shuffle
   db.js       SQLite schema + atomic wallet operations
   auth.js     Telegram initData HMAC validation
-  bot.js      /start, menu button, admin approve/reject
+  bot.js      /start, menu button, admin commands + approve/reject buttons
+  admin.js    admin actions (shared by bot + web panel) and /api/admin routes
 shared/cards.js   deterministic card generation + win check (used by server and client)
-client/src/       React mini app (Lobby, Room, Card, Wallet)
+client/src/       React mini app (Lobby, Room, Card, Wallet, Admin)
 test/simulate.js  end-to-end test
 ```
 
@@ -110,5 +137,6 @@ test/simulate.js  end-to-end test
 - Always confirm the money arrived in your account **before** approving a deposit.
   The transaction ID alone proves nothing.
 - Back up `data/bingo.db` regularly.
+- Use a long, unique `ADMIN_PASSWORD`. Anyone who has it can approve deposits and change balances.
 - Ideas for next steps: auto-verify Telebirr/Chapa payments through their API,
-  an admin dashboard, referral bonuses, Amharic translation.
+  referral bonuses, Amharic translation.

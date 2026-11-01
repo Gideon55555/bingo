@@ -3,17 +3,19 @@ import { api, socket, tg, withEndsAt } from './api.js';
 import Lobby from './Lobby.jsx';
 import Room from './Room.jsx';
 import Wallet from './Wallet.jsx';
+import Admin from './Admin.jsx';
 
 export default function App() {
   const [cfg, setCfg] = useState(null);
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
   const [rooms, setRooms] = useState([]);
-  const [tab, setTab] = useState('play');
+  const [tab, setTab] = useState(new URLSearchParams(location.search).get('admin') ? 'admin' : 'play');
   const [stake, setStake] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    socket.connect();
     Promise.all([api.config(), api.me()])
       .then(([c, m]) => {
         setCfg(c);
@@ -69,6 +71,8 @@ export default function App() {
           <Room stake={stake} cfg={cfg} user={user} balance={balance} onExit={() => setStake(null)} />
         ) : tab === 'play' ? (
           <Lobby rooms={rooms} cfg={cfg} onEnter={setStake} />
+        ) : tab === 'admin' && user.isAdmin ? (
+          <Admin cfg={cfg} />
         ) : (
           <Wallet cfg={cfg} balance={balance} />
         )}
@@ -78,6 +82,9 @@ export default function App() {
         <nav className="tabs">
           <button className={tab === 'play' ? 'active' : ''} onClick={() => setTab('play')}>🎮 Play</button>
           <button className={tab === 'wallet' ? 'active' : ''} onClick={() => setTab('wallet')}>💳 Wallet</button>
+          {user.isAdmin && (
+            <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>🛠 Admin</button>
+          )}
         </nav>
       )}
     </div>

@@ -10,7 +10,8 @@ import { findWin, shuffledBalls } from './bingo.js';
  *   finished  -> results shown for resultShowSec, then back to waiting
  */
 export class Room {
-  constructor(stake, io, onBalanceChange) {
+  constructor(stake, io, onBalanceChange, manager) {
+    this.manager = manager;
     this.stake = stake;
     this.io = io;
     this.onBalanceChange = onBalanceChange;
@@ -43,6 +44,7 @@ export class Room {
     return {
       stake: this.stake,
       state: this.state,
+      paused: this.manager?.paused || false,
       players: this.players.size,
       prize: this.prize,
       // Send time *remaining* rather than a timestamp so client clock skew doesn't matter
@@ -80,6 +82,7 @@ export class Room {
   pick(user, cardId) {
     const uid = String(user.id);
     cardId = Number(cardId);
+    if (this.manager?.paused) throw new Error('Games are paused for maintenance. Please try again later.');
     if (!['waiting', 'countdown'].includes(this.state)) throw new Error('Game already started');
     if (!Number.isInteger(cardId) || cardId < 1 || cardId > config.cardCount) throw new Error('Invalid card');
     const owner = this.cardOwners.get(cardId);
@@ -134,6 +137,19 @@ export class Room {
     }
     this.finish([uid]);
     return { valid: true };
+  }
+
+  /** Cancel a round that hasn't started yet and refund everyone. Returns refunded count. */
+  cancelAndRefund(reason = 'cancelled') {
+    if (!['waiting', 'countdown'].includes(this.state)) return 0;
+    const n = this.players.size;
+    for (const uid of this.players.keys()) {
+      credit(uid, this.stake, 'refund', `Bingo ${this.stake} ${reason}`);
+      this.onBalanceChange(uid);
+    }
+    this.reset();
+    this.broadcast();
+    return n;
   }
 
   // ---------- game flow ----------
@@ -217,7 +233,32 @@ export class Room {
 
 export class GameManager {
   constructor(io, onBalanceChange) {
-    this.rooms = new Map(config.stakes.map((s) => [s, new Room(s, io, onBalanceChange)]));
+    this.io = io;
+    this.paused = false;
+    this.rooms = new Map(config.stakes.map((s) => [s, new Room(s, io, onBalanceChange, this)]));
+  }
+
+  /** Stop new games. Rounds not yet started are refunded; running games finish normally. */
+  pause() {
+    this.paused = true;
+    let refunded = 0;
+    for (const r of this.rooms.values()) refunded += r.cancelAndRefund('paused by admin');
+    this.io.emit('lobby:all', this.lobby());
+    return { refunded };
+  }
+
+  resume() {
+    this.paused = false;
+    this.io.emit('lobby:all', this.lobby());
+  }
+
+  /** Live snapshot for the admin panel */
+  adminSnapshot() {
+    return [...this.rooms.values()].map((r) => ({
+      ...r.summary(),
+      called: r.called.length,
+      cards: [...r.players.entries()].map(([userId, p]) => ({ userId, name: p.name, card: p.card, disqualified: p.disqualified })),
+    }));
   }
   get(stake) {
     const r = this.rooms.get(Number(stake));

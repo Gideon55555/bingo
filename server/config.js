@@ -6,8 +6,10 @@ const list = (v) => (v || '').split(',').map((s) => s.trim()).filter(Boolean);
 export const config = {
   port: num(process.env.PORT, 3000),
   botToken: process.env.BOT_TOKEN || '',
-  webAppUrl: process.env.WEBAPP_URL || '',
+  webAppUrl: (process.env.WEBAPP_URL || '').replace(/\/+$/, ''),
   adminIds: list(process.env.ADMIN_IDS),
+  // Password for the browser admin panel at /admin (min 8 chars; empty = browser login disabled)
+  adminPassword: (process.env.ADMIN_PASSWORD || '').length >= 8 ? process.env.ADMIN_PASSWORD : '',
   dbPath: process.env.DB_PATH || './data/bingo.db',
 
   // Game

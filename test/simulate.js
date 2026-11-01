@@ -17,6 +17,7 @@ const env = {
   ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: DB,
   COUNTDOWN_SEC: '2', CALL_INTERVAL_MS: '40', RESULT_SHOW_SEC: '1', HOUSE_CUT: '0.2',
   MIN_DEPOSIT: '10', MIN_WITHDRAW: '50', DEV_MODE: 'false',
+  ADMIN_IDS: '1001', ADMIN_PASSWORD: 'super-secret-pw',
 };
 Object.assign(process.env, env); // so the imported db module uses the same DB
 
@@ -32,9 +33,9 @@ function initDataFor(user, token = TOKEN) {
   return params.toString();
 }
 
-const call = async (method, p, init, body) => {
+const call = async (method, p, init, body, extra = {}) => {
   const r = await fetch(URL + p, {
-    method, headers: { 'Content-Type': 'application/json', Authorization: `tma ${init}` },
+    method, headers: { 'Content-Type': 'application/json', Authorization: `tma ${init}`, ...extra },
     body: body && JSON.stringify(body),
   });
   return { status: r.status, body: await r.json() };
@@ -140,6 +141,42 @@ try {
   ok('cannot withdraw more than balance');
   rejectWithdrawal(w.body.id);
   assert.equal(getUser(1002).balance, 106); ok('rejected withdrawal refunds');
+
+  console.log('Admin');
+  const PW = { 'x-admin-key': 'super-secret-pw' };
+  const A = (method, p, body) => call(method, '/api/admin' + p, '', body, PW);
+  assert.equal((await call('GET', '/api/admin/stats', '')).status, 401); ok('admin API without auth → 401');
+  assert.equal((await call('GET', '/api/admin/stats', '', null, { 'x-admin-key': 'wrong-password' })).status, 401); ok('wrong admin password → 401');
+  assert.equal((await call('GET', '/api/admin/stats', init.B)).status, 401); ok('non-admin Telegram user → 401');
+  assert.equal((await call('GET', '/api/admin/stats', init.A)).status, 200); ok('admin Telegram user (in ADMIN_IDS) → 200');
+  assert.equal((await call('GET', '/api/me', init.A)).body.user.isAdmin, true); ok('/api/me reports isAdmin');
+  const st = (await A('GET', '/stats')).body;
+  assert.equal(st.allTime.games, 1); assert.equal(st.allTime.houseEarnings, 4); assert.equal(st.allTime.deposits, 300);
+  assert.equal(st.rooms.length, 4); ok('stats: games, house earnings, deposits, rooms');
+
+  const dep = await call('POST', '/api/deposit', init.D, { amount: 50, reference: 'WEBDEP777' });
+  assert.equal((await A('GET', '/pending')).body.items.length, 1); ok('pending list shows new deposit');
+  assert.equal((await A('POST', '/decide', { kind: 'deposit', id: dep.body.id, approve: true })).status, 200);
+  assert.equal(getUser(1004).balance, 50); ok('web approve credits player');
+  assert.equal((await A('POST', '/decide', { kind: 'deposit', id: dep.body.id, approve: false })).status, 400); ok('cannot decide twice');
+
+  assert.equal((await A('POST', '/adjust', { userId: '1004', amount: 25, note: 'bonus' })).body.balance, 75); ok('add balance');
+  assert.equal((await A('POST', '/adjust', { userId: '1004', amount: -100 })).status, 400); ok('cannot subtract below zero');
+  assert.equal((await A('GET', '/transactions?type=adjust')).body.items.length, 1); ok('transaction filter');
+  assert.equal((await A('GET', '/users?search=Bethel')).body.total, 1); ok('player search');
+  const detail = (await A('GET', '/users/1002')).body;
+  assert.equal(detail.user.games_won, 1); assert.ok(detail.history.length > 0); ok('player detail with history');
+  assert.equal((await A('GET', '/games')).body.items[0].winners[0].first_name, 'Bethel'); ok('games list with winner names');
+
+  await emit(sock.D, 'room:enter', { stake: 20 });
+  await emit(sock.D, 'card:pick', { stake: 20, card: 4 });
+  assert.equal(getUser(1004).balance, 55);
+  assert.equal((await A('POST', '/pause')).body.refunded, 1);
+  assert.equal(getUser(1004).balance, 75); ok('pause refunds waiting players');
+  assert.equal((await emit(sock.D, 'card:pick', { stake: 20, card: 4 })).ok, false); ok('cannot join while paused');
+  await A('POST', '/resume');
+  assert.equal((await emit(sock.D, 'card:pick', { stake: 20, card: 4 })).ok, true); ok('resume reopens rooms');
+  await emit(sock.D, 'card:unpick', { stake: 20 });
 
   console.log(`\nAll ${passed} checks passed ✅`);
   for (const s of Object.values(sock)) s.close();

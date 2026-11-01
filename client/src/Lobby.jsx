@@ -33,6 +33,7 @@ export default function Lobby({ rooms, cfg, onEnter }) {
         Pick a card, wait for the numbers, and press BINGO when you complete a row, column,
         diagonal, or the four corners. The winner takes the prize.
       </p>
+      {rooms[0]?.paused && <div className="banner">⏸ Games are paused for maintenance. Please check back soon.</div>}
       <div className="room-list">
         {rooms.map((r) => <RoomCard key={r.stake} r={r} cfg={cfg} onEnter={onEnter} />)}
       </div>

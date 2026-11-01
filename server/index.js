@@ -9,6 +9,7 @@ import { authenticate, requireAuth } from './auth.js';
 import { getUser, history, createDeposit, createWithdrawal } from './db.js';
 import { GameManager } from './game.js';
 import { startBot, notifyAdmins } from './bot.js';
+import { createAdmin, isAdminId } from './admin.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -24,9 +25,11 @@ function onBalanceChange(userId) {
 }
 
 const games = new GameManager(io, onBalanceChange);
+const admin = createAdmin({ games, onBalanceChange });
 
 // ---------------- REST API ----------------
 app.use(express.json());
+app.use('/api/admin', admin.router);
 
 app.get('/api/config', (_req, res) =>
   res.json({
@@ -41,7 +44,7 @@ app.get('/api/config', (_req, res) =>
     devMode: config.devMode,
   }));
 
-app.get('/api/me', requireAuth, (req, res) => res.json({ user: req.user }));
+app.get('/api/me', requireAuth, (req, res) => res.json({ user: { ...req.user, isAdmin: isAdminId(req.user.id) } }));
 
 app.get('/api/history', requireAuth, (req, res) => res.json({ items: history(req.user.id) }));
 
@@ -134,5 +137,5 @@ io.on('connection', (socket) => {
 
 server.listen(config.port, () => {
   console.log(`Bingo server on http://localhost:${config.port}`);
-  startBot({ onBalanceChange });
+  startBot({ actions: admin.actions });
 });

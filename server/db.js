@@ -153,3 +153,86 @@ export const rejectWithdrawal = db.transaction((id) => {
 });
 
 export const recordGame = (g) => stmts.insertGame.run({ ...g, winners: JSON.stringify(g.winners) });
+
+// ---------- Admin queries ----------
+const startOfToday = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return Math.floor(d.getTime() / 1000);
+};
+
+const scalar = (sql, ...args) => Object.values(db.prepare(sql).get(...args))[0] ?? 0;
+
+export function getStats() {
+  const today = startOfToday();
+  const block = (since) => ({
+    deposits: scalar("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='deposit' AND status='approved' AND created_at >= ?", since),
+    withdrawals: -scalar("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='withdraw' AND status='approved' AND created_at >= ?", since),
+    houseEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM games WHERE created_at >= ?', since),
+    games: scalar('SELECT COUNT(*) FROM games WHERE created_at >= ?', since),
+    totalBets: scalar('SELECT COALESCE(SUM(pot),0) FROM games WHERE created_at >= ?', since),
+    activePlayers: scalar("SELECT COUNT(DISTINCT user_id) FROM transactions WHERE type='bet' AND created_at >= ?", since),
+    newUsers: scalar('SELECT COUNT(*) FROM users WHERE created_at >= ?', since),
+  });
+  return {
+    today: block(today),
+    allTime: block(0),
+    users: scalar('SELECT COUNT(*) FROM users'),
+    playerBalances: scalar('SELECT COALESCE(SUM(balance),0) FROM users'),
+    pendingDeposits: db.prepare("SELECT COUNT(*) n, COALESCE(SUM(amount),0) total FROM transactions WHERE type='deposit' AND status='pending'").get(),
+    pendingWithdrawals: db.prepare("SELECT COUNT(*) n, COALESCE(-SUM(amount),0) total FROM transactions WHERE type='withdraw' AND status='pending'").get(),
+  };
+}
+
+/** Find a user by Telegram id or @username */
+export function findUser(q) {
+  q = String(q || '').trim().replace(/^@/, '');
+  if (!q) return null;
+  return db.prepare('SELECT * FROM users WHERE id = ? OR lower(username) = lower(?)').get(q, q) || null;
+}
+
+export function listUsers({ search = '', limit = 50, offset = 0 } = {}) {
+  const like = `%${search.replace(/^@/, '')}%`;
+  const where = search ? 'WHERE id LIKE @like OR username LIKE @like OR first_name LIKE @like' : '';
+  const rows = db.prepare(`
+    SELECT u.*,
+      (SELECT COALESCE(SUM(amount),0) FROM transactions WHERE user_id=u.id AND type='deposit' AND status='approved') AS deposited,
+      (SELECT COALESCE(-SUM(amount),0) FROM transactions WHERE user_id=u.id AND type='withdraw' AND status='approved') AS withdrawn,
+      (SELECT COUNT(*) FROM transactions WHERE user_id=u.id AND type='bet') AS games_played,
+      (SELECT COUNT(*) FROM transactions WHERE user_id=u.id AND type='win') AS games_won
+    FROM users u ${where} ORDER BY u.created_at DESC LIMIT @limit OFFSET @offset`).all({ like, limit, offset });
+  const total = db.prepare(`SELECT COUNT(*) n FROM users ${where}`).get({ like }).n;
+  return { rows, total };
+}
+
+export function listTransactions({ type = '', status = '', userId = '', limit = 100 } = {}) {
+  const conds = [];
+  if (type) conds.push('t.type = @type');
+  if (status) conds.push('t.status = @status');
+  if (userId) conds.push('t.user_id = @userId');
+  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+  return db.prepare(`
+    SELECT t.*, u.username, u.first_name FROM transactions t JOIN users u ON u.id = t.user_id
+    ${where} ORDER BY t.id DESC LIMIT @limit`).all({ type, status, userId: String(userId), limit });
+}
+
+export function listGames(limit = 50) {
+  return db.prepare('SELECT * FROM games ORDER BY id DESC LIMIT ?').all(limit).map((g) => {
+    const winners = JSON.parse(g.winners || '[]').map((w) => ({ ...w, ...(getUser(w.userId) || {}) }));
+    return { ...g, winners: winners.map(({ userId, card, username, first_name }) => ({ userId, card, username, first_name })) };
+  });
+}
+
+export const allUserIds = () => db.prepare('SELECT id FROM users').all().map((r) => r.id);
+
+/** Manual balance change by admin. Positive adds, negative subtracts (never below 0). */
+export const adjustBalance = db.transaction((userId, amount, note) => {
+  const u = getUser(userId);
+  if (!u) throw new Error('User not found');
+  amount = Math.trunc(Number(amount));
+  if (!amount) throw new Error('Amount must be a non-zero number');
+  if (u.balance + amount < 0) throw new Error(`Balance would go negative (current ${u.balance})`);
+  stmts.credit.run(amount, String(userId));
+  tx({ user_id: userId, type: 'adjust', amount, status: 'done', note: note || 'Admin adjustment' });
+  return getUser(userId);
+});

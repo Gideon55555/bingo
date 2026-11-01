@@ -26,7 +26,39 @@ export const api = {
   withdraw: (amount, phone) => request('POST', '/api/withdraw', { amount, phone }),
 };
 
-export const socket = io({ auth: { initData, devUser }, transports: ['websocket', 'polling'] });
+export const socket = io({ auth: { initData, devUser }, transports: ['websocket', 'polling'], autoConnect: false });
+export const inTelegram = !!initData;
+
+// ---------- Admin API ----------
+// In Telegram, admins are recognised by their Telegram id. In a normal browser, by ADMIN_PASSWORD.
+const KEY = 'bingo_admin_key';
+export const adminKey = {
+  get: () => { try { return sessionStorage.getItem(KEY) || ''; } catch { return ''; } },
+  set: (v) => { try { v ? sessionStorage.setItem(KEY, v) : sessionStorage.removeItem(KEY); } catch { /* ignore */ } },
+};
+async function adminRequest(method, url, body) {
+  const h = headers();
+  const k = adminKey.get();
+  if (k) h['x-admin-key'] = k;
+  const res = await fetch('/api/admin' + url, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { const e = new Error(data.error || `Request failed (${res.status})`); e.status = res.status; throw e; }
+  return data;
+}
+export const adminApi = {
+  stats: () => adminRequest('GET', '/stats'),
+  pending: () => adminRequest('GET', '/pending'),
+  users: (search = '', offset = 0) => adminRequest('GET', `/users?search=${encodeURIComponent(search)}&offset=${offset}`),
+  user: (id) => adminRequest('GET', `/users/${encodeURIComponent(id)}`),
+  transactions: (q = {}) => adminRequest('GET', `/transactions?${new URLSearchParams(q)}`),
+  games: () => adminRequest('GET', '/games'),
+  decide: (kind, id, approve) => adminRequest('POST', '/decide', { kind, id, approve }),
+  adjust: (userId, amount, note) => adminRequest('POST', '/adjust', { userId, amount, note }),
+  pause: () => adminRequest('POST', '/pause'),
+  resume: () => adminRequest('POST', '/resume'),
+  broadcast: (text) => adminRequest('POST', '/broadcast', { text }),
+  broadcastStatus: () => adminRequest('GET', '/broadcast'),
+};
 
 /** emit with ack → Promise; rejects with server error message */
 export const emit = (event, payload) =>
@@ -54,3 +86,10 @@ export const toast = (msg) => {
   if (tg?.showAlert && tg.initData) tg.showAlert(msg);
   else alert(msg);
 };
+
+/** Yes/no confirmation that works inside Telegram and in a browser */
+export const confirmBox = (msg) =>
+  new Promise((resolve) => {
+    if (tg?.showConfirm && tg.initData) tg.showConfirm(msg, resolve);
+    else resolve(window.confirm(msg));
+  });

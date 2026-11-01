@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, haptic, toast } from './api.js';
 
-const LABELS = { deposit: 'Deposit', withdraw: 'Withdrawal', bet: 'Game entry', win: 'Win', refund: 'Refund' };
+const LABELS = { deposit: 'Deposit', withdraw: 'Withdrawal', bet: 'Game entry', win: 'Win', refund: 'Refund', adjust: 'Bonus / adjustment' };
 
 export default function Wallet({ cfg, balance }) {
   const [mode, setMode] = useState('deposit');

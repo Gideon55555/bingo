@@ -1,17 +1,16 @@
 import { Bot, InlineKeyboard } from 'grammy';
 import { config } from './config.js';
-import {
-  getUser, pendingTx, approveDeposit, rejectDeposit, markWithdrawalPaid, rejectWithdrawal, getTx,
-} from './db.js';
+import { getUser, getTx } from './db.js';
 
 export let bot = null;
 const isAdmin = (id) => config.adminIds.includes(String(id));
-const who = (t) => (t.username ? `@${t.username}` : t.first_name || t.user_id);
+const who = (t) => (t.username ? `@${t.username}` : t.first_name || t.user_id || t.id);
 const money = (n) => `${n} ${config.currency}`;
+const fmtDate = (s) => new Date(s * 1000).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
 
 function txText(t) {
   if (t.type === 'deposit') {
-    return `💰 Deposit #${t.id}\nUser: ${who(t)} (id ${t.user_id})\nAmount: ${money(t.amount)}\nRef: ${t.reference}`;
+    return `💰 Deposit #${t.id}\nUser: ${who(t)} (id ${t.user_id})\nAmount: ${money(t.amount)}\nRef: ${t.reference}\n\n⚠️ Check that the money arrived before approving.`;
   }
   return `🏧 Withdrawal #${t.id}\nUser: ${who(t)} (id ${t.user_id})\nAmount: ${money(-t.amount)}\nSend to: ${t.phone}`;
 }
@@ -22,28 +21,38 @@ function txKeyboard(t) {
     : new InlineKeyboard().text('✅ Mark paid', `wd:ok:${t.id}`).text('❌ Reject & refund', `wd:no:${t.id}`);
 }
 
-/** Notify all admins about a new pending transaction. */
-export async function notifyAdmins(txId) {
-  if (!bot) return;
-  const raw = getTx(txId);
-  const t = { ...raw, ...pickUser(raw.user_id) };
-  for (const admin of config.adminIds) {
-    await bot.api.sendMessage(admin, txText(t), { reply_markup: txKeyboard(t) }).catch((e) =>
-      console.error('notify admin failed', e.message));
+/** Send a message; returns true on success. Safe to call when bot is disabled. */
+export async function sendMessage(chatId, text, extra) {
+  if (!bot) return false;
+  try {
+    await bot.api.sendMessage(chatId, text, extra);
+    return true;
+  } catch {
+    return false;
   }
 }
 
-export async function notifyUser(userId, text) {
-  if (!bot) return;
-  await bot.api.sendMessage(userId, text).catch(() => {});
+export const notifyUser = (userId, text) => sendMessage(userId, text);
+
+/** Notify all admins about a new pending transaction. */
+export async function notifyAdmins(txId) {
+  const raw = getTx(txId);
+  const u = getUser(raw.user_id) || {};
+  const t = { ...raw, username: u.username, first_name: u.first_name };
+  for (const admin of config.adminIds) await sendMessage(admin, txText(t), { reply_markup: txKeyboard(t) });
 }
 
-function pickUser(id) {
-  const u = getUser(id) || {};
-  return { username: u.username, first_name: u.first_name };
-}
+const ADMIN_HELP = `🛠 Admin commands
+/stats — today's and all-time numbers
+/pending — deposits & withdrawals waiting for you
+/user <id or @username> — player balance & history
+/addbalance <id or @username> <amount> [note] — add (or subtract with a minus) balance
+/broadcast <message> — message every player
+/pause — stop new games (unstarted rounds are refunded)
+/resume — allow games again
+/admin — open the admin panel`;
 
-export function startBot({ onBalanceChange }) {
+export function startBot({ actions }) {
   if (!config.botToken || process.env.BOT_DISABLED === 'true') {
     console.warn('Bot disabled (no BOT_TOKEN or BOT_DISABLED=true)');
     return;
@@ -51,7 +60,17 @@ export function startBot({ onBalanceChange }) {
   bot = new Bot(config.botToken);
 
   const playKeyboard = () => new InlineKeyboard().webApp('🎱 Play Bingo', config.webAppUrl);
+  const adminOnly = (fn) => async (ctx) => {
+    if (!isAdmin(ctx.from?.id)) return ctx.reply('This command is for admins only.');
+    try {
+      await fn(ctx);
+    } catch (e) {
+      await ctx.reply(`⚠️ ${e.message}`);
+    }
+  };
+  const args = (ctx) => (ctx.match || '').trim();
 
+  // ---------- Player commands ----------
   bot.command('start', (ctx) =>
     ctx.reply('Welcome to Bingo! Pick a card, wait for the numbers, and shout BINGO first to win the pot.', {
       reply_markup: playKeyboard(),
@@ -62,41 +81,92 @@ export function startBot({ onBalanceChange }) {
     return ctx.reply(`Your balance: ${money(u ? u.balance : 0)}`, { reply_markup: playKeyboard() });
   });
 
-  bot.command('pending', async (ctx) => {
-    if (!isAdmin(ctx.from.id)) return;
-    const list = pendingTx();
-    if (!list.length) return ctx.reply('No pending requests 🎉');
-    for (const t of list) await ctx.reply(txText(t), { reply_markup: txKeyboard(t) });
-  });
-
   bot.command('id', (ctx) => ctx.reply(`Your Telegram id: ${ctx.from.id}`));
 
+  bot.command('help', (ctx) =>
+    ctx.reply(isAdmin(ctx.from.id) ? ADMIN_HELP : '/start — play\n/balance — your balance\n/id — your Telegram id'));
+
+  // ---------- Admin commands ----------
+  bot.command('admin', adminOnly((ctx) =>
+    ctx.reply('Admin panel:', {
+      reply_markup: new InlineKeyboard().webApp('🛠 Open admin panel', `${config.webAppUrl}/?admin=1`),
+    })));
+
+  bot.command('stats', adminOnly((ctx) => {
+    const s = actions.stats();
+    const b = (x) =>
+      `Games: ${x.games}  ·  Bets: ${money(x.totalBets)}\n🏦 House earned: ${money(x.houseEarnings)}\n` +
+      `💰 Deposits: ${money(x.deposits)}  ·  🏧 Withdrawals: ${money(x.withdrawals)}\n` +
+      `👥 Active players: ${x.activePlayers}  ·  New users: ${x.newUsers}`;
+    const rooms = s.rooms.map((r) => `${r.stake}: ${r.state}, ${r.players} players`).join('\n');
+    return ctx.reply(
+      `📊 TODAY\n${b(s.today)}\n\n📈 ALL TIME\n${b(s.allTime)}\n\n` +
+      `Users: ${s.users}  ·  Player balances held: ${money(s.playerBalances)}\n` +
+      `⏳ Pending: ${s.pendingDeposits.n} deposits (${money(s.pendingDeposits.total)}), ` +
+      `${s.pendingWithdrawals.n} withdrawals (${money(s.pendingWithdrawals.total)})\n\n` +
+      `🎱 Rooms ${s.paused ? '(⏸ PAUSED)' : ''}\n${rooms}`,
+    );
+  }));
+
+  bot.command('pending', adminOnly(async (ctx) => {
+    const list = actions.pending();
+    if (!list.length) return ctx.reply('No pending requests 🎉');
+    for (const t of list) await ctx.reply(txText(t), { reply_markup: txKeyboard(t) });
+  }));
+
+  bot.command('user', adminOnly((ctx) => {
+    const q = args(ctx);
+    if (!q) return ctx.reply('Usage: /user <id or @username>');
+    const { user: u, history } = actions.userDetail(q);
+    const lines = history.slice(0, 10).map((t) =>
+      `${fmtDate(t.created_at)}  ${t.type}  ${t.amount > 0 ? '+' : ''}${t.amount}${t.status !== 'done' ? ` (${t.status})` : ''}`);
+    return ctx.reply(
+      `👤 ${u.first_name || ''} ${u.username ? `@${u.username}` : ''}\nid: ${u.id}\n` +
+      `Balance: ${money(u.balance)}\nDeposited: ${money(u.deposited ?? 0)}  ·  Withdrawn: ${money(u.withdrawn ?? 0)}\n` +
+      `Games: ${u.games_played ?? 0}  ·  Wins: ${u.games_won ?? 0}\nJoined: ${fmtDate(u.created_at)}\n\n` +
+      `Last transactions:\n${lines.join('\n') || '—'}`,
+    );
+  }));
+
+  bot.command('addbalance', adminOnly(async (ctx) => {
+    const [q, amount, ...note] = args(ctx).split(/\s+/);
+    if (!q || !amount || Number.isNaN(Number(amount))) {
+      return ctx.reply('Usage: /addbalance <id or @username> <amount> [note]\nExample: /addbalance @abebe 50 welcome bonus\nUse a negative amount to subtract.');
+    }
+    const u = await actions.adjust(q, amount, note.join(' '), ctx.from.first_name);
+    return ctx.reply(`✅ Done. ${who(u)} now has ${money(u.balance)}.`);
+  }));
+
+  bot.command('broadcast', adminOnly(async (ctx) => {
+    const text = args(ctx);
+    if (!text) return ctx.reply('Usage: /broadcast <message>');
+    const job = actions.broadcast(text);
+    return ctx.reply(`📣 Sending to ${job.total} players… (about ${Math.ceil(job.total / 20)}s)`);
+  }));
+
+  bot.command('pause', adminOnly((ctx) => {
+    const { refunded } = actions.pause();
+    return ctx.reply(`⏸ Games paused. ${refunded} waiting player(s) refunded. Running games will finish normally.\nUse /resume to reopen.`);
+  }));
+
+  bot.command('resume', adminOnly((ctx) => {
+    actions.resume();
+    return ctx.reply('▶️ Games resumed.');
+  }));
+
+  // ---------- Approve / reject buttons ----------
   bot.callbackQuery(/^(dep|wd):(ok|no):(\d+)$/, async (ctx) => {
     if (!isAdmin(ctx.from.id)) return ctx.answerCallbackQuery({ text: 'Not allowed' });
     const [, kind, action, idStr] = ctx.match;
-    const id = Number(idStr);
-    let t;
-    let userMsg;
-    if (kind === 'dep' && action === 'ok') {
-      t = approveDeposit(id);
-      userMsg = t && `✅ Your deposit of ${money(t.amount)} was approved.`;
-    } else if (kind === 'dep') {
-      t = rejectDeposit(id);
-      userMsg = t && `❌ Your deposit of ${money(t.amount)} (ref ${t.reference}) was rejected. Contact support if this is a mistake.`;
-    } else if (action === 'ok') {
-      t = markWithdrawalPaid(id);
-      userMsg = t && `✅ Your withdrawal of ${money(-t.amount)} has been sent to ${t.phone}.`;
-    } else {
-      t = rejectWithdrawal(id);
-      userMsg = t && `❌ Your withdrawal of ${money(-t.amount)} was rejected and refunded to your balance.`;
+    try {
+      const t = await actions.decide(kind === 'dep' ? 'deposit' : 'withdraw', Number(idStr), action === 'ok', ctx.from.first_name);
+      const status = t.status === 'approved' ? '✅ APPROVED' : '❌ REJECTED';
+      await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n${status} by ${ctx.from.first_name}`);
+      return ctx.answerCallbackQuery({ text: status });
+    } catch (e) {
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
+      return ctx.answerCallbackQuery({ text: e.message });
     }
-    if (!t) return ctx.answerCallbackQuery({ text: 'Already handled' });
-
-    onBalanceChange(t.user_id);
-    await notifyUser(t.user_id, userMsg);
-    const status = t.status === 'approved' ? '✅ APPROVED' : '❌ REJECTED';
-    await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n${status} by ${ctx.from.first_name}`);
-    return ctx.answerCallbackQuery({ text: status });
   });
 
   bot.catch((err) => console.error('Bot error:', err.message));
@@ -104,6 +174,24 @@ export function startBot({ onBalanceChange }) {
   bot.start({
     onStart: async (me) => {
       console.log(`Bot @${me.username} started`);
+      await bot.api.setMyCommands([
+        { command: 'start', description: 'Play bingo' },
+        { command: 'balance', description: 'Your balance' },
+        { command: 'help', description: 'Help' },
+      ]).catch(() => {});
+      for (const admin of config.adminIds) {
+        await bot.api.setMyCommands([
+          { command: 'admin', description: 'Open admin panel' },
+          { command: 'stats', description: 'Stats' },
+          { command: 'pending', description: 'Pending requests' },
+          { command: 'user', description: 'Look up a player' },
+          { command: 'addbalance', description: 'Add/subtract balance' },
+          { command: 'broadcast', description: 'Message all players' },
+          { command: 'pause', description: 'Pause games' },
+          { command: 'resume', description: 'Resume games' },
+          { command: 'help', description: 'All commands' },
+        ], { scope: { type: 'chat', chat_id: Number(admin) } }).catch(() => {});
+      }
       if (config.webAppUrl) {
         await bot.api.setChatMenuButton({
           menu_button: { type: 'web_app', text: 'Play', web_app: { url: config.webAppUrl } },
