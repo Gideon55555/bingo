@@ -1,5 +1,5 @@
 import { config } from './config.js';
-import { debit, credit, getUser, recordGame } from './db.js';
+import { debit, credit, getUser, openRound, settleRound, refundRound } from './db.js';
 import { findWin, shuffledBalls } from './bingo.js';
 
 /**
@@ -30,6 +30,7 @@ export class Room {
     this.calledSet = new Set();
     this.countdownEndsAt = null;
     this.result = null;
+    this.roundId = null; // DB round, created when the first player pays
   }
 
   get pot() {
@@ -94,7 +95,8 @@ export class Room {
       this.cardOwners.delete(existing.card);
       existing.card = cardId;
     } else {
-      if (!debit(uid, this.stake, 'bet', `Bingo ${this.stake} entry`)) {
+      if (!this.roundId) this.roundId = openRound(this.stake);
+      if (!debit(uid, this.stake, 'bet', `Bingo ${this.stake} entry`, this.roundId)) {
         throw new Error('Insufficient balance. Please deposit first.');
       }
       this.players.set(uid, { card: cardId, name: user.first_name || user.username || 'Player', disqualified: false });
@@ -112,7 +114,7 @@ export class Room {
     if (!p) return;
     this.players.delete(uid);
     this.cardOwners.delete(p.card);
-    credit(uid, this.stake, 'refund', `Bingo ${this.stake} left before start`);
+    credit(uid, this.stake, 'refund', `Bingo ${this.stake} left before start`, this.roundId);
     this.onBalanceChange(uid);
     if (this.state === 'countdown' && this.players.size < config.minPlayers) {
       clearTimeout(this.timer);
@@ -143,9 +145,8 @@ export class Room {
   cancelAndRefund(reason = 'cancelled') {
     if (!['waiting', 'countdown'].includes(this.state)) return 0;
     const n = this.players.size;
-    for (const uid of this.players.keys()) {
-      credit(uid, this.stake, 'refund', `Bingo ${this.stake} ${reason}`);
-      this.onBalanceChange(uid);
+    if (this.roundId) {
+      for (const { userId } of refundRound(this.roundId, this.stake, reason, 'cancelled')) this.onBalanceChange(userId);
     }
     this.reset();
     this.broadcast();
@@ -203,23 +204,25 @@ export class Room {
     const prize = this.prize;
     const each = ids.length ? Math.floor(prize / ids.length) : 0;
 
-    for (const id of ids) {
-      credit(id, each, 'win', `Bingo ${this.stake} win`);
-      this.onBalanceChange(id);
-    }
     const winnersInfo = ids.map((id) => {
       const p = this.players.get(id);
       return { userId: id, name: p.name, card: p.card, line: findWin(p.card, this.calledSet) };
     });
-    recordGame({
-      stake: this.stake,
-      players: this.players.size,
-      pot,
-      payout: each * ids.length,
-      house: pot - each * ids.length,
-      winners: winnersInfo.map(({ userId, card }) => ({ userId, card })),
-      calls: this.called.length,
-    });
+    // Payouts + game record + closing the round happen in one DB transaction
+    settleRound(
+      this.roundId,
+      ids.map((id) => ({ userId: id, amount: each, note: `Bingo ${this.stake} win` })),
+      {
+        stake: this.stake,
+        players: this.players.size,
+        pot,
+        payout: each * ids.length,
+        house: pot - each * ids.length,
+        winners: winnersInfo.map(({ userId, card }) => ({ userId, card })),
+        calls: this.called.length,
+      },
+    );
+    for (const id of ids) this.onBalanceChange(id);
 
     this.state = 'finished';
     this.result = { winners: winnersInfo, amountEach: each, pot };
@@ -252,6 +255,14 @@ export class GameManager {
     this.io.emit('lobby:all', this.lobby());
   }
 
+  /** Stop all timers (used on shutdown; open rounds are then refunded from the DB). */
+  stopAll() {
+    for (const r of this.rooms.values()) {
+      clearTimeout(r.timer);
+      clearInterval(r.caller);
+    }
+  }
+
   /** Live snapshot for the admin panel */
   adminSnapshot() {
     return [...this.rooms.values()].map((r) => ({
@@ -270,4 +281,3 @@ export class GameManager {
   }
 }
 
-export { getUser };

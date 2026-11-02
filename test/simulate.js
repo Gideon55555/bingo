@@ -12,10 +12,11 @@ import { io } from 'socket.io-client';
 const TOKEN = '123456:TEST_TOKEN';
 const PORT = 3999;
 const DB = path.join(os.tmpdir(), `bingo-test-${Date.now()}.db`);
+const BACKUPS = path.join(os.tmpdir(), `bingo-test-backups-${Date.now()}`);
 const URL = `http://localhost:${PORT}`;
 const env = {
   ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: DB,
-  COUNTDOWN_SEC: '2', CALL_INTERVAL_MS: '40', RESULT_SHOW_SEC: '1', HOUSE_CUT: '0.2',
+  BACKUP_DIR: BACKUPS, COUNTDOWN_SEC: '2', CALL_INTERVAL_MS: '40', RESULT_SHOW_SEC: '1', HOUSE_CUT: '0.2',
   MIN_DEPOSIT: '10', MIN_WITHDRAW: '50', DEV_MODE: 'false',
   ADMIN_IDS: '1001', ADMIN_PASSWORD: 'super-secret-pw',
 };
@@ -186,5 +187,6 @@ try {
 } finally {
   server.kill();
   fs.rmSync(DB, { force: true });
+  fs.rmSync(BACKUPS, { recursive: true, force: true });
   setTimeout(() => process.exit(), 200);
 }

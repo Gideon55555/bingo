@@ -33,6 +33,7 @@ export default function App() {
     socket.on('balance', onBal);
     socket.on('connect_error', onErr);
     socket.on('connect', () => setError(''));
+    socket.on('server:restart', () => setError('Server is restarting for maintenance — reconnecting… Any unfinished game entry is refunded.'));
     return () => {
       socket.off('lobby:all', onAll);
       socket.off('lobby', onOne);

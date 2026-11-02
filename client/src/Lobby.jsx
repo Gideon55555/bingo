@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import Rules from './Rules.jsx';
 import { useCountdown } from './hooks.js';
 
 const STATUS = {
@@ -25,10 +26,21 @@ function RoomCard({ r, cfg, onEnter }) {
   );
 }
 
+const seenRules = () => { try { return localStorage.getItem('rules_seen') === '1'; } catch { return false; } };
+
 export default function Lobby({ rooms, cfg, onEnter }) {
+  const [showRules, setShowRules] = useState(() => !seenRules());
+  const closeRules = () => {
+    try { localStorage.setItem('rules_seen', '1'); } catch { /* ignore */ }
+    setShowRules(false);
+  };
   return (
     <div className="lobby">
-      <h2>Choose a room</h2>
+      {showRules && <Rules cfg={cfg} onClose={closeRules} />}
+      <div className="row-between">
+        <h2>Choose a room</h2>
+        <button className="ghost sm" onClick={() => setShowRules(true)}>📖 Rules</button>
+      </div>
       <p className="muted small">
         Pick a card, wait for the numbers, and press BINGO when you complete a row, column,
         diagonal, or the four corners. The winner takes the prize.
@@ -37,6 +49,7 @@ export default function Lobby({ rooms, cfg, onEnter }) {
       <div className="room-list">
         {rooms.map((r) => <RoomCard key={r.stake} r={r} cfg={cfg} onEnter={onEnter} />)}
       </div>
+      <p className="muted small center-text">🔞 {cfg.minAge}+ only · Play responsibly{cfg.supportContact ? ` · Help: ${cfg.supportContact}` : ''}</p>
     </div>
   );
 }

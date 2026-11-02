@@ -1,4 +1,4 @@
-import { Bot, InlineKeyboard } from 'grammy';
+import { Bot, InlineKeyboard, InputFile, webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { getUser, getTx } from './db.js';
 
@@ -34,6 +34,18 @@ export async function sendMessage(chatId, text, extra) {
 
 export const notifyUser = (userId, text) => sendMessage(userId, text);
 
+export async function sendDocumentToAdmins(filePath, caption) {
+  if (!bot) return;
+  for (const admin of config.adminIds) {
+    await bot.api.sendDocument(admin, new InputFile(filePath), { caption }).catch((e) =>
+      console.error('[bot] sending backup failed:', e.message));
+  }
+}
+
+export async function stopBot() {
+  if (bot && config.botMode === 'polling') await bot.stop().catch(() => {});
+}
+
 /** Notify all admins about a new pending transaction. */
 export async function notifyAdmins(txId) {
   const raw = getTx(txId);
@@ -50,9 +62,10 @@ const ADMIN_HELP = `🛠 Admin commands
 /broadcast <message> — message every player
 /pause — stop new games (unstarted rounds are refunded)
 /resume — allow games again
+/backup — send yourself a copy of the database now
 /admin — open the admin panel`;
 
-export function startBot({ actions }) {
+export async function startBot({ actions, app }) {
   if (!config.botToken || process.env.BOT_DISABLED === 'true') {
     console.warn('Bot disabled (no BOT_TOKEN or BOT_DISABLED=true)');
     return;
@@ -154,6 +167,11 @@ export function startBot({ actions }) {
     return ctx.reply('▶️ Games resumed.');
   }));
 
+  bot.command('backup', adminOnly(async (ctx) => {
+    await ctx.reply('🗄 Making a backup…');
+    await actions.backup();
+  }));
+
   // ---------- Approve / reject buttons ----------
   bot.callbackQuery(/^(dep|wd):(ok|no):(\d+)$/, async (ctx) => {
     if (!isAdmin(ctx.from.id)) return ctx.answerCallbackQuery({ text: 'Not allowed' });
@@ -171,32 +189,57 @@ export function startBot({ actions }) {
 
   bot.catch((err) => console.error('Bot error:', err.message));
 
-  bot.start({
-    onStart: async (me) => {
-      console.log(`Bot @${me.username} started`);
+  const onReady = async () => {
+    await bot.api.setMyCommands([
+      { command: 'start', description: 'Play bingo' },
+      { command: 'balance', description: 'Your balance' },
+      { command: 'help', description: 'Help' },
+    ]).catch(() => {});
+    for (const admin of config.adminIds) {
       await bot.api.setMyCommands([
-        { command: 'start', description: 'Play bingo' },
-        { command: 'balance', description: 'Your balance' },
-        { command: 'help', description: 'Help' },
-      ]).catch(() => {});
-      for (const admin of config.adminIds) {
-        await bot.api.setMyCommands([
-          { command: 'admin', description: 'Open admin panel' },
-          { command: 'stats', description: 'Stats' },
-          { command: 'pending', description: 'Pending requests' },
-          { command: 'user', description: 'Look up a player' },
-          { command: 'addbalance', description: 'Add/subtract balance' },
-          { command: 'broadcast', description: 'Message all players' },
-          { command: 'pause', description: 'Pause games' },
-          { command: 'resume', description: 'Resume games' },
-          { command: 'help', description: 'All commands' },
-        ], { scope: { type: 'chat', chat_id: Number(admin) } }).catch(() => {});
-      }
-      if (config.webAppUrl) {
-        await bot.api.setChatMenuButton({
-          menu_button: { type: 'web_app', text: 'Play', web_app: { url: config.webAppUrl } },
-        }).catch((e) => console.error('setChatMenuButton failed', e.message));
-      }
+        { command: 'admin', description: 'Open admin panel' },
+        { command: 'stats', description: 'Stats' },
+        { command: 'pending', description: 'Pending requests' },
+        { command: 'user', description: 'Look up a player' },
+        { command: 'addbalance', description: 'Add/subtract balance' },
+        { command: 'broadcast', description: 'Message all players' },
+        { command: 'pause', description: 'Pause games' },
+        { command: 'resume', description: 'Resume games' },
+        { command: 'backup', description: 'Get a database backup' },
+        { command: 'help', description: 'All commands' },
+      ], { scope: { type: 'chat', chat_id: Number(admin) } }).catch(() => {});
+    }
+    if (config.webAppUrl) {
+      await bot.api.setChatMenuButton({
+        menu_button: { type: 'web_app', text: 'Play', web_app: { url: config.webAppUrl } },
+      }).catch((e) => console.error('setChatMenuButton failed', e.message));
+    }
+  };
+
+  if (config.botMode === 'webhook') {
+    // Telegram pushes updates to https://your-app/tg-webhook/<secret>. Works on shared hosting.
+    app.post(config.webhookPath, webhookCallback(bot, 'express', { secretToken: config.webhookSecret }));
+    try {
+      await bot.init();
+      await bot.api.setWebhook(`${config.webAppUrl}${config.webhookPath}`, {
+        secret_token: config.webhookSecret,
+        drop_pending_updates: false,
+        allowed_updates: ['message', 'callback_query'],
+      });
+      console.log(`Bot @${bot.botInfo.username} started (webhook)`);
+      await onReady();
+    } catch (e) {
+      console.error('Bot webhook setup failed:', e.message);
+    }
+    return;
+  }
+
+  // Polling mode (also removes any old webhook automatically)
+  bot.start({
+    allowed_updates: ['message', 'callback_query'],
+    onStart: async (me) => {
+      console.log(`Bot @${me.username} started (polling)`);
+      await onReady();
     },
   }).catch((e) => console.error('Bot failed to start:', e.message));
 }

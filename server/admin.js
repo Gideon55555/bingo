@@ -8,6 +8,7 @@ import {
   approveDeposit, rejectDeposit, markWithdrawalPaid, rejectWithdrawal, pendingTx,
 } from './db.js';
 import { notifyUser, sendMessage } from './bot.js';
+import { runBackup } from './backup.js';
 
 export const isAdminId = (id) => config.adminIds.includes(String(id));
 const money = (n) => `${n} ${config.currency}`;
@@ -86,6 +87,7 @@ export function createAdmin({ games, onBalanceChange }) {
       return job;
     },
     broadcastStatus: () => broadcastJob,
+    backup: () => runBackup({ sendToTelegram: true, label: 'manual' }),
   };
 
   return { actions, router: adminRouter(actions) };
@@ -93,14 +95,31 @@ export function createAdmin({ games, onBalanceChange }) {
 
 // ---------------- Web admin API ----------------
 
+// Wrong-password tracking per IP: 10 failures → locked for 15 minutes
+const failures = new Map();
+const LOCK_MS = 15 * 60 * 1000;
+const isLocked = (ip) => {
+  const f = failures.get(ip);
+  if (f && Date.now() - f.first > LOCK_MS) { failures.delete(ip); return false; }
+  return !!f && f.count >= 10;
+};
+const recordFailure = (ip) => {
+  const f = failures.get(ip) || { count: 0, first: Date.now() };
+  f.count++;
+  failures.set(ip, f);
+};
+
 /** Admin = Telegram user in ADMIN_IDS (inside the Mini App), or ADMIN_PASSWORD (browser). */
 function requireAdmin(req, res, next) {
   const key = req.get('x-admin-key') || '';
   const pw = config.adminPassword;
   if (pw && key) {
+    if (isLocked(req.ip)) return res.status(429).json({ error: 'Too many wrong attempts. Try again in 15 minutes.' });
     const a = crypto.createHash('sha256').update(key).digest();
     const b = crypto.createHash('sha256').update(pw).digest();
     if (crypto.timingSafeEqual(a, b)) { req.adminName = 'web-admin'; return next(); }
+    recordFailure(req.ip);
+    console.warn(`[admin] wrong admin password from ${req.ip}`);
     return res.status(401).json({ error: 'Wrong password' });
   }
   const h = req.get('authorization') || '';

@@ -26,7 +26,8 @@ export const api = {
   withdraw: (amount, phone) => request('POST', '/api/withdraw', { amount, phone }),
 };
 
-export const socket = io({ auth: { initData, devUser }, transports: ['websocket', 'polling'], autoConnect: false });
+// Default transports: starts with HTTP long-polling and upgrades to WebSocket when the host allows it
+export const socket = io({ auth: { initData, devUser }, autoConnect: false });
 export const inTelegram = !!initData;
 
 // ---------- Admin API ----------

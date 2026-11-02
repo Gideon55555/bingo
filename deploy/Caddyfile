@@ -1,0 +1,6 @@
+# Caddy gets and renews the HTTPS certificate automatically.
+# Replace the domain, then: sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+bingo.yourdomain.com {
+	encode gzip
+	reverse_proxy localhost:3000
+}

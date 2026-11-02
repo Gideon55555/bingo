@@ -33,6 +33,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_deposit_ref
   ON transactions(reference) WHERE type = 'deposit' AND status != 'rejected';
 CREATE INDEX IF NOT EXISTS tx_user ON transactions(user_id, created_at);
 
+CREATE TABLE IF NOT EXISTS rounds (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  stake       INTEGER NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'open', -- open | finished | cancelled | refunded
+  created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+  closed_at   INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS games (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   stake       INTEGER NOT NULL,
@@ -46,6 +54,12 @@ CREATE TABLE IF NOT EXISTS games (
 );
 `);
 
+// --- migrations for databases created by older versions ---
+const cols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
+if (!cols('transactions').includes('round_id')) db.exec('ALTER TABLE transactions ADD COLUMN round_id INTEGER');
+if (!cols('games').includes('round_id')) db.exec('ALTER TABLE games ADD COLUMN round_id INTEGER');
+db.exec('CREATE INDEX IF NOT EXISTS tx_round ON transactions(round_id)');
+
 const stmts = {
   upsertUser: db.prepare(`
     INSERT INTO users (id, username, first_name) VALUES (@id, @username, @first_name)
@@ -55,8 +69,8 @@ const stmts = {
   debit: db.prepare('UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?'),
   credit: db.prepare('UPDATE users SET balance = balance + ? WHERE id = ?'),
   insertTx: db.prepare(`
-    INSERT INTO transactions (user_id, type, amount, status, reference, phone, note)
-    VALUES (@user_id, @type, @amount, @status, @reference, @phone, @note)
+    INSERT INTO transactions (user_id, type, amount, status, reference, phone, note, round_id)
+    VALUES (@user_id, @type, @amount, @status, @reference, @phone, @note, @round_id)
   `),
   getTx: db.prepare('SELECT * FROM transactions WHERE id = ?'),
   setTxStatus: db.prepare(
@@ -67,9 +81,15 @@ const stmts = {
     "SELECT t.*, u.username, u.first_name FROM transactions t JOIN users u ON u.id = t.user_id WHERE t.status = 'pending' ORDER BY t.id"
   ),
   insertGame: db.prepare(`
-    INSERT INTO games (stake, players, pot, payout, house, winners, calls)
-    VALUES (@stake, @players, @pot, @payout, @house, @winners, @calls)
+    INSERT INTO games (stake, players, pot, payout, house, winners, calls, round_id)
+    VALUES (@stake, @players, @pot, @payout, @house, @winners, @calls, @round_id)
   `),
+  openRound: db.prepare('INSERT INTO rounds (stake) VALUES (?)'),
+  closeRound: db.prepare("UPDATE rounds SET status = ?, closed_at = unixepoch() WHERE id = ? AND status = 'open'"),
+  openRounds: db.prepare("SELECT * FROM rounds WHERE status = 'open'"),
+  roundNet: db.prepare(`
+    SELECT user_id, SUM(amount) AS net FROM transactions
+    WHERE round_id = ? AND type IN ('bet', 'refund') GROUP BY user_id`),
 };
 
 export function upsertUser(u) {
@@ -86,22 +106,25 @@ export const getTx = (id) => stmts.getTx.get(id);
 export const history = (userId) => stmts.history.all(String(userId));
 export const pendingTx = () => stmts.pending.all();
 
-const tx = ({ user_id, type, amount, status, reference = null, phone = null, note = null }) =>
-  stmts.insertTx.run({ user_id: String(user_id), type, amount, status, reference, phone, note })
+const tx = ({ user_id, type, amount, status, reference = null, phone = null, note = null, round_id = null }) =>
+  stmts.insertTx.run({ user_id: String(user_id), type, amount, status, reference, phone, note, round_id })
     .lastInsertRowid;
 
 /** Atomically take money from a user. Returns false if balance is too low. */
-export const debit = db.transaction((userId, amount, type, note) => {
+export const debit = db.transaction((userId, amount, type, note, roundId = null) => {
   const r = stmts.debit.run(amount, String(userId), amount);
   if (r.changes === 0) return false;
-  tx({ user_id: userId, type, amount: -amount, status: 'done', note });
+  tx({ user_id: userId, type, amount: -amount, status: 'done', note, round_id: roundId });
   return true;
 });
 
-export const credit = db.transaction((userId, amount, type, note) => {
+export const credit = db.transaction((userId, amount, type, note, roundId = null) => {
   stmts.credit.run(amount, String(userId));
-  tx({ user_id: userId, type, amount, status: 'done', note });
+  tx({ user_id: userId, type, amount, status: 'done', note, round_id: roundId });
 });
+
+export const countPending = (userId, type) =>
+  db.prepare("SELECT COUNT(*) n FROM transactions WHERE user_id = ? AND type = ? AND status = 'pending'").get(String(userId), type).n;
 
 // ---------- Deposits ----------
 export function createDeposit(userId, amount, reference) {
@@ -152,7 +175,46 @@ export const rejectWithdrawal = db.transaction((id) => {
   return getTx(id);
 });
 
-export const recordGame = (g) => stmts.insertGame.run({ ...g, winners: JSON.stringify(g.winners) });
+// ---------- Rounds (crash safety) ----------
+// Every entry fee is tied to a round. A round is "open" until it is paid out or cancelled.
+// If the server stops while a round is open, refundOpenRounds() gives everyone their entry back.
+
+export const openRound = (stake) => Number(stmts.openRound.run(stake).lastInsertRowid);
+
+/** Pay winners, record the game and close the round — all or nothing. */
+export const settleRound = db.transaction((roundId, payouts, game) => {
+  for (const { userId, amount, note } of payouts) {
+    if (amount > 0) {
+      stmts.credit.run(amount, String(userId));
+      tx({ user_id: userId, type: 'win', amount, status: 'done', note, round_id: roundId });
+    }
+  }
+  stmts.insertGame.run({ ...game, winners: JSON.stringify(game.winners), round_id: roundId });
+  stmts.closeRound.run('finished', roundId);
+});
+
+/** Refund everyone's net entry in one round and close it. Returns [{userId, amount}]. */
+export const refundRound = db.transaction((roundId, stake, reason, status = 'refunded') => {
+  const refunds = [];
+  for (const { user_id, net } of stmts.roundNet.all(roundId)) {
+    if (net < 0) {
+      stmts.credit.run(-net, user_id);
+      tx({ user_id, type: 'refund', amount: -net, status: 'done', note: `Bingo ${stake} ${reason}`, round_id: roundId });
+      refunds.push({ userId: user_id, amount: -net, stake });
+    }
+  }
+  stmts.closeRound.run(status, roundId);
+  return refunds;
+});
+
+/** Called on startup and shutdown: refund every round that never finished. */
+export function refundOpenRounds(reason = 'interrupted (server restart)') {
+  const all = [];
+  for (const r of stmts.openRounds.all()) all.push(...refundRound(r.id, r.stake, reason));
+  return all;
+}
+
+export const recordGame = (g) => stmts.insertGame.run({ round_id: null, ...g, winners: JSON.stringify(g.winners) });
 
 // ---------- Admin queries ----------
 const startOfToday = () => {

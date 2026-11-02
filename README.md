@@ -48,6 +48,7 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
 | `/addbalance @name 50 welcome bonus` | Add balance. Use `-50` to subtract. The player is notified. |
 | `/broadcast Your message` | Send a message to every player |
 | `/pause` / `/resume` | Stop/allow new games. Unstarted rounds are refunded; running games finish. |
+| `/backup` | Sends you a copy of the database right now |
 | `/admin` | Opens the admin panel inside Telegram |
 
 **Web admin panel**, in two places:
@@ -99,17 +100,24 @@ npm test
 ```
 This runs a full simulated game with real signed Telegram auth (41 checks): auth forgery,
 deposits, duplicate references, entry fees, refunds, false BINGO, payouts, house cut,
-withdrawals and every admin feature.
+withdrawals and every admin feature. A second test (10 checks) kills the server mid-game
+and checks that every player is refunded on restart.
 
 ## Deploying
 
-You need **one Node service with a persistent disk**, because the database is a SQLite file.
-- **VPS** (Hetzner, DigitalOcean, Contabo, and so on): `npm ci && npm run build`, then run
-  with `pm2 start server/index.js --name bingo` behind Nginx/Caddy for HTTPS.
-- **Railway / Render / Fly.io:** build command `npm ci && npm run build`, start command
-  `npm start`, and mount a volume at `/data` (set `DB_PATH=/data/bingo.db`).
+See **[DEPLOY.md](DEPLOY.md)** for step-by-step guides (VPS, or DirectAdmin Node.js hosting) and the go-live checklist.
 
-Run only **one instance**. Game state lives in memory, and the bot uses long polling.
+## Production safety built in
+- **Crash-safe money:** every entry fee belongs to a saved round. If the server crashes or restarts
+  mid-game, all unfinished rounds are refunded on startup and players get a Telegram message.
+  Payouts, the game record and closing the round happen in one database transaction.
+- **Daily backups:** kept on the server (last 14) and sent to admins on Telegram. `/backup` makes one on demand.
+- **Rate limits:** on the API, wallet requests, game actions and wrong admin passwords
+  (10 failures → 15-minute lockout). Players can have at most 3 deposits / 2 withdrawals pending at once.
+- **Startup checks:** in production, the server refuses to run with `DEV_MODE`, a missing token or a non-https URL.
+- **Timezone:** stats and backups use `TIMEZONE` (default Africa/Addis_Ababa), not the server clock.
+- **Rules screen:** shown on first open, with the 18+ notice and support contact.
+- **Health check** at `/healthz`. The bot runs in polling or webhook mode (`BOT_MODE`).
 
 ## Project layout
 ```
@@ -121,6 +129,11 @@ server/
   auth.js     Telegram initData HMAC validation
   bot.js      /start, menu button, admin commands + approve/reject buttons
   admin.js    admin actions (shared by bot + web panel) and /api/admin routes
+  backup.js   daily backups
+  ratelimit.js
+app.cjs           startup file for shared hosting (Passenger)
+ecosystem.config.cjs  pm2 config for a VPS
+deploy/           VPS setup + update scripts, Caddy config
 shared/cards.js   deterministic card generation + win check (used by server and client)
 client/src/       React mini app (Lobby, Room, Card, Wallet, Admin)
 test/simulate.js  end-to-end test

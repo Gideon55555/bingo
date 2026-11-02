@@ -183,3 +183,12 @@ textarea { width: 100%; resize: vertical; }
 .login .brand { text-align: center; margin-bottom: 6px; }
 .login input { background: var(--bg); }
 .admin-section > .ghost { justify-self: start; }
+
+/* Rules */
+.rules { text-align: left; }
+.rules h2, .rules h3 { margin-top: 4px; }
+.rules ol, .rules ul { padding-left: 20px; margin: 6px 0 12px; line-height: 1.5; font-size: 14px; }
+.rules li { margin-bottom: 4px; }
+.rules .primary { width: 100%; margin-top: 6px; }
+.age { background: color-mix(in srgb, var(--accent) 18%, transparent); padding: 10px 12px; border-radius: 10px; font-size: 14px; }
+.center-text { text-align: center; margin-top: 16px; }
