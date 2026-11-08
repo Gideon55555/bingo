@@ -74,7 +74,7 @@ export class PlayerModel {
  * proportion to its chance, so players can't count on it always going for the "obvious" box.
  * players: [{ pos, last, model }], rand(): number in [0,1)
  */
-export function hunterPick(players, hunter, rand, { surprise = 0.15, reach = 'any' } = {}) {
+export function hunterPick(players, hunter, rand, { surprise = 0.15, reach = 'any', position = reach === 'any' ? 0 : 0.35 } = {}) {
   const mass = new Array(CELLS).fill(0);
   for (const p of players) {
     const ctx = { hunter, last: p.last, others: players.filter((q) => q !== p).map((q) => q.pos) };
@@ -86,8 +86,11 @@ export function hunterPick(players, hunter, rand, { surprise = 0.15, reach = 'an
     let x = rand() * total;
     for (const i of options) { x -= mass[i] + 0.02; if (x <= 0) return { box: i, mass }; }
   }
-  const best = Math.max(...options.map((i) => mass[i]));
-  const top = options.filter((i) => Math.abs(mass[i] - best) < 1e-9);
+  // A one-step cop also thinks one move ahead: boxes it can reach more of next time are worth more
+  // (the middle touches all 9, a corner only 4), scaled by how many players are still in.
+  const score = (i) => mass[i] + position * players.length * (neighbors(i).length + 1) / CELLS;
+  const best = Math.max(...options.map(score));
+  const top = options.filter((i) => Math.abs(score(i) - best) < 1e-9);
   return { box: top[Math.floor(rand() * top.length)], mass };
 }
 

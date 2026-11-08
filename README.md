@@ -1,4 +1,4 @@
-# 🎱 Telegram Bingo + ✈️ Aviator + 🎯 Keno + 🎲 Ludo + 🎱 8-Ball Pool + 🔴 ከረንቡላ Kerenbula + 👁 ድብብቆሽ Dibibkosh Mini App
+# 🎱 Telegram Bingo + ✈️ Aviator + 🎯 Keno + 🎲 Ludo + 🎱 8-Ball Pool + 🔴 ከረንቡላ Kerenbula + 👮 ድብብቆሽ Dibibkosh Mini App
 
 A multiplayer 75-ball bingo game that runs inside Telegram, with a player wallet.
 Players send you money (Telebirr, bank and so on), submit the transaction ID in the app,
@@ -103,14 +103,16 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
    shows roughly where the ball would stop. Every roll is simulated on the server with deterministic shared physics.
 7. 25-second roll clock (`KERENBULA_ROLL_SEC`): running out loses that ball; 3 in a row forfeits. Restart = refund.
 
-**👁 ድብብቆሽ Dibibkosh (4 players, hide from the hunter)**
+**👮 ድብብቆሽ Dibibkosh (4 players, hide from the cop)**
 1. Tables per stake (`HUNT_STAKES`). Last player standing takes the pot minus 10% (`HUNT_HOUSE_CUT`).
-2. 3 × 3 board. Players start in the corners, the hunter in the middle. Every move has a 3-second count
+2. 3 × 3 board. Four people start in the corners, the cop in the middle. Every move has a 3-second count
    (`HUNT_MOVE_SEC`): each player taps a neighbouring box (diagonals count). Standing still is not allowed;
    no pick in time = a random neighbouring box.
-3. The hunter jumps to any other box. It learns each player's habits (flee / corner / centre / repeat / back /
-   crowd tendencies) and goes where it expects the most players; 15% of the time it picks at random.
-4. Players in the hunter's box are out; players sharing a box with each other are fine. After a catch the hunter
+3. The cop also moves one step (`HUNT_JUMP_ANY=false`; set true to let it jump anywhere for faster games). It learns
+   each player's habits (flee / corner / centre / repeat / back / crowd tendencies), goes where it expects the most
+   players and prefers boxes that keep more of the board in reach next move; 15% of the time (`HUNT_SURPRISE`) it
+   picks at random. Both are in Admin → Settings.
+4. Players in the cop's box are out; players sharing a box with each other are fine. After a catch the cop
    returns to the middle. If the last players are caught together, they split the prize.
 5. Fairness: before anyone picks, the server publishes `sha256(gameId:move:box:salt)`; after the reveal the app
    recomputes it and shows ✅. Free practice against 3 bots and private invite tables (`hunt_CODE`) included.

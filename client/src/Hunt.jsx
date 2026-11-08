@@ -4,6 +4,7 @@ import { fmt } from '../../shared/money.js';
 import { SocialBar, InviteBox } from './Social.jsx';
 import { sfx } from './sound.js';
 import { t, useLang, trServer } from './i18n.js';
+import { Person, Cop } from './HuntFigures.jsx';
 
 const SEAT_COLOR = ['#f3c14b', '#4fb3ff', '#35d07f', '#ff6ad5'];
 const CENTER = 4;
@@ -31,7 +32,7 @@ function Board({ game, view, onPick }) {
       {/* hunter */}
       {(() => {
         const [x, y] = cellXY(view.hunter);
-        return <div className={`hunt-eye ${view.strike ? 'strike' : ''}`} style={{ left: `${x}%`, top: `${y}%` }}>👁</div>;
+        return <div className={`hunt-cop ${view.strike ? 'strike' : ''}`} style={{ left: `${x}%`, top: `${y}%` }}><Cop /></div>;
       })()}
       {/* players */}
       {game.players.map((p) => {
@@ -42,15 +43,15 @@ function Board({ game, view, onPick }) {
         if (p.out && !caught) return null;
         return (
           <div key={p.seat} className={`hunt-token ${caught ? 'caught' : ''} ${p.seat === game.me ? 'me' : ''}`}
-            style={{ left: `calc(${x}% + ${sx * 11}%)`, top: `calc(${y}% + ${sy * 11}%)`, background: SEAT_COLOR[p.seat] }}>
-            {p.bot ? '🤖' : (p.name || '?').slice(0, 1)}
+            style={{ left: `calc(${x}% + ${sx * 10}%)`, top: `calc(${y}% + ${sy * 7}%)`, zIndex: 2 + (sy > 0 ? 1 : 0) }}>
+            <Person color={SEAT_COLOR[p.seat]} label={p.bot ? '' : (p.name || '?').slice(0, 1)} />
           </div>
         );
       })}
       {game.me >= 0 && game.myChoice != null && game.phase === 'move' && (() => {
         const [x, y] = cellXY(game.myChoice);
         const [sx, sy] = SLOT[game.me];
-        return <div className="hunt-token ghost" style={{ left: `calc(${x}% + ${sx * 11}%)`, top: `calc(${y}% + ${sy * 11}%)`, borderColor: SEAT_COLOR[game.me] }} />;
+        return <div className="hunt-ghost" style={{ left: `calc(${x}% + ${sx * 10}%)`, top: `calc(${y}% + ${sy * 8}% + 6%)`, borderColor: SEAT_COLOR[game.me] }} />;
       })()}
     </div>
   );

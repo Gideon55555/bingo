@@ -80,11 +80,13 @@ export const SCHEMA = [
     F('pool.shotSec', 'Seconds per shot', 'int', { min: 10, max: 120 }),
     F('pool.maxMisses', 'Timeouts before forfeit', 'int', { min: 1, max: 10 }),
   ] },
-  { id: 'hunt', label: '👁 Dibibkosh', fields: [
+  { id: 'hunt', label: '👮 Dibibkosh', fields: [
     F('hunt.enabled', 'Game is on', 'bool'),
     F('hunt.stakes', 'Table entry fees', 'moneyList', { min: 1, max: 100000, maxItems: 8 }),
     F('hunt.houseCut', 'House cut from the pot', 'percent', { min: 0, max: 50 }),
     F('hunt.moveSec', 'Seconds to pick each move', 'int', { min: 2, max: 10 }),
+    F('hunt.jumpAny', 'Cop can jump to any box (off = only to boxes next to it, longer games)', 'bool'),
+    F('hunt.surprise', 'How often the cop guesses at random instead of predicting', 'percent', { min: 0, max: 100 }),
   ] },
   { id: 'kerenbula', label: '🔴 Kerenbula', fields: [
     F('kerenbula.enabled', 'Game is on', 'bool'),

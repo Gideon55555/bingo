@@ -132,7 +132,7 @@ app.get('/api/config', (_req, res) =>
     pool: config.pool.enabled
       ? { stakes: config.pool.stakes, sizes: config.pool.sizes, houseCut: config.pool.houseCut, shotSec: config.pool.shotSec, maxMisses: config.pool.maxMisses }
       : null,
-    hunt: config.hunt.enabled ? { stakes: config.hunt.stakes, houseCut: config.hunt.houseCut, moveSec: config.hunt.moveSec, size: 4 } : null,
+    hunt: config.hunt.enabled ? { stakes: config.hunt.stakes, houseCut: config.hunt.houseCut, moveSec: config.hunt.moveSec, jumpAny: config.hunt.jumpAny, size: 4 } : null,
     kerenbula: config.kerenbula.enabled
       ? (({ stakes, houseCut, target, maxFrames, pinPoints, rollSec, maxMisses }) => ({ stakes, houseCut, target, maxFrames, pinPoints, rollSec, maxMisses }))(config.kerenbula)
       : null,

@@ -38,13 +38,14 @@ console.log('Hunter learns');
 
 console.log('Balance (simulated games)');
 const rnd = Math.random;
+let OPTS = {};
 function play(style) {
   const players = mk([0, 2, 6, 8]);
   let hunter = CENTER, moves = 0;
   for (;;) {
     moves++;
     const alive = players.filter((p) => !p.out);
-    const pick = hunterPick(alive, hunter, rnd).box; // decided BEFORE players move
+    const pick = hunterPick(alive, hunter, rnd, OPTS).box; // decided BEFORE players move
     const mv = new Map();
     players.forEach((p, i) => {
       if (p.out) return;
@@ -74,4 +75,18 @@ console.log(`    average moves per game — unpredictable players: ${sRandom.avg
 assert.ok(sFlee.avg < sRandom.avg, 'predictable players are caught faster'); ok('the hunter catches predictable players faster than unpredictable ones (skill matters)');
 assert.ok(sRandom.avg > 4 && sRandom.avg < 60, `game length ${sRandom.avg}`); ok(`a 4-player game lasts about ${Math.round(sRandom.avg)} moves (~${Math.round((sRandom.avg * 4.5) / 60 * 10) / 10} min at 3 s + reveal)`);
 assert.ok(sRandom.splitPct < 25, `${sRandom.splitPct}% splits`); ok(`split wins are uncommon (${sRandom.splitPct.toFixed(1)}% of games)`);
+// The default since the cop became a person: it moves one step at a time, like the players
+OPTS = { reach: 'near' };
+{
+  const players = mk([0, 2, 6, 8]);
+  for (const from of [0, 1, 4, 8]) for (let k = 0; k < 50; k++) {
+    const box = hunterPick(players, from, rnd, OPTS).box;
+    assert.ok(neighbors(from).includes(box), `cop ${from}→${box}`);
+  }
+  ok('one-step cop: always moves to a box next to it (never stays, never jumps)');
+}
+const nRandom = stats('random'), nFlee = stats('flee');
+console.log(`    one-step cop — unpredictable players: ${nRandom.avg.toFixed(1)} moves, predictable "always flee": ${nFlee.avg.toFixed(1)}`);
+assert.ok(nFlee.avg < nRandom.avg, 'one-step cop still punishes predictable players'); ok('one-step cop still catches predictable players faster (thinks one move ahead)');
+assert.ok(nRandom.avg > 4 && nRandom.avg < 30, `game length ${nRandom.avg}`); ok(`one-step cop game lasts about ${Math.round(nRandom.avg)} moves`);
 console.log(`\nAll ${passed} Dibibkosh rule checks passed ✅`);

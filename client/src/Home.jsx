@@ -5,7 +5,7 @@ import GrowthCards from './Growth.jsx';
 import { api, tg } from './api.js';
 import { fmt } from '../../shared/money.js';
 
-const GAME_ICON = { hunt: '👁', aviator: '✈️', bingo: '🔢', keno: '🎯', ludo: '🎲', pool: '🎱', kerenbula: '🔴', crash: '✈️' };
+const GAME_ICON = { hunt: '👮', aviator: '✈️', bingo: '🔢', keno: '🎯', ludo: '🎲', pool: '🎱', kerenbula: '🔴', crash: '✈️' };
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 /** Promo carousel: the admin's uploaded banners, or built-in slides for the games that are on. */

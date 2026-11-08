@@ -1,3 +1,4 @@
+import { Person, Cop } from './HuntFigures.jsx';
 import React from 'react';
 
 // Original illustrations of each game, used on the home screen tiles. Pure SVG, so they
@@ -185,24 +186,17 @@ export function KerenbulaArt() {
   );
 }
 
-/** Dibibkosh: a red-and-gold 3×3 board, the hunter's eye in the middle, four players in the corners. */
+/** Dibibkosh: a red-and-gold 3×3 board, the cop in the middle, four people in the corners. */
 export function HuntArt() {
   const cell = (i) => [14 + (i % 3) * 25, 14 + Math.floor(i / 3) * 25];
-  const pawn = (i, c, k) => { const [x, y] = cell(i); return (
-    <g key={k}><ellipse cx={x + 12.5} cy={y + 19} rx="6" ry="2" fill="rgba(0,0,0,.4)" />
-      <circle cx={x + 12.5} cy={y + 9} r="4" fill={c} /><path d={`M${x + 6.5} ${y + 19} Q${x + 12.5} ${y + 7} ${x + 18.5} ${y + 19}Z`} fill={c} /></g>); };
+  const COL = ['#f3c14b', '#4fb3ff', '#35d07f', '#ff6ad5'];
   return (
     <svg viewBox="0 0 100 100" className="game-art" preserveAspectRatio="xMidYMid slice">
-      <defs>
-        <radialGradient id="hbg" cx=".5" cy=".5" r=".75"><stop offset="0" stopColor="#a3142a" /><stop offset="1" stopColor="#2c050b" /></radialGradient>
-        <radialGradient id="heye" cx=".5" cy=".5" r=".5"><stop offset="0" stopColor="#fff2b0" /><stop offset=".5" stopColor="#f3c14b" /><stop offset="1" stopColor="#a8741c" /></radialGradient>
-      </defs>
+      <defs><radialGradient id="hbg" cx=".5" cy=".5" r=".75"><stop offset="0" stopColor="#a3142a" /><stop offset="1" stopColor="#2c050b" /></radialGradient></defs>
       <rect width="100" height="100" fill="url(#hbg)" />
-      {Array.from({ length: 9 }, (_, i) => { const [x, y] = cell(i); return <rect key={i} x={x + 1} y={y + 1} width="23" height="23" rx="3" fill={i === 4 ? 'rgba(255,43,67,.35)' : 'rgba(0,0,0,.35)'} stroke="#e9b949" strokeOpacity=".55" strokeWidth=".8" />; })}
-      <circle cx="50" cy="50" r="13" fill="rgba(255,43,67,.35)" />
-      <ellipse cx="50" cy="50" rx="10" ry="6.5" fill="#fff8e6" stroke="#1a0505" strokeWidth="1.2" />
-      <circle cx="50" cy="50" r="4.6" fill="url(#heye)" /><circle cx="50" cy="50" r="2" fill="#1a0505" />
-      {pawn(0, '#f3c14b', 'a')}{pawn(2, '#4fb3ff', 'b')}{pawn(6, '#35d07f', 'c')}{pawn(8, '#ff6ad5', 'd')}
+      {Array.from({ length: 9 }, (_, i) => { const [x, y] = cell(i); return <rect key={i} x={x + 1} y={y + 1} width="23" height="23" rx="3" fill={i === 4 ? 'rgba(61,123,255,.28)' : 'rgba(0,0,0,.35)'} stroke="#e9b949" strokeOpacity=".55" strokeWidth=".8" />; })}
+      {[0, 2, 6, 8].map((c, k) => { const [x, y] = cell(c); return <Person key={c} color={COL[k]} x={x + 5} y={y + 1} width="15" height="21" />; })}
+      <Cop x="38" y="35" width="24" height="31" />
     </svg>
   );
 }

@@ -59,6 +59,7 @@ class HuntGame {
     this.roundId = roundId;
     this.practice = practice;
     this.cut = cfg().houseCut;   // fixed for this game
+    this.hunterOpts = { reach: cfg().jumpAny ? 'any' : 'near', surprise: cfg().surprise };
     this.moveSec = cfg().moveSec;
     this.channel = `hunt:${this.id}`;
     this.players = members.map((m, i) => ({
@@ -88,7 +89,7 @@ class HuntGame {
     clearTimeout(this.timer);
     this.moveNo++;
     // 1) the hunter decides first, from earlier moves only, and commits to it
-    const { box } = hunterPick(this.alive(), this.hunter, rand);
+    const { box } = hunterPick(this.alive(), this.hunter, rand, this.hunterOpts);
     const salt = crypto.randomBytes(8).toString('hex');
     this.pending = { box, salt, commit: crypto.createHash('sha256').update(`${this.id}:${this.moveNo}:${box}:${salt}`).digest('hex') };
     // 2) players pick during the count

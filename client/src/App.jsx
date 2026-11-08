@@ -148,7 +148,7 @@ export default function App() {
   if (!cfg || !user) return <div className="center muted">{t('loading')}</div>;
 
   const gameName = game === 'aviator' ? crashName(cfg) : game ? t(`g_${game}`) : null;
-  const icons = { aviator: '✈️', bingo: '🔢', keno: '🎯', ludo: '🎲', pool: '🎱', kerenbula: '🔴', hunt: '👁' };
+  const icons = { aviator: '✈️', bingo: '🔢', keno: '🎯', ludo: '🎲', pool: '🎱', kerenbula: '🔴', hunt: '👮' };
 
   return (
     <div className="app">

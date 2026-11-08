@@ -135,6 +135,8 @@ export const config = {
     stakes: list(process.env.HUNT_STAKES || '10,20,50,100').map(toCents),
     houseCut: num(process.env.HUNT_HOUSE_CUT, 0.1),
     moveSec: num(process.env.HUNT_MOVE_SEC, 3),            // the 3-2-1 count for each move
+    jumpAny: process.env.HUNT_JUMP_ANY === 'true',          // default: the cop moves one step, like the players (true = may jump anywhere)
+    surprise: num(process.env.HUNT_SURPRISE, 0.15),        // share of moves where the hunter picks a random box
     delayScale: num(process.env.HUNT_DELAY_SCALE, 1),      // < 1 only for automated tests
   },
 
