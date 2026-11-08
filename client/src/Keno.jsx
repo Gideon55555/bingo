@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { socket, emit, haptic, toast } from './api.js';
 import { fmt, toCents } from '../../shared/money.js';
 import { PAYTABLE, KENO_MAX_PICKS, countHits } from '../../shared/keno.js';
+import { sfx } from './sound.js';
 import { t, useLang } from './i18n.js';
 
 const loadPref = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
@@ -38,7 +39,7 @@ export default function Keno({ cfg, balance }) {
       setSt(s);
     };
     const onBall = ({ n, i }) => {
-      haptic('light');
+      haptic('light'); sfx('tap');
       setSt((p) => (p && p.revealed.length === i ? { ...p, revealed: [...p.revealed, n] } : p));
     };
     const onPlayers = ({ players }) => setSt((p) => (p ? { ...p, players } : p));
@@ -70,7 +71,7 @@ export default function Keno({ cfg, balance }) {
 
   // Results feedback + auto-buy queued ticket when betting opens
   useEffect(() => {
-    if (phase === 'results' && me?.win != null) haptic(me.win > 0 ? 'success' : 'error');
+    if (phase === 'results' && me?.win != null) { haptic(me.win > 0 ? 'success' : 'error'); if (me.win > 0) sfx('win'); }
     if (phase === 'betting' && queued) { setQueued(false); buy(); }
   }, [phase, st?.round]);
 

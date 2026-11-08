@@ -1,4 +1,4 @@
-import { PlaySafe } from './Responsible.jsx';
+import { PlaySafe, DeviceSettings } from './Responsible.jsx';
 import React, { useEffect, useState } from 'react';
 import { api, haptic, toast } from './api.js';
 import { fmt, toCents } from '../../shared/money.js';
@@ -81,6 +81,7 @@ export default function Wallet({ cfg, balance }) {
       </form>
 
       <PlaySafe cfg={cfg} />
+      <DeviceSettings />
 
       <h3>{t('history')}</h3>
       <div className="history">

@@ -1,3 +1,4 @@
+import { canvasDpr } from './prefs.js';
 // Canvas renderer for the pool table. Runs its own animation loop and reads from a plain
 // object (`view`) so React doesn't re-render every frame.
 import { W, H, R, POCKETS, BALL_COLORS, HEAD_LINE, FOOT_SPOT, DT, Sim, aimGuide, canPlaceCue } from '../../shared/pool.js';
@@ -79,7 +80,7 @@ export function startPoolRender(canvas, view) {
   const ctx = canvas.getContext('2d');
   let w = 0, h = 0, dpr = 1, raf;
   const resize = () => {
-    dpr = Math.min(2, window.devicePixelRatio || 1);
+    dpr = canvasDpr();
     w = canvas.clientWidth; h = canvas.clientHeight;
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
   };

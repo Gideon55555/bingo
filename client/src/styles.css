@@ -486,3 +486,6 @@ textarea { width: 100%; resize: vertical; }
 .lb-list li { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; font-size: 14px; }
 .lb-list li.me { font-weight: 800; }
 .lb-rank { text-align: center; }
+
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+.setting-row input { width: 22px; height: 22px; flex: none; }

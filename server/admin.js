@@ -16,6 +16,7 @@ import { publicMessage } from './security.js';
 import { metrics } from './monitor.js';
 import { verifyTotp } from './totp.js';
 import { onDepositApproved } from './growth.js';
+import { listClientErrors } from './clienterrors.js';
 import { sharedDevices, suspiciousPairs, lowPlayCashouts, userFlags, linkedAccounts, setFrozen } from './risk.js';
 
 export const isAdminId = (id) => config.adminIds.includes(String(id));
@@ -252,6 +253,7 @@ function adminRouter(actions) {
   r.post('/resume', wrap((req) => { actions.resume(req.who); return { ok: true }; }));
   r.post('/broadcast', wrap((req) => actions.broadcast(req.body.text, req.who)));
   r.get('/risk', wrap(() => actions.risk()));
+  r.get('/client-errors', wrap(() => ({ items: listClientErrors() })));
   r.post('/freeze', wrap((req) => actions.freeze(String(req.body.userId), !!req.body.on, String(req.body.reason || '').slice(0, 200), req.who)));
   r.get('/log', wrap((req) => ({ items: actions.adminLog({ limit: Math.min(Number(req.query.limit) || 200, 500), before: Number(req.query.before) || null }) })));
   r.post('/logout', wrap((req) => { sessions.delete(req.get('x-admin-session')); return { ok: true }; }));

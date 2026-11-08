@@ -3,6 +3,7 @@ import { socket, emit, haptic, toast } from './api.js';
 import { fmt, toCents } from '../../shared/money.js';
 import { fmtX, msFor } from '../../shared/crash.js';
 import { startFlight } from './flight.js';
+import { sfx } from './sound.js';
 import { t, useLang } from './i18n.js';
 
 const loadPref = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
@@ -86,7 +87,7 @@ export default function Crash({ cfg, balance }) {
 
   // ---------- reactions to phase changes ----------
   useEffect(() => {
-    if (phase === 'crashed') haptic(me && !me.cashedAt ? 'error' : 'light');
+    if (phase === 'crashed') { haptic(me && !me.cashedAt ? 'error' : 'light'); sfx('crash'); }
     if (phase === 'flying' && me) haptic('medium');
     if (phase === 'betting' && queued) { setQueued(false); placeBet(); }
   }, [phase, st?.round]);
@@ -94,7 +95,7 @@ export default function Crash({ cfg, balance }) {
   useEffect(() => {
     if (!me?.cashedAt) return;
     setFlash(`+${fmt(me.win)} ${cfg.currency} at ${fmtX(me.cashedAt)}`);
-    haptic('success');
+    haptic('success'); sfx('cash');
     const t = setTimeout(() => setFlash(null), 3500);
     return () => clearTimeout(t);
   }, [me?.cashedAt]);

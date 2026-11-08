@@ -92,6 +92,7 @@ export const adminApi = {
   },
   logout: () => adminRequest('POST', '/logout').catch(() => {}),
   risk: () => adminRequest('GET', '/risk'),
+  clientErrors: () => adminRequest('GET', '/client-errors'),
   freeze: (userId, on, reason) => adminRequest('POST', '/freeze', { userId, on, reason }),
   log: (before) => adminRequest('GET', `/log${before ? `?before=${before}` : ''}`),
   stats: () => adminRequest('GET', '/stats'),
@@ -148,3 +149,16 @@ export const confirmBox = (msg) =>
     if (tg?.showConfirm && tg.initData) tg.showConfirm(msg, resolve);
     else resolve(window.confirm(msg));
   });
+
+// ---------- Report app errors to the server (admin → Errors) ----------
+let reported = 0;
+export function reportError(err, extra = '') {
+  if (reported++ > 10) return; // at most 10 per page load
+  const e = err instanceof Error ? err : new Error(String(err?.message || err));
+  fetch('/api/client-error', {
+    method: 'POST', headers: headers(), keepalive: true,
+    body: JSON.stringify({ message: `${e.message}${extra ? ` (${extra})` : ''}`, stack: e.stack, path: location.pathname + location.search.slice(0, 40), ua: navigator.userAgent }),
+  }).catch(() => {});
+}
+window.addEventListener('error', (ev) => { if (ev.error || ev.message) reportError(ev.error || ev.message); });
+window.addEventListener('unhandledrejection', (ev) => reportError(ev.reason || 'unhandled rejection'));

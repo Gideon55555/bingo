@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api, toast, confirmBox, haptic, tg } from './api.js';
 import { fmt, toCents } from '../../shared/money.js';
 import { t, useLang } from './i18n.js';
+import { soundSettings, setSound, sfx } from './sound.js';
+import { lowData, setLowData } from './prefs.js';
 
 const dateOf = (s) => new Date(s * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' });
 
@@ -129,6 +131,34 @@ export function PlaySafe({ cfg }) {
           {cfg.supportContact && <p className="muted small">{t('needHelp')} {cfg.supportContact}</p>}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Wallet → Settings: sound effects, bingo voice, low-data mode. */
+export function DeviceSettings() {
+  useLang();
+  const [s, setS] = useState(() => ({ ...soundSettings(), lowData: lowData() }));
+  const toggle = (k) => {
+    const on = !s[k];
+    if (k === 'lowData') setLowData(on); else setSound(k, on);
+    setS({ ...s, [k]: on });
+    if (k === 'effects' && on) sfx('pick');
+  };
+  const Row = ({ k, label, help }) => (
+    <label className="setting-row">
+      <span><b>{label}</b>{help && <small className="muted"> — {help}</small>}</span>
+      <input type="checkbox" checked={!!s[k]} onChange={() => toggle(k)} />
+    </label>
+  );
+  return (
+    <div className="playsafe">
+      <div className="playsafe-head"><span>⚙️ {t('settings')}</span></div>
+      <div className="playsafe-body">
+        <Row k="effects" label={t('setEffects')} />
+        <Row k="voice" label={t('setVoice')} help={t('setVoiceHelp')} />
+        <Row k="lowData" label={t('setLowData')} help={t('setLowDataHelp')} />
+      </div>
     </div>
   );
 }

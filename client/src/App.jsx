@@ -4,6 +4,7 @@ import { t, useLang, getLang, setLang, crashName } from './i18n.js';
 import Home from './Home.jsx';
 import Wallet from './Wallet.jsx';
 import { AgeGate, RealityCheck } from './Responsible.jsx';
+import { lowData } from './prefs.js';
 
 // Each game is its own download: the home screen appears fast, then the games load quietly in the
 // background (see prefetch below) so opening one is still instant.
@@ -21,6 +22,7 @@ const Ludo = lazy(load.ludo);
 const Pool = lazy(load.pool);
 const Kerenbula = lazy(load.kerenbula);
 const prefetchGames = () => {
+  if (lowData()) return; // low-data mode: load each game only when opened
   const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1200));
   idle(() => { for (const k of ['aviator', 'bingo', 'room', 'keno', 'ludo', 'pool', 'kerenbula']) load[k]().catch(() => {}); });
 };

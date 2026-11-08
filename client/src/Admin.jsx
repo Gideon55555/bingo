@@ -35,6 +35,7 @@ export default function Admin({ cfg, onLogout }) {
     ['risk', '🚩 Risk'],
     ['broadcast', '📣 Broadcast'],
     ['log', '📜 Admin log'],
+    ['errors', '🐞 App errors'],
   ];
 
   return (
@@ -54,6 +55,7 @@ export default function Admin({ cfg, onLogout }) {
           {tab === 'broadcast' && <Broadcast users={stats.users} />}
           {tab === 'log' && <AdminLog />}
           {tab === 'risk' && <Risk cfg={cfg} />}
+          {tab === 'errors' && <ClientErrors />}
         </>
       )}
     </div>
@@ -783,6 +785,32 @@ function Risk({ cfg }) {
           ))}
         </tbody></table></div>
       )}
+    </div>
+  );
+}
+
+/** Errors that happened in the app on players' phones (grouped). */
+function ClientErrors() {
+  const [data] = usePoll(adminApi.clientErrors, 30000);
+  const [open, setOpen] = useState(null);
+  if (!data) return <div className="muted">Loading…</div>;
+  if (!data.items.length) return <div className="empty">No app errors reported in the last 30 days 🎉</div>;
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead><tr><th>Last seen</th><th>Times</th><th>Error</th><th>Screen</th><th>Phone</th></tr></thead>
+        <tbody>
+          {data.items.map((e) => (
+            <React.Fragment key={e.id}>
+              <tr onClick={() => setOpen(open === e.id ? null : e.id)} style={{ cursor: 'pointer' }}>
+                <td className="nowrap">{fmtDate(e.last_at)}</td><td>{e.count}</td><td className="small">{e.message}</td>
+                <td className="mono small">{e.path}</td><td className="small muted">{(e.ua || '').replace(/.*\((.*?)\).*/, '$1').slice(0, 40)}</td>
+              </tr>
+              {open === e.id && <tr><td colSpan={5}><pre className="mono small break" style={{ whiteSpace: 'pre-wrap' }}>{e.stack || '(no stack)'}</pre></td></tr>}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

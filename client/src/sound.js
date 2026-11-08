@@ -4,6 +4,8 @@
 // Phones only allow sound after the player has touched the screen, so the audio engine is
 // unlocked on the first tap anywhere in the app.
 
+import { lowData as lowDataOn } from './prefs.js';
+
 let ctx = null;
 const buffers = new Map(); // url -> Promise<AudioBuffer>
 const settings = {
@@ -68,7 +70,7 @@ export async function callNumber(n) {
 
 /** Warm the cache for a few numbers (e.g. while waiting for the game to start). */
 export function preloadCalls(numbers) {
-  if (!settings.voice) return;
+  if (!settings.voice || lowDataOn()) return;
   for (const n of numbers) load(`/voice/am/${n}.mp3`).catch(() => {});
 }
 

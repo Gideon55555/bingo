@@ -1,3 +1,4 @@
+import { canvasDpr } from './prefs.js';
 // Canvas renderer for the crash game. Runs its own requestAnimationFrame loop and reads live
 // data from a plain object (`engine`), so React never re-renders 60 times a second.
 import { GROWTH, fmtX } from '../../shared/crash.js';
@@ -58,7 +59,7 @@ export function startFlight(canvas, engine, els) {
   const ctx = canvas.getContext('2d');
   let w = 0, h = 0, dpr = 1;
   const resize = () => {
-    dpr = Math.min(2, window.devicePixelRatio || 1);
+    dpr = canvasDpr();
     w = canvas.clientWidth; h = canvas.clientHeight;
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
   };

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { config } from './config.js';
 import { db } from './db.js';
 import { sendDocumentToAdmins } from './bot.js';
+import { encryptFile } from './crypto-backup.js';
 
 const today = () => {
   const d = new Date();
@@ -35,7 +36,15 @@ export async function runBackup({ sendToTelegram = config.backupToTelegram, labe
 
   const sizeKb = Math.round(fs.statSync(file).size / 1024);
   console.log(`[backup] ${label} backup saved: ${path.basename(file)} (${sizeKb} KB, ${users} users, verified, sha256 ${sha})`);
-  if (sendToTelegram) await sendDocumentToAdmins(file, `🗄 ${label} backup ${today()} (${sizeKb} KB, ${users} users, verified ✅, sha256 ${sha}). Keep this file safe — it contains balances and phone numbers.`);
+  if (sendToTelegram) {
+    if (config.backupPassword) {
+      const enc = encryptFile(file, `${file}.enc`, config.backupPassword);
+      await sendDocumentToAdmins(enc, `🔒 ${label} backup ${today()} (${sizeKb} KB, ${users} users, verified ✅, sha256 ${sha}). Encrypted — open with: npm run backup:decrypt -- ${path.basename(enc)}`);
+      fs.rmSync(enc, { force: true });
+    } else {
+      await sendDocumentToAdmins(file, `🗄 ${label} backup ${today()} (${sizeKb} KB, ${users} users, verified ✅, sha256 ${sha}). Keep this file safe — it contains balances and phone numbers. Set BACKUP_PASSWORD to encrypt these.`);
+    }
+  }
   return file;
 }
 

@@ -4,6 +4,7 @@ import { SocialBar, InviteBox } from './Social.jsx';
 import { fmt } from '../../shared/money.js';
 import { SOLIDS, STRIPES, BALL_COLORS, R, W, H, HEAD_LINE } from '../../shared/pool.js';
 import { startPoolRender, toTable, Sim, canPlaceCue } from './poolRender.js';
+import { sfx } from './sound.js';
 import { t, useLang, trServer } from './i18n.js';
 
 function MiniBall({ n, gone }) {
@@ -57,7 +58,9 @@ export default function Pool({ cfg, balance }) {
       view.cuePlaced = canPlaceCue(st.balls, start.x, start.y, st.breakShot) ? start : { x: W / 2, y: HEAD_LINE + 12 };
     }
     if (!myTurn || !st.ballInHand) view.cuePlaced = null;
-    if (myTurn) haptic('medium');
+    if (myTurn) { haptic('medium'); sfx('turn'); }
+    if (st.phase === 'over' && st.result && !view.overSound) { view.overSound = true; sfx(st.practice ? (st.result.winner === st.me ? 'win' : 'lose') : st.result.winner === st.me ? 'win' : 'lose'); }
+    if (st.phase !== 'over') view.overSound = false;
   }
 
   useEffect(() => {
@@ -71,14 +74,14 @@ export default function Pool({ cfg, balance }) {
       const sim = new Sim(before, shot);
       view.replay = {
         sim, after, start: performance.now(), finished: false,
-        onPot: (n) => haptic(n === 0 ? 'error' : 'light'),
+        onPot: (n) => { haptic(n === 0 ? 'error' : 'light'); sfx('thud'); },
         onDone: () => {
           view.balls = after;
           setTimeout(() => { view.replay = null; }, 50);
           if (foul) setMsg(t('foulBy', { name: gameRef.current?.players[shooter]?.name, reason: trServer(foul) }));
         },
       };
-      haptic('heavy');
+      haptic('heavy'); sfx('ball');
       setRolling(true);
     };
     socket.on('connect', enter);

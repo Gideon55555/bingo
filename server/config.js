@@ -160,6 +160,8 @@ export const config = {
   backupKeep: num(process.env.BACKUP_KEEP, 14),
   backupHour: num(process.env.BACKUP_HOUR, 4), // local time
   backupToTelegram: process.env.BACKUP_TO_TELEGRAM !== 'false',
+  // Copies sent to Telegram are encrypted with this password (decrypt: npm run backup:decrypt)
+  backupPassword: process.env.BACKUP_PASSWORD || '',
 
   // Dev mode lets you open the app in a normal browser without Telegram.
   // NEVER enable in production.
@@ -180,6 +182,7 @@ export function checkConfig() {
     if (config.adminPassword && (config.adminPassword.length < 12 || /^(admin|password|123|qwerty)/i.test(config.adminPassword)))
       warnings.push('ADMIN_PASSWORD is weak — use at least 12 random characters.');
     if (config.adminPassword && !config.adminTotpSecret) warnings.push('ADMIN_TOTP_SECRET not set — the browser admin panel only needs a password. Run "npm run admin:2fa" to add a 6-digit code.');
+    if (config.backupToTelegram && !config.backupPassword) warnings.push('BACKUP_PASSWORD not set — backups sent to Telegram are NOT encrypted (they contain balances and phone numbers).');
     if (config.trustProxy === 0) warnings.push('TRUST_PROXY=0: make sure nothing sits in front of the app, or rate limits will see one IP for everyone.');
   } else if (config.devMode) {
     warnings.push('DEV_MODE is ON — anyone can log in as any user. Never use this in production.');

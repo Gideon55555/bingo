@@ -1,3 +1,4 @@
+import { canvasDpr } from './prefs.js';
 // Canvas renderer for the Kerenbula table. Own animation loop; reads a plain `view` object so
 // React doesn't re-render every frame.
 import { W, H, R, PIN_R, DT, MAX_SPEED, MIDLINE, RELEASE_Y, BALL_HEX, colorOf, Sim } from '../../shared/kerenbula.js';
@@ -107,7 +108,7 @@ export function startKbRender(canvas, view) {
   const ctx = canvas.getContext('2d');
   let w = 0, h = 0, dpr = 1, raf;
   const resize = () => {
-    dpr = Math.min(2, window.devicePixelRatio || 1);
+    dpr = canvasDpr();
     w = canvas.clientWidth; h = canvas.clientHeight;
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
   };

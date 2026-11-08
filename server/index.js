@@ -11,6 +11,7 @@ import { serveStatic } from './static.js';
 import { seen, isFrozen, assertNotFrozen } from './risk.js';
 import * as rg from './rg.js';
 import * as growth from './growth.js';
+import { recordClientError } from './clienterrors.js';
 import { setReferralHandler } from './bot.js';
 import { upsertUser } from './db.js';
 import { startMonitor, health } from './monitor.js';
@@ -125,6 +126,15 @@ app.get('/api/config', (_req, res) =>
 app.get('/api/me', requireAuth, (req, res) => {
   const l = rg.getLimits(req.user.id);
   res.json({ user: { ...req.user, isAdmin: isAdminId(req.user.id), ageConfirmed: l.ageConfirmed, excludedUntil: l.excludedUntil, reminderMin: l.reminderMin } });
+});
+
+// ---- App errors from players' phones (no login needed: errors can happen before login) ----
+app.post('/api/client-error', limit('clienterr', 20, 60 * 1000), (req, res) => {
+  const h = req.get('authorization') || '';
+  let uid = null;
+  try { uid = h.startsWith('tma ') ? authenticate(h.slice(4))?.id : null; } catch { /* ignore */ }
+  recordClientError(req.body, uid);
+  res.json({ ok: true });
 });
 
 // ---- Growth: referrals, daily reward, leaderboard ----

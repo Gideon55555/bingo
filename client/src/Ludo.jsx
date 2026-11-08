@@ -4,6 +4,7 @@ import { fmt } from '../../shared/money.js';
 import { COLORS, COLOR_HEX, HOME_POS } from '../../shared/ludo.js';
 import LudoBoard from './LudoBoard.jsx';
 import { SocialBar, InviteBox } from './Social.jsx';
+import { sfx } from './sound.js';
 import { t, useLang, trServer } from './i18n.js';
 
 const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
@@ -55,7 +56,7 @@ export default function Ludo({ cfg, balance }) {
       for (const [k, o] of overrides.current) if (!o.active) overrides.current.delete(k);
       setGame(st);
     };
-    const onRoll = ({ seat, value }) => {
+    const onRoll = ({ seat, value }) => { sfx('dice');
       setDice({ value: 1 + Math.floor(Math.random() * 6), rolling: true, seat });
       setTimeout(() => setDice({ value, rolling: false, seat }), 420);
     };
@@ -70,7 +71,7 @@ export default function Ludo({ cfg, balance }) {
         rerender((x) => x + 1);
         if (i === path.length - 1) {
           if (captured.length) {
-            haptic('heavy');
+            haptic('heavy'); sfx('thud');
             captured.forEach((c) => overrides.current.set(`${c.seat}:${c.token}`, { rel: -1, slow: true, active: false }));
             rerender((x) => x + 1);
           } else haptic('light');
@@ -101,7 +102,8 @@ export default function Ludo({ cfg, balance }) {
 
   // buzz when it becomes my turn
   const myTurn = game && game.turnSeat === game.mySeat && game.mySeat !== null;
-  useEffect(() => { if (myTurn && game.phase === 'roll') haptic('medium'); }, [myTurn, game?.phase]);
+  useEffect(() => { if (myTurn && game.phase === 'roll') { haptic('medium'); sfx('turn'); } }, [myTurn, game?.phase]);
+  useEffect(() => { if (game?.phase === 'over' && game.result) sfx(game.result.winnerSeat === game.mySeat ? 'win' : 'lose'); }, [game?.phase]);
 
   if (!lobby) return <div className="center muted">{t('loading')}</div>;
 

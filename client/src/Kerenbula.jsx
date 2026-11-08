@@ -4,6 +4,7 @@ import { SocialBar, InviteBox } from './Social.jsx';
 import { fmt } from '../../shared/money.js';
 import { W, R, RELEASE_Y, BALL_HEX, canRelease } from '../../shared/kerenbula.js';
 import { startKbRender, toTable, Sim } from './kbRender.js';
+import { sfx } from './sound.js';
 import { t, useLang, trServer } from './i18n.js';
 
 const Dot = ({ color, gone }) => <span className={`kb-dot ${gone ? 'gone' : ''}`} style={{ background: BALL_HEX[color] }} />;
@@ -44,7 +45,10 @@ export default function Kerenbula({ cfg, balance }) {
     const wasMine = view.canRoll;
     view.canRoll = myTurn;
     view.next = st.next;
+    if (st.phase === 'over' && st.result && !view.overSound) { view.overSound = true; sfx(st.result.winner === st.me ? 'win' : 'lose'); }
+    if (st.phase !== 'over') view.overSound = false;
     if (myTurn && !wasMine) {
+      sfx('turn');
       if (!canRelease(st.balls, view.handX)) {
         for (let k = 0; k < 40; k++) { const x = W / 2 + ((k % 2 ? 1 : -1) * Math.ceil(k / 2) * 3); if (canRelease(st.balls, x)) { view.handX = x; break; } }
       }
@@ -63,8 +67,8 @@ export default function Kerenbula({ cfg, balance }) {
       const sim = new Sim(before, pins, { n, ...roll });
       view.replay = {
         sim, after, pinsAfter, start: performance.now(), finished: false,
-        onPin: () => haptic('heavy'),
-        onHit: () => haptic('light'),
+        onPin: () => { haptic('heavy'); sfx('pin'); },
+        onHit: () => { haptic('light'); sfx('ball'); },
         onDone: () => {
           view.balls = view.pending?.balls || after; view.pins = view.pending?.pins || pinsAfter; view.pending = null;
           setTimeout(() => { view.replay = null; if (view.pending) { view.balls = view.pending.balls; view.pins = view.pending.pins; view.pending = null; } }, 50);
