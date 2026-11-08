@@ -700,6 +700,12 @@ input, textarea, select { background: #2e060c; }
 .hunt-count { height: 56px; text-align: center; font-family: 'Score', sans-serif; font-size: 52px; font-weight: 800; color: var(--gold-hi);
   text-shadow: 0 0 18px rgba(233, 185, 73, .6); line-height: 56px; }
 .hunt-count.zero { color: var(--red-hot); }
+.hunt-count span { display: inline-block; animation: beat .45s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes beat { from { transform: scale(1.9); opacity: .2; } to { transform: scale(1); opacity: 1; } }
+/* everybody leaves the ground together on "jump" */
+.hunt-board.hop .hunt-token .fig, .hunt-board.hop .hunt-cop .fig { animation: hop .6s cubic-bezier(.3, 0, .4, 1); }
+@keyframes hop { 0% { transform: translateY(0) scaleY(.85); } 15% { transform: translateY(0) scaleY(1.1); } 50% { transform: translateY(-38%); }
+  85% { transform: translateY(0) scaleY(.82); } 100% { transform: translateY(0) scaleY(1); } }
 .hunt-board { position: relative; width: min(100%, 420px); aspect-ratio: 1; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr);
   gap: 6px; padding: 6px; border-radius: 18px; background: #2a0509; border: 2px solid var(--gold); box-shadow: 0 0 0 4px #2a0509, 0 0 0 6px var(--red), 0 18px 40px rgba(0, 0, 0, .5); }
 .hunt-cell { border-radius: 12px; background: radial-gradient(circle at 50% 40%, #6a1222, #3a0811); border: 1px solid rgba(233, 185, 73, .25); }
@@ -718,6 +724,6 @@ input, textarea, select { background: #2e060c; }
 @keyframes caught { 0% { transform: translate(-50%, -50%); } 25% { transform: translate(-50%, -62%) rotate(-12deg); filter: grayscale(1); }
   100% { transform: translate(-50%, -35%) scale(.3); opacity: 0; filter: grayscale(1); } }
 .hunt-ghost { position: absolute; width: 9%; aspect-ratio: 2.2; transform: translate(-50%, -50%); border: 2px dashed; border-radius: 50%; pointer-events: none; z-index: 1; }
-.fig { display: block; width: 100%; height: auto; overflow: visible; }
+.fig { display: block; width: 100%; height: auto; overflow: visible; transform-origin: 50% 95%; }
 .hunt-hint { text-align: center; font-weight: 800; min-height: 22px; color: var(--gold-hi); }
-@media (prefers-reduced-motion: reduce) { .hunt-cell.legal, .hunt-cop.strike, .hunt-token.caught { animation: none; } .hunt-cop, .hunt-token { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .hunt-cell.legal, .hunt-cop.strike, .hunt-token.caught, .hunt-board.hop .fig, .hunt-count span { animation: none; } .hunt-cop, .hunt-token { transition: none; } }

@@ -102,7 +102,7 @@ function content(game, cfg, lang) {
     const h = cfg.hunt;
     return am ? {
       how: ['ፖሊስ እና ሌባ፦ 4 ተጫዋቾች በ3 × 3 ሳጥን ላይ። ተጫዋቾች በማዕዘኖቹ ይጀምራሉ፤ ፖሊሱ (👮) በመሃል።',
-        `በየዙሩ ${h.moveSec} ሰከንድ ቆጠራ አለ፤ በቆጠራው ውስጥ ከጎንዎ ያለ ሳጥን ይንኩ (ሰያፍ ጨምሮ)። ባሉበት መቆም አይቻልም።`,
+        `በየዙሩ ጨዋታው 1… 2… ${h.moveSec}… ብሎ ይቆጥራል፤ ከመጨረሻው ቁጥር በፊት ከጎንዎ ያለ ሳጥን ይንኩ (ሰያፍ ጨምሮ)። ከዚያ ሁሉም — ፖሊሱም ጭምር — በአንድ ጊዜ ይዘላሉ። ባሉበት መቆም አይቻልም።`,
         (h.jumpAny === false ? 'ፖሊሱም እንደ እርስዎ አንድ እርምጃ ብቻ ይሄዳል' : 'ፖሊሱም ወደ ማንኛውም ሳጥን ይዘላል') + ' — ቀደም ብለው እንዴት እንደተንቀሳቀሱ አይቶ የት እንደሚሄዱ ይገምታል።',
         'ሁሉም እንቅስቃሴዎች በአንድ ጊዜ ይገለጣሉ። ተጫዋቾች አንድ ሳጥን ቢጋሩ ችግር የለም።'],
       win: ['ከፖሊሱ ጋር አንድ ሳጥን ውስጥ የገባ ይወጣል። አንድ ሰው ሲወጣ ፖሊሱ ወደ መሃል ይመለሳል።',
@@ -111,7 +111,7 @@ function content(game, cfg, lang) {
       payouts: [`አሸናፊው ከጠቅላላው ገንዘብ ${100 - pct(h.houseCut)}% ይወስዳል።`, 'የፖሊሱ ምርጫ ተጫዋቾች ከመምረጣቸው በፊት ተቆልፎ (🔒) ይታተማል፤ ከዚያ ይገለጣል — ማንም ማጭበርበር አይችልም (✅)።', 'ጨዋታው በቴክኒክ ችግር ከተቋረጠ ሁሉም ገንዘብ ይመለሳል።'],
     } : {
       how: ['Cops and robbers: 4 players on a 3 × 3 board. Players start in the corners; the cop (👮) starts in the middle.',
-        `Every move there's a ${h.moveSec}-second count: tap a box next to yours (diagonals count). You can't stand still.`,
+        `Every move the game counts 1… 2… ${h.moveSec}… — tap a box next to yours before the last number (diagonals count). Then everyone, the cop too, jumps at the same moment. You can't stand still.`,
         (h.jumpAny === false ? 'The cop also moves just one step, like you' : 'The cop can jump to any box') + ' — it studies how you moved before and guesses where you\'ll go.',
         'All moves are revealed at the same moment. Players may share a box with each other.'],
       win: ['Land in the same box as the cop and you\'re out. After a catch the cop goes back to the middle.',

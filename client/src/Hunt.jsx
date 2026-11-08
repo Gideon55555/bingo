@@ -17,10 +17,10 @@ async function sha256(text) {
   return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
-function Board({ game, view, onPick }) {
+function Board({ game, view, onPick, hop }) {
   const myPos = game.me >= 0 ? game.players[game.me].pos : null;
   return (
-    <div className="hunt-board">
+    <div className={`hunt-board ${hop ? 'hop' : ''}`}>
       {Array.from({ length: 9 }, (_, i) => {
         const legal = game.legal.includes(i);
         const chosen = game.myChoice === i;
@@ -66,6 +66,7 @@ export default function Hunt({ cfg, balance }) {
   const [inviteMode, setInviteMode] = useState(false);
   const [view, setView] = useState({ pos: {}, hunter: CENTER, caught: [], strike: false });
   const [count, setCount] = useState(null);
+  const [hop, setHop] = useState(false);
   const [fair, setFair] = useState(null);
   const gameRef = useRef(null);
   gameRef.current = game;
@@ -98,6 +99,7 @@ export default function Hunt({ cfg, balance }) {
       const pos = { ...Object.fromEntries((gameRef.current?.players || []).map((p) => [p.seat, p.pos])) };
       for (const m of rv.moves) pos[m.seat] = m.to;
       setView({ pos, hunter: rv.hunter.to, caught: rv.caught, strike: rv.caught.length > 0 });
+      setHop(true); setTimeout(() => setHop(false), 700);
       if (rv.caught.length) { haptic('heavy'); sfx('crash'); } else sfx('ball');
       if (rv.caught.includes(gameRef.current?.me)) haptic('error');
       setTimeout(() => {
@@ -128,14 +130,24 @@ export default function Hunt({ cfg, balance }) {
     };
   }, []);
 
-  // 3-2-1 count
+  // Count 1… 2… 3… then everyone (cop included) jumps at the same moment
+  const lastBeat = useRef(0);
   useEffect(() => {
     if (game?.phase !== 'move' || game.deadlineLeftMs == null) { setCount(null); return; }
+    const sec = game.moveSec || 3;
     const end = Date.now() + game.deadlineLeftMs;
-    const tick = () => setCount(Math.max(0, Math.ceil((end - Date.now() - 400) / 1000)));
+    lastBeat.current = 0;
+    const tick = () => {
+      const left = Math.ceil((end - Date.now() - 400) / 1000);       // server grace is 400 ms
+      const n = Math.min(sec + 1, Math.max(1, sec - left + 1));     // 1..sec, then sec+1 = "jump!"
+      setCount(n);
+      if (n !== lastBeat.current) {
+        lastBeat.current = n;
+        if (n <= sec) { sfx(n === sec ? 'pick' : 'turn'); haptic(n === sec ? 'medium' : 'light'); }
+      }
+    };
     tick();
-    const iv = setInterval(tick, 100);
-    if (game.legal.length) { haptic('light'); sfx('turn'); }
+    const iv = setInterval(tick, 80);
     return () => clearInterval(iv);
   }, [game?.moveNo, game?.phase]);
 
@@ -174,8 +186,10 @@ export default function Hunt({ cfg, balance }) {
             </div>
           ))}
         </div>
-        <div className={`hunt-count ${count === 0 ? 'zero' : ''}`}>{game.phase === 'move' && count != null ? (count || '!') : ''}</div>
-        <Board game={game} view={view} onPick={pick} />
+        <div className={`hunt-count ${count > (game.moveSec || 3) || hop ? 'zero' : ''}`}>
+          <span key={`${game.moveNo}-${hop ? 'j' : count}`}>{hop || (game.phase === 'move' && count > (game.moveSec || 3)) ? t('huntJump') : game.phase === 'move' && count ? count : ''}</span>
+        </div>
+        <Board game={game} view={view} onPick={pick} hop={hop} />
         <div className="hunt-hint">{hint}</div>
         <div className="small muted center-text">
           {game.phase === 'move' && game.commit ? `🔒 ${t('huntSealed')} ${game.commit.slice(0, 10)}…` : fair === true ? `✅ ${t('huntFair')}` : fair === false ? '⚠️' : ''}
