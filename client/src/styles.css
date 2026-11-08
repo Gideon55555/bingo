@@ -435,3 +435,14 @@ textarea { width: 100%; resize: vertical; }
   background: var(--bg2); margin-bottom: 10px; border-left: 4px solid #22c55e; }
 .health-strip.warn { border-left-color: #f59e0b; }
 .health-strip.bad { border-left-color: #ef4444; }
+
+/* Bingo: several cards per player */
+.my-cards { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
+.card-chip { background: var(--ok); color: #fff; font-weight: 800; border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+.card-chip.sel { outline: 2px solid var(--text, #fff); }
+.my-play-cards { display: grid; gap: 8px; justify-items: center; }
+.my-play-cards.n2, .my-play-cards.n3 { grid-template-columns: 1fr 1fr; }
+.my-play-cards.n3 > :last-child { grid-column: 1 / -1; max-width: calc(50% - 4px); }
+.card-multi { width: 100%; max-width: 230px; margin: 0; gap: 3px; padding: 5px; }
+.card-multi .cell { font-size: 13px; border-radius: 5px; }
+.card-multi .hdr { font-size: 12px; }

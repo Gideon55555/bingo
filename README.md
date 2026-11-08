@@ -28,16 +28,17 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
 
 **Game flow**
 1. Rooms exist for each stake (10 / 20 / 50 / 100 ETB, configurable).
-2. Players pick a card number (1–100). Each number always maps to the same card.
-   The stake is taken from the player's balance. Players can switch cards for free,
-   or leave before the start and get a refund.
-3. When at least 2 players have joined, a 30 s countdown starts.
+2. Players pick card numbers (1–100), **up to 3 cards each** (`BINGO_MAX_CARDS`). Each number always maps to the
+   same card, and each card costs the room's stake. Before the start a player can remove a card (refunded),
+   pick another, or leave with a full refund.
+3. When at least 2 different players have joined, a 30 s countdown starts.
 4. The server calls a random number every 3.5 s, using a cryptographically secure shuffle.
 5. A player presses **BINGO!** when they have a full row, column, diagonal or the four corners.
    The **server checks the claim** against the called numbers, so the client can't cheat.
-   A false claim disqualifies that player for the round.
-6. The winner gets the pot minus the house cut (20% by default). If several players complete
-   a line on the same ball, they split the prize. The room then resets.
+   One BINGO button covers all of a player's cards. A false claim (no card with a line) disqualifies that player for the round.
+6. The pot is every card's stake; the winner gets it minus the house cut (20% by default). If several cards complete
+   a line on the same ball, the prize is split per winning card (a player with two winning cards gets two shares).
+   The room then resets.
 
 **✈️ Aviator (crash game)** (rename it with `CRASH_NAME`; note: "Aviator" is a trademark of Spribe — consider your own name for a public launch)
 1. One shared round for everyone. Players bet during a 7-second betting window.

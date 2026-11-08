@@ -65,7 +65,9 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
 
   if (!room) return <div className="center muted">{t('loading')}</div>;
 
-  const inGame = room.myCard !== null;
+  const myCards = room.myCards || [];
+  const maxCards = room.maxCards || cfg.maxCards || 1;
+  const inGame = myCards.length > 0;
   const lastCall = room.called[room.called.length - 1];
 
   const run = async (fn) => {
@@ -79,7 +81,10 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
     haptic('medium');
     setPreview(null);
   });
-  const unpick = () => run(() => emit('card:unpick', { stake }));
+  const unpick = (card) => run(async () => {
+    await emit('card:unpick', card ? { stake, card } : { stake });
+    setPreview(null);
+  });
   const claim = () => run(async () => {
     const res = await emit('bingo', { stake });
     if (res.valid === false) { haptic('error'); toast(res.message); }
@@ -108,7 +113,7 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
       </div>
       <div>
         <div className="muted small">{t('players')}</div>
-        <div className="big">{room.players}</div>
+        <div className="big">{room.players}{room.cards > room.players ? <small className="muted"> · {t('nCards', { n: room.cards })}</small> : null}</div>
       </div>
       <div>
         <div className="muted small">{t('prize')}</div>
@@ -120,7 +125,9 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
   // ---------- Picking phase ----------
   if (room.state === 'waiting' || room.state === 'countdown') {
     const taken = new Set(room.takenCards);
-    const showing = preview ?? room.myCard;
+    const mineSet = new Set(myCards);
+    const showing = preview ?? myCards[myCards.length - 1] ?? null;
+    const full = myCards.length >= maxCards;
     return (
       <div className="room">
         {header}
@@ -130,27 +137,41 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
             : <>{t('waitingMore', { n: Math.max(0, cfg.minPlayers - room.players) })}</>}
         </div>
 
+        {inGame && (
+          <div className="my-cards">
+            <span className="muted small">{t('myCardsN', { n: myCards.length, max: maxCards })}</span>
+            {myCards.map((n) => (
+              <button key={n} className={`card-chip ${showing === n ? 'sel' : ''}`} onClick={() => { haptic('light'); setPreview(n); }}>#{n}</button>
+            ))}
+          </div>
+        )}
+
         {showing && (
           <div className="preview">
             <Card id={showing} size="md" />
             <div className="preview-actions">
-              {preview && preview !== room.myCard ? (
-                <button className="primary" disabled={busy} onClick={() => pick(preview)}>
-                  {inGame ? t('switchCard', { n: preview }) : t('playCard', { n: preview, amount: `${fmt(stake)} ${cfg.currency}` })}
-                </button>
+              {mineSet.has(showing) ? (
+                <>
+                  <div className="ok">{t('inWithCard', { n: showing })}</div>
+                  <button className="ghost" disabled={busy} onClick={() => unpick(showing)}>{t('removeCard', { n: showing })}</button>
+                </>
+              ) : full ? (
+                <div className="warn small">{t('maxCardsReached', { max: maxCards })}</div>
               ) : (
-                <div className="ok">{t('inWithCard', { n: room.myCard })}</div>
+                <button className="primary" disabled={busy} onClick={() => pick(showing)}>
+                  {t(inGame ? 'addCard' : 'playCard', { n: showing, amount: `${fmt(stake)} ${cfg.currency}` })}
+                </button>
               )}
-              {inGame && <button className="ghost" disabled={busy} onClick={unpick}>{t('leaveRefund')}</button>}
-              {!inGame && balance < stake && <div className="warn small">{t('balanceLow')}</div>}
+              {myCards.length > 1 && <button className="ghost" disabled={busy} onClick={() => unpick()}>{t('leaveRefund')}</button>}
+              {!mineSet.has(showing) && !full && balance < stake && <div className="warn small">{t('balanceLow')}</div>}
             </div>
           </div>
         )}
 
-        <h3>{inGame ? t('changeCard') : t('pickCard')}</h3>
+        <h3>{maxCards > 1 ? t('pickCards', { max: maxCards }) : t('pickCard')}</h3>
         <div className="picker">
           {Array.from({ length: cfg.cardCount }, (_, i) => i + 1).map((n) => {
-            const mine = n === room.myCard;
+            const mine = mineSet.has(n);
             const isTaken = taken.has(n) && !mine;
             return (
               <button
@@ -170,7 +191,9 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
 
   // ---------- Playing / finished ----------
   const result = room.state === 'finished' ? room.result : null;
-  const myWin = result?.winners.find((w) => w.userId === String(user.id));
+  const myWins = result ? result.winners.filter((w) => w.userId === String(user.id)) : [];
+  const myWin = myWins.length > 0;
+  const lineFor = (card) => result?.winners.find((w) => w.card === card)?.line;
 
   return (
     <div className="room">
@@ -191,13 +214,19 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
       {inGame ? (
         <>
           {room.disqualified && <div className="banner">{t('falseBingo')}</div>}
-          <Card
-            id={room.myCard}
-            called={called}
-            marked={effectiveMarks}
-            onToggle={room.state === 'playing' && !autoMark ? toggle : null}
-            winLine={myWin?.line}
-          />
+          <div className={`my-play-cards n${myCards.length}`}>
+            {myCards.map((id) => (
+              <Card
+                key={id}
+                id={id}
+                size={myCards.length > 1 ? 'multi' : 'lg'}
+                called={called}
+                marked={effectiveMarks}
+                onToggle={room.state === 'playing' && !autoMark ? toggle : null}
+                winLine={lineFor(id)}
+              />
+            ))}
+          </div>
           <div className="controls">
             <label className="toggle">
               <input type="checkbox" checked={autoMark} onChange={toggleAuto} /> {t('autoMark')}
@@ -220,10 +249,10 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
       {result && (
         <div className="overlay">
           <div className="result">
-            {myWin ? <h2>{t('youWon', { amount: `${fmt(result.amountEach)} ${cfg.currency}` })}</h2>
+            {myWin ? <h2>{t('youWon', { amount: `${fmt(result.amountEach * myWins.length)} ${cfg.currency}` })}</h2>
               : result.winners.length ? <h2>{t('gameOver')}</h2> : <h2>{t('noWinner')}</h2>}
             {result.winners.map((w) => (
-              <div key={w.userId} className="winner">
+              <div key={`${w.userId}-${w.card}`} className="winner">
                 <div>🏆 <b>{w.name}</b> — card #{w.card} — {fmt(result.amountEach)} {cfg.currency}</div>
                 <Card id={w.card} called={called} marked={called} winLine={w.line} size="sm" />
               </div>

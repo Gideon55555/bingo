@@ -29,17 +29,19 @@ function content(game, cfg, lang) {
   if (game === 'bingo') {
     const cut = pct(cfg.houseCut);
     return am ? {
-      how: ['ክፍል ይምረጡ — የክፍሉ መጠን የመግቢያ ክፍያዎ ነው።', 'ካርድ ቁጥር ይምረጡ። ጨዋታው እስኪጀምር ድረስ ካርድ መቀየር ወይም ገንዘብዎን ተመላሽ አድርገው መውጣት ይችላሉ።',
+      how: ['ክፍል ይምረጡ — የክፍሉ መጠን የአንድ ካርድ ዋጋ ነው።', `እስከ ${cfg.maxCards || 1} ካርዶች መያዝ ይችላሉ፤ እያንዳንዱ ካርድ የክፍሉን ዋጋ ያስከፍላል። ብዙ ካርድ = የማሸነፍ ዕድል ይጨምራል።`,
+        'ጨዋታው እስኪጀምር ድረስ ካርድ ማስወገድ (ገንዘቡ ይመለሳል) ወይም ሌላ መምረጥ ይችላሉ።',
         `ቢያንስ ${cfg.minPlayers} ተጫዋቾች ሲገቡ ቆጠራ ይጀምራል፣ ከዚያ ጨዋታው ይጀምራል።`, 'ቁጥሮች አንድ በአንድ ይጠራሉ፤ በካርድዎ ላይ በራሳቸው ምልክት ይደረግባቸዋል።'],
-      win: ['ረድፍ፣ አምድ፣ ሰያፍ ወይም አራቱን ማዕዘኖች ሲያሟሉ "ቢንጎ!" ይጫኑ።', 'መጀመሪያ ትክክለኛ ቢንጎ ያለ ሰው ሽልማቱን ያሸንፋል።', 'በአንድ ቁጥር ብዙ ሰዎች ካሟሉ ሽልማቱን እኩል ይካፈላሉ።'],
-      penalties: ['መስመር ሳያሟሉ ቢንጎ ከጫኑ ከዙሩ ይሰረዛሉ፤ የመግቢያ ክፍያዎም አይመለስም።', 'ግንኙነትዎ ቢቋረጥ ጨዋታው ይቀጥላል።'],
-      payouts: [`ሽልማት = ሁሉም የመግቢያ ክፍያዎች ሲቀነስ ${cut}% የአገልግሎት ክፍያ።`, 'ሁሉም 75 ቁጥሮች እስኪጠሩ ማንም ቢንጎ ካልጠየቀ መስመር ያሟሉ ሁሉ ይካፈላሉ።', 'በቴክኒክ ችግር ጨዋታው ከተቋረጠ ሁሉም ገንዘብ ይመለሳል።'],
+      win: ['ረድፍ፣ አምድ፣ ሰያፍ ወይም አራቱን ማዕዘኖች ሲያሟሉ "ቢንጎ!" ይጫኑ።', 'መጀመሪያ ትክክለኛ ቢንጎ ያለ ሰው ሽልማቱን ያሸንፋል።', 'በአንድ ቁጥር ብዙ ካርዶች ካሟሉ ሽልማቱ በአሸናፊ ካርዶች ቁጥር እኩል ይከፈላል (ሁለት አሸናፊ ካርድ ያለው ሁለት ድርሻ ያገኛል)።'],
+      penalties: ['ከካርዶችዎ አንዱም መስመር ሳያሟላ ቢንጎ ከጫኑ ከዙሩ ይሰረዛሉ (ሁሉም ካርዶችዎ)፤ ክፍያዎም አይመለስም።', 'ግንኙነትዎ ቢቋረጥ ጨዋታው ይቀጥላል።'],
+      payouts: [`ሽልማት = የሁሉም ካርዶች ክፍያ ሲቀነስ ${cut}% የአገልግሎት ክፍያ።`, 'ሁሉም 75 ቁጥሮች እስኪጠሩ ማንም ቢንጎ ካልጠየቀ መስመር ያሟሉ ሁሉ ይካፈላሉ።', 'በቴክኒክ ችግር ጨዋታው ከተቋረጠ ሁሉም ገንዘብ ይመለሳል።'],
     } : {
-      how: ['Choose a room — the room amount is your entry fee.', 'Pick a card number. Until the game starts you can switch cards or leave with a full refund.',
+      how: ['Choose a room — the room amount is the price of one card.', `You can hold up to ${cfg.maxCards || 1} cards; each card costs the room amount. More cards = more chances to win.`,
+        'Until the game starts you can remove a card (refunded) or pick another.',
         `Once ${cfg.minPlayers} players have joined, a countdown starts, then the game begins.`, 'Numbers are called one by one and marked on your card automatically.'],
-      win: ['Complete a row, column, diagonal, or the four corners, then tap BINGO!', 'The first valid BINGO wins the prize.', 'If several players complete a line on the same number, they share the prize equally.'],
-      penalties: ['Tapping BINGO without a complete line disqualifies you from the round — your entry fee is not returned.', 'If you lose connection, the game continues without you.'],
-      payouts: [`Prize = all entry fees minus a ${cut}% service fee.`, 'If nobody claims before all 75 numbers are called, everyone holding a line shares the prize.', 'If a game is interrupted by a technical problem, every entry is refunded.'],
+      win: ['Complete a row, column, diagonal, or the four corners, then tap BINGO!', 'The first valid BINGO wins the prize.', 'If several cards complete a line on the same number, the prize is split equally per winning card (two winning cards = two shares).'],
+      penalties: ['Tapping BINGO when none of your cards has a complete line disqualifies you (all your cards) from the round — entries are not returned.', 'If you lose connection, the game continues without you.'],
+      payouts: [`Prize = all card entries minus a ${cut}% service fee.`, 'If nobody claims before all 75 numbers are called, everyone holding a line shares the prize.', 'If a game is interrupted by a technical problem, every entry is refunded.'],
     };
   }
   if (game === 'keno') {

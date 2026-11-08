@@ -101,8 +101,22 @@ try {
   await emit(sock.C, 'card:pick', { stake: 1000, card: 3 });
   await emit(sock.C, 'card:unpick', { stake: 1000 });
   assert.equal(getUser(1003).balance, 10000); ok('leaving before start refunds');
+  // Multiple cards: each costs a stake, max 3, removing one refunds it
+  await emit(sock.C, 'card:pick', { stake: 1000, card: 11 });
+  await emit(sock.C, 'card:pick', { stake: 1000, card: 12 });
+  await emit(sock.C, 'card:pick', { stake: 1000, card: 13 });
+  assert.equal(getUser(1003).balance, 7000); ok('3 cards cost 3 stakes');
+  const fourth = await emit(sock.C, 'card:pick', { stake: 1000, card: 14 });
+  assert.equal(fourth.ok, false); assert.match(fourth.error, /up to 3 cards/); ok('a 4th card is refused');
+  await emit(sock.C, 'card:unpick', { stake: 1000, card: 12 });
+  assert.equal(getUser(1003).balance, 8000); ok('removing one card refunds just that card');
+  const snap = await emit(sock.C, 'room:enter', { stake: 1000 });
+  assert.deepEqual(snap.room.myCards, [11, 13]); assert.ok(snap.room.takenCards.includes(13) && !snap.room.takenCards.includes(12)); ok('player sees their remaining cards; the removed one is free again');
+  await emit(sock.C, 'card:unpick', { stake: 1000 });
+  assert.equal(getUser(1003).balance, 10000); ok('leaving refunds every card');
+  await emit(sock.A, 'card:unpick', { stake: 1000, card: 1 });
   await emit(sock.A, 'card:pick', { stake: 1000, card: 5 });
-  assert.equal(getUser(1001).balance, 9000); ok('switching card is free');
+  assert.equal(getUser(1001).balance, 9000); ok('switching = remove + pick, costs nothing extra');
 
   // Pick B's card so that B is guaranteed to differ from A; then start
   await emit(sock.B, 'card:pick', { stake: 1000, card: 2 });

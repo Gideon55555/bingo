@@ -5,7 +5,8 @@ import { fmt } from '../shared/money.js';
 
 /**
  * One Room per stake. Lifecycle:
- *   waiting   -> players pick cards (stake is charged on pick, refunded on unpick)
+ *   waiting   -> players pick up to BINGO_MAX_CARDS cards; each card costs one stake
+ *                (charged on pick, refunded when the card is dropped before the start)
  *   countdown -> starts when minPlayers have picked; more can still join
  *   playing   -> server calls a number every callIntervalMs; players press BINGO
  *   finished  -> results shown for resultShowSec, then back to waiting
@@ -24,7 +25,7 @@ export class Room {
     clearTimeout(this.timer);
     clearInterval(this.caller);
     this.state = 'waiting';
-    this.players = new Map(); // userId -> { card, name, disqualified }
+    this.players = new Map(); // userId -> { cards: [cardId…], name, disqualified }
     this.cardOwners = new Map(); // cardId -> userId
     this.balls = [];
     this.called = [];
@@ -34,8 +35,14 @@ export class Room {
     this.roundId = null; // DB round, created when the first player pays
   }
 
+  get cardsInPlay() {
+    let n = 0;
+    for (const p of this.players.values()) n += p.cards.length;
+    return n;
+  }
+
   get pot() {
-    return this.players.size * this.stake;
+    return this.cardsInPlay * this.stake; // every card is one entry
   }
 
   get prize() {
@@ -48,6 +55,7 @@ export class Room {
       state: this.state,
       paused: this.manager?.paused || false,
       players: this.players.size,
+      cards: this.cardsInPlay,
       prize: this.prize,
       // Send time *remaining* rather than a timestamp so client clock skew doesn't matter
       countdownLeftMs: this.countdownEndsAt ? Math.max(0, this.countdownEndsAt - Date.now()) : null,
@@ -60,7 +68,8 @@ export class Room {
       ...this.summary(),
       takenCards: [...this.cardOwners.keys()],
       called: this.called,
-      myCard: me ? me.card : null,
+      myCards: me ? me.cards : [],
+      maxCards: config.maxCards,
       disqualified: me ? me.disqualified : false,
       result: this.result,
       callIntervalMs: config.callIntervalMs,
@@ -81,6 +90,7 @@ export class Room {
   }
 
   // ---------- player actions ----------
+  /** Add a card (charged one stake). A player may hold up to config.maxCards cards. */
   pick(user, cardId) {
     const uid = String(user.id);
     cardId = Number(cardId);
@@ -88,34 +98,36 @@ export class Room {
     if (!['waiting', 'countdown'].includes(this.state)) throw new Error('Game already started');
     if (!Number.isInteger(cardId) || cardId < 1 || cardId > config.cardCount) throw new Error('Invalid card');
     const owner = this.cardOwners.get(cardId);
-    if (owner && owner !== uid) throw new Error('Card already taken');
-
+    if (owner === uid) return; // already yours
+    if (owner) throw new Error('Card already taken');
     const existing = this.players.get(uid);
-    if (existing) {
-      // switching cards is free
-      this.cardOwners.delete(existing.card);
-      existing.card = cardId;
-    } else {
-      if (!this.roundId) this.roundId = openRound(this.stake);
-      if (!debit(uid, this.stake, 'bet', `Bingo ${fmt(this.stake)} entry`, this.roundId)) {
-        throw new Error('Insufficient balance. Please deposit first.');
-      }
-      this.players.set(uid, { card: cardId, name: user.first_name || user.username || 'Player', disqualified: false });
-      this.onBalanceChange(uid);
+    if (existing && existing.cards.length >= config.maxCards) throw new Error(`You can hold up to ${config.maxCards} cards`);
+
+    if (!this.roundId) this.roundId = openRound(this.stake);
+    if (!debit(uid, this.stake, 'bet', `Bingo ${fmt(this.stake)} card #${cardId}`, this.roundId)) {
+      throw new Error('Insufficient balance. Please deposit first.');
     }
+    if (existing) existing.cards.push(cardId);
+    else this.players.set(uid, { cards: [cardId], name: user.first_name || user.username || 'Player', disqualified: false });
     this.cardOwners.set(cardId, uid);
+    this.onBalanceChange(uid);
     this.maybeStartCountdown();
     this.broadcast();
   }
 
-  unpick(user) {
+  /** Drop one card (cardId given) or all of them (no cardId) before the game starts — refunded. */
+  unpick(user, cardId) {
     const uid = String(user.id);
     if (!['waiting', 'countdown'].includes(this.state)) throw new Error('Game already started');
     const p = this.players.get(uid);
     if (!p) return;
-    this.players.delete(uid);
-    this.cardOwners.delete(p.card);
-    credit(uid, this.stake, 'refund', `Bingo ${fmt(this.stake)} left before start`, this.roundId);
+    const drop = cardId === undefined || cardId === null ? [...p.cards] : p.cards.filter((c) => c === Number(cardId));
+    for (const c of drop) {
+      p.cards = p.cards.filter((x) => x !== c);
+      this.cardOwners.delete(c);
+      credit(uid, this.stake, 'refund', `Bingo ${fmt(this.stake)} card #${c} returned before start`, this.roundId);
+    }
+    if (!p.cards.length) this.players.delete(uid);
     this.onBalanceChange(uid);
     if (this.state === 'countdown' && this.players.size < config.minPlayers) {
       clearTimeout(this.timer);
@@ -125,6 +137,11 @@ export class Room {
     this.broadcast();
   }
 
+  /** First winning line among a player's cards: { card, line } or null. */
+  winningCards(p) {
+    return p.cards.map((card) => ({ card, line: findWin(card, this.calledSet) })).filter((w) => w.line);
+  }
+
   claim(user) {
     const uid = String(user.id);
     if (this.state !== 'playing') throw new Error('No game in progress');
@@ -132,8 +149,7 @@ export class Room {
     if (!p) throw new Error('You are not in this game');
     if (p.disqualified) throw new Error('You were disqualified for a false BINGO');
 
-    const line = findWin(p.card, this.calledSet);
-    if (!line) {
+    if (!this.winningCards(p).length) {
       p.disqualified = true;
       this.broadcast();
       return { valid: false, message: 'Not a BINGO yet — you are disqualified from this round.' };
@@ -182,7 +198,7 @@ export class Room {
     if (n === undefined) {
       // All 75 called and nobody claimed: auto-award everyone holding a line.
       const winners = [...this.players.entries()]
-        .filter(([, p]) => !p.disqualified && findWin(p.card, this.calledSet))
+        .filter(([, p]) => !p.disqualified && this.winningCards(p).length)
         .map(([id]) => id);
       return this.finish(winners);
     }
@@ -193,37 +209,38 @@ export class Room {
 
   finish(claimantIds) {
     clearInterval(this.caller);
-    // Anyone else (not disqualified) who also has a line at this moment shares the prize,
-    // so two players completing on the same ball split it fairly.
+    // Everyone (not disqualified) with a line at this moment shares the prize — per winning CARD,
+    // since each card was a separate entry. Two winning cards = two shares.
     // If there are no eligible winners (everyone disqualified), the house keeps the pot.
     const winners = new Set(claimantIds);
-    for (const [id, p] of this.players) {
-      if (!p.disqualified && findWin(p.card, this.calledSet)) winners.add(id);
+    for (const [id, p] of this.players) if (!p.disqualified && this.winningCards(p).length) winners.add(id);
+    const winningCards = [];
+    for (const id of winners) {
+      const p = this.players.get(id);
+      for (const w of this.winningCards(p)) winningCards.push({ userId: id, name: p.name, card: w.card, line: w.line });
     }
-    const ids = [...winners];
     const pot = this.pot;
     const prize = this.prize;
-    const each = ids.length ? Math.floor(prize / ids.length) : 0;
+    const each = winningCards.length ? Math.floor(prize / winningCards.length) : 0;
+    const perUser = new Map();
+    for (const w of winningCards) perUser.set(w.userId, (perUser.get(w.userId) || 0) + each);
 
-    const winnersInfo = ids.map((id) => {
-      const p = this.players.get(id);
-      return { userId: id, name: p.name, card: p.card, line: findWin(p.card, this.calledSet) };
-    });
     // Payouts + game record + closing the round happen in one DB transaction
     settleRound(
       this.roundId,
-      ids.map((id) => ({ userId: id, amount: each, note: `Bingo ${fmt(this.stake)} win` })),
+      [...perUser].map(([userId, amount]) => ({ userId, amount, note: `Bingo ${fmt(this.stake)} win` })),
       {
         stake: this.stake,
         players: this.players.size,
         pot,
-        payout: each * ids.length,
-        house: pot - each * ids.length,
-        winners: winnersInfo.map(({ userId, card }) => ({ userId, card })),
+        payout: each * winningCards.length,
+        house: pot - each * winningCards.length,
+        winners: winningCards.map(({ userId, card }) => ({ userId, card })),
         calls: this.called.length,
       },
     );
-    for (const id of ids) this.onBalanceChange(id);
+    for (const id of perUser.keys()) this.onBalanceChange(id);
+    const winnersInfo = winningCards;
 
     this.state = 'finished';
     this.result = { winners: winnersInfo, amountEach: each, pot };
@@ -279,7 +296,7 @@ export class GameManager {
     return [...this.rooms.values()].map((r) => ({
       ...r.summary(),
       called: r.called.length,
-      cards: [...r.players.entries()].map(([userId, p]) => ({ userId, name: p.name, card: p.card, disqualified: p.disqualified })),
+      cards: [...r.players.entries()].flatMap(([userId, p]) => p.cards.map((card) => ({ userId, name: p.name, card, disqualified: p.disqualified }))),
     }));
   }
   get(stake) {

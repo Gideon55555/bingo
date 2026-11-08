@@ -77,6 +77,7 @@ app.get('/api/config', (_req, res) =>
   res.json({
     stakes: config.stakes,
     cardCount: config.cardCount,
+    maxCards: config.maxCards,
     currency: config.currency,
     paymentInfo: config.paymentInfo,
     minDeposit: config.minDeposit,
@@ -231,8 +232,8 @@ io.on('connection', (socket) => {
     games.get(stake).pick(getUser(user.id), card);
   });
 
-  handle('card:unpick', ({ stake }) => {
-    games.get(stake).unpick(user);
+  handle('card:unpick', ({ stake, card }) => {
+    games.get(stake).unpick(user, card);
   });
 
   handle('bingo', ({ stake }) => games.get(stake).claim(user));
