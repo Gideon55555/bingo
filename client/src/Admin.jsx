@@ -33,6 +33,7 @@ export default function Admin({ cfg, onLogout }) {
     ['players', '👥 Players'],
     ['games', '🎱 Games'],
     ['broadcast', '📣 Broadcast'],
+    ['log', '📜 Admin log'],
   ];
 
   return (
@@ -50,6 +51,7 @@ export default function Admin({ cfg, onLogout }) {
           {tab === 'players' && <Players cfg={cfg} />}
           {tab === 'games' && <Games cfg={cfg} />}
           {tab === 'broadcast' && <Broadcast users={stats.users} />}
+          {tab === 'log' && <AdminLog />}
         </>
       )}
     </div>
@@ -233,8 +235,9 @@ function Requests({ cfg, onChange }) {
     if (!(await confirmBox(q))) return;
     setBusy(t.id);
     try {
-      await adminApi.decide(kind, t.id, approve);
+      const r = await adminApi.decide(kind, t.id, approve);
       haptic('success');
+      if (r.awaitingSecond) toast('First approval recorded. A second admin must approve this withdrawal before you send the money.');
     } catch (e) {
       toast(e.message);
     } finally {
@@ -259,6 +262,9 @@ function Requests({ cfg, onChange }) {
               <div className="small">{name(t)} <span className="muted">· id {t.user_id}</span></div>
               <div className="small">
                 {t.type === 'deposit' ? <>Ref: <b className="mono">{t.reference}</b></> : <>Send to: <b className="mono">{t.phone}</b></>}
+                {t.approvals && JSON.parse(t.approvals).length > 0 && (
+                  <div className="warn small">☑️ Approved by {JSON.parse(t.approvals).map((a) => a.name).join(', ')} — needs a second admin</div>
+                )}
                 <span className="muted"> · {fmtDate(t.created_at)}</span>
               </div>
               <div className="req-actions">
@@ -649,6 +655,55 @@ function KerenbulaGames({ cfg }) {
         </tbody>
       </table>
       <p className="muted small" style={{ padding: '0 10px' }}>Amounts in {cfg.currency}.</p>
+    </div>
+  );
+}
+
+const LOG_LABEL = {
+  approve_deposit: '✅ Approved deposit', reject_deposit: '❌ Rejected deposit', approve_withdraw: '✅ Paid withdrawal',
+  reject_withdraw: '❌ Rejected withdrawal', withdraw_first_approval: '☑️ First approval (withdrawal)', adjust_balance: '✏️ Balance change',
+  pause_games: '⏸ Paused games', resume_games: '▶️ Resumed games', broadcast: '📣 Broadcast', backup: '🗄 Backup',
+  login: '🔑 Login', login_failed: '🚫 Failed login', flag_user: '🚩 Flag', unflag_user: '🏳️ Cleared flag',
+};
+/** Everything admins did, newest first — kept permanently in the database. */
+function AdminLog() {
+  const [items, setItems] = useState(null);
+  const [more, setMore] = useState(true);
+  const load = async (before) => {
+    const r = await adminApi.log(before);
+    setItems((prev) => (before ? [...(prev || []), ...r.items] : r.items));
+    setMore(r.items.length >= 200);
+  };
+  useEffect(() => { load().catch((e) => toast(e.message)); }, []);
+  if (!items) return <div className="muted">Loading…</div>;
+  if (!items.length) return <div className="empty">No admin actions yet.</div>;
+  const detail = (d) => {
+    if (!d) return '';
+    try {
+      const o = JSON.parse(d);
+      if (typeof o !== 'object') return String(o);
+      return Object.entries(o).filter(([, v]) => v !== null && v !== undefined)
+        .map(([k, v]) => (k === 'amount' || k === 'newBalance' ? `${k} ${fmt(v)}` : `${k} ${v}`)).join(' · ');
+    } catch { return d; }
+  };
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th><th>IP</th></tr></thead>
+        <tbody>
+          {items.map((l) => (
+            <tr key={l.id} className={l.action === 'login_failed' ? 'neg' : ''}>
+              <td className="nowrap">{fmtDate(l.created_at)}</td>
+              <td>{l.admin}</td>
+              <td className="nowrap">{LOG_LABEL[l.action] || l.action}</td>
+              <td className="mono small">{l.target || '—'}</td>
+              <td className="small">{detail(l.detail)}</td>
+              <td className="mono small muted">{l.ip || ''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {more && <button className="ghost" onClick={() => load(items[items.length - 1].id)}>Load older</button>}
     </div>
   );
 }

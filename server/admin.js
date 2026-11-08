@@ -7,14 +7,19 @@ import { authenticate } from './auth.js';
 import {
   getStats, listCrashRounds, listKenoRounds, listLudoGames, listPoolGames, listKerenbulaGames, findUser, listUsers, listTransactions, listGames, adjustBalance, allUserIds, history,
   approveDeposit, rejectDeposit, invalidateStats, markWithdrawalPaid, rejectWithdrawal, pendingTx,
+  logAdmin, listAdminLog, addWithdrawalApproval, getTx,
 } from './db.js';
 import { notifyUser, sendMessage } from './bot.js';
 import { runBackup } from './backup.js';
 import { tr } from './i18n.js';
 import { publicMessage } from './security.js';
 import { metrics } from './monitor.js';
+import { verifyTotp } from './totp.js';
 
 export const isAdminId = (id) => config.adminIds.includes(String(id));
+/** Normalise "who did it": { id, name, ip }. Accepts a plain name for older callers. */
+const asWho = (w) => (w && typeof w === 'object' ? w : { id: String(w || 'admin'), name: String(w || 'admin') });
+const twoPersonActive = () => config.adminIds.length >= 2;
 const money = (n) => fmtMoney(n, config.currency);
 
 export function createAdmin({ games, onBalanceChange }) {
@@ -39,8 +44,13 @@ export function createAdmin({ games, onBalanceChange }) {
     listTransactions,
     listGames,
 
-    /** Handle a deposit/withdrawal decision. kind: 'deposit'|'withdraw', approve: boolean */
-    async decide(kind, id, approve, adminName = 'admin') {
+    /**
+     * Handle a deposit/withdrawal decision. kind: 'deposit'|'withdraw', approve: boolean, who: {id,name,ip}.
+     * Big withdrawals (≥ WITHDRAW_SECOND_APPROVAL) need two different admins when there are 2+ admins:
+     * the first approval is recorded and the request stays pending ({ awaitingSecond: true }).
+     */
+    async decide(kind, id, approve, whoIn) {
+      const who = asWho(whoIn);
       let t;
       let msg;
       if (kind === 'deposit') {
@@ -49,6 +59,18 @@ export function createAdmin({ games, onBalanceChange }) {
           ? tr(t.user_id, 'depositApproved', { amount: money(t.amount) })
           : tr(t.user_id, 'depositRejected', { amount: money(t.amount), ref: t.reference }));
       } else {
+        const cur = getTx(id);
+        if (approve && cur && cur.type === 'withdraw' && cur.status === 'pending' && twoPersonActive() && -cur.amount >= config.withdrawSecondApproval) {
+          const prior = cur.approvals ? JSON.parse(cur.approvals) : [];
+          if (!prior.length) {
+            const u = addWithdrawalApproval(id, who);
+            logAdmin(who, 'withdraw_first_approval', id, { amount: -cur.amount, user: cur.user_id }, who.ip);
+            console.log(`[admin] ${who.name} gave first approval to withdrawal #${id} — waiting for a second admin`);
+            return { ...u, awaitingSecond: true, firstBy: who.name };
+          }
+          if (prior.some((p) => String(p.id) === String(who.id))) throw new Error('A different admin must give the second approval');
+          addWithdrawalApproval(id, who);
+        }
         t = approve ? markWithdrawalPaid(id) : rejectWithdrawal(id);
         msg = t && (approve
           ? tr(t.user_id, 'withdrawSent', { amount: money(-t.amount), phone: t.phone })
@@ -56,33 +78,38 @@ export function createAdmin({ games, onBalanceChange }) {
       }
       if (!t) throw new Error('Already handled (or not found)');
       invalidateStats();
+      logAdmin(who, `${approve ? 'approve' : 'reject'}_${kind}`, id, { amount: Math.abs(t.amount), user: t.user_id, ref: t.reference || undefined, phone: t.phone || undefined }, who.ip);
       onBalanceChange(t.user_id);
       await notifyUser(t.user_id, msg);
-      console.log(`[admin] ${adminName} ${approve ? 'approved' : 'rejected'} ${kind} #${id}`);
+      console.log(`[admin] ${who.name} ${approve ? 'approved' : 'rejected'} ${kind} #${id}`);
       return t;
     },
 
-    async adjust(userQuery, amount, note, adminName = 'admin') {
+    async adjust(userQuery, amount, note, whoIn) {
+      const who = asWho(whoIn);
       const u = findUser(userQuery);
       if (!u) throw new Error('User not found');
-      const updated = adjustBalance(u.id, amount, note || `Adjusted by ${adminName}`);
+      const updated = adjustBalance(u.id, amount, note || `Adjusted by ${who.name}`);
       invalidateStats();
       onBalanceChange(u.id);
       const amt = Math.trunc(Number(amount)); // cents
+      logAdmin(who, 'adjust_balance', u.id, { amount: amt, note: note || null, newBalance: updated.balance }, who.ip);
       await notifyUser(u.id, amt > 0
         ? tr(u.id, 'bonusAdded', { amount: money(amt), note: note ? ` (${note})` : '' })
         : tr(u.id, 'deducted', { amount: money(-amt), note: note ? ` (${note})` : '' }));
-      console.log(`[admin] ${adminName} adjusted ${u.id} by ${amt}`);
+      console.log(`[admin] ${who.name} adjusted ${u.id} by ${amt}`);
       return updated;
     },
 
-    pause() { return games.pause(); },
-    resume() { games.resume(); },
+    pause(who) { const r = games.pause(); logAdmin(asWho(who), 'pause_games', null, r, asWho(who).ip); return r; },
+    resume(who) { games.resume(); logAdmin(asWho(who), 'resume_games', null, null, asWho(who).ip); },
+    adminLog: (q) => listAdminLog(q),
 
     /** Sends to every user, ~20 msgs/sec to stay under Telegram limits. Runs in background. */
-    broadcast(text) {
+    broadcast(text, who) {
       text = String(text || '').trim();
       if (!text) throw new Error('Message is empty');
+      logAdmin(asWho(who), 'broadcast', null, text.slice(0, 500), asWho(who).ip);
       if (broadcastJob?.running) throw new Error('A broadcast is already running');
       const ids = allUserIds();
       const job = { running: true, total: ids.length, sent: 0, failed: 0 };
@@ -98,7 +125,7 @@ export function createAdmin({ games, onBalanceChange }) {
       return job;
     },
     broadcastStatus: () => broadcastJob,
-    backup: () => runBackup({ sendToTelegram: true, label: 'manual' }),
+    backup: (who) => { logAdmin(asWho(who), 'backup', null, null, asWho(who)?.ip); return runBackup({ sendToTelegram: true, label: 'manual' }); },
   };
 
   return { actions, router: adminRouter(actions) };
@@ -120,27 +147,71 @@ const recordFailure = (ip) => {
   failures.set(ip, f);
 };
 
-/** Admin = Telegram user in ADMIN_IDS (inside the Mini App), or ADMIN_PASSWORD (browser). */
-function requireAdmin(req, res, next) {
-  const key = req.get('x-admin-key') || '';
+// Browser sessions after a successful login (password + 6-digit code when ADMIN_TOTP_SECRET is set)
+const sessions = new Map(); // token -> { until }
+const newSession = () => {
+  const token = crypto.randomBytes(32).toString('base64url');
+  sessions.set(token, { until: Date.now() + config.adminSessionHours * 3600 * 1000 });
+  for (const [k, v] of sessions) if (v.until < Date.now()) sessions.delete(k);
+  return token;
+};
+const passwordOk = (key) => {
   const pw = config.adminPassword;
-  if (pw && key) {
-    if (isLocked(req.ip)) return res.status(429).json({ error: 'Too many wrong attempts. Try again in 15 minutes.' });
-    const a = crypto.createHash('sha256').update(key).digest();
-    const b = crypto.createHash('sha256').update(pw).digest();
-    if (crypto.timingSafeEqual(a, b)) { req.adminName = 'web-admin'; return next(); }
+  if (!pw || !key) return false;
+  const a = crypto.createHash('sha256').update(String(key)).digest();
+  const b = crypto.createHash('sha256').update(pw).digest();
+  return crypto.timingSafeEqual(a, b);
+};
+
+/** POST /api/admin/login { password, code } → { token } */
+function login(req, res) {
+  if (isLocked(req.ip)) return res.status(429).json({ error: 'Too many wrong attempts. Try again in 15 minutes.' });
+  const { password, code } = req.body || {};
+  if (!passwordOk(password)) {
     recordFailure(req.ip);
+    logAdmin({ name: 'web-admin' }, 'login_failed', null, 'wrong password', req.ip);
+    console.warn(`[security] wrong admin password from ${req.ip}`);
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  if (config.adminTotpSecret) {
+    if (!code) return res.status(401).json({ error: 'Enter the 6-digit code from your authenticator app', needCode: true });
+    if (!verifyTotp(config.adminTotpSecret, code)) {
+      recordFailure(req.ip);
+      logAdmin({ name: 'web-admin' }, 'login_failed', null, 'wrong 2FA code', req.ip);
+      return res.status(401).json({ error: 'Wrong or expired code', needCode: true });
+    }
+  }
+  logAdmin({ name: 'web-admin' }, 'login', null, config.adminTotpSecret ? 'password + 2FA' : 'password', req.ip);
+  res.json({ token: newSession(), twoFactor: !!config.adminTotpSecret });
+}
+
+/** Admin = Telegram user in ADMIN_IDS (inside the Mini App), or a browser session (or, without 2FA, the password header). */
+function requireAdmin(req, res, next) {
+  const session = req.get('x-admin-session');
+  if (session) {
+    const s = sessions.get(session);
+    if (s && s.until > Date.now()) { req.who = { id: 'web', name: 'web-admin', ip: req.ip }; return next(); }
+    return res.status(401).json({ error: 'Session expired — please log in again', expired: true });
+  }
+  const key = req.get('x-admin-key') || '';
+  if (config.adminPassword && key) {
+    if (config.adminTotpSecret) return res.status(401).json({ error: 'Log in with your 2-step code', needCode: true });
+    if (isLocked(req.ip)) return res.status(429).json({ error: 'Too many wrong attempts. Try again in 15 minutes.' });
+    if (passwordOk(key)) { req.who = { id: 'web', name: 'web-admin', ip: req.ip }; return next(); }
+    recordFailure(req.ip);
+    logAdmin({ name: 'web-admin' }, 'login_failed', null, 'wrong password', req.ip);
     console.warn(`[security] wrong admin password from ${req.ip}`);
     return res.status(401).json({ error: 'Wrong password' });
   }
   const h = req.get('authorization') || '';
   const user = authenticate(h.startsWith('tma ') ? h.slice(4) : '', req.get('x-dev-user'));
-  if (user && isAdminId(user.id)) { req.adminName = user.first_name || user.id; return next(); }
+  if (user && isAdminId(user.id)) { req.who = { id: `tg:${user.id}`, name: user.first_name || user.id, ip: req.ip }; req.adminName = req.who.name; return next(); }
   res.status(401).json({ error: 'Admins only' });
 }
 
 function adminRouter(actions) {
   const r = express.Router();
+  r.post('/login', login);
   r.use(requireAdmin);
   const wrap = (fn) => async (req, res) => {
     try { res.json(await fn(req)); } catch (e) { res.status(400).json({ error: publicMessage(e, `admin ${req.path}`) }); }
@@ -163,11 +234,13 @@ function adminRouter(actions) {
   r.get('/ludo-games', wrap(() => ({ items: actions.ludoGames() })));
   r.get('/pool-games', wrap(() => ({ items: actions.poolGames() })));
   r.get('/kerenbula-games', wrap(() => ({ items: actions.kerenbulaGames() })));
-  r.post('/decide', wrap((req) => actions.decide(req.body.kind, Number(req.body.id), !!req.body.approve, req.adminName)));
-  r.post('/adjust', wrap((req) => actions.adjust(req.body.userId, req.body.amount, req.body.note, req.adminName)));
-  r.post('/pause', wrap(() => actions.pause()));
-  r.post('/resume', wrap(() => { actions.resume(); return { ok: true }; }));
-  r.post('/broadcast', wrap((req) => actions.broadcast(req.body.text)));
+  r.post('/decide', wrap((req) => actions.decide(String(req.body.kind), Number(req.body.id), !!req.body.approve, req.who)));
+  r.post('/adjust', wrap((req) => actions.adjust(req.body.userId, req.body.amount, req.body.note, req.who)));
+  r.post('/pause', wrap((req) => actions.pause(req.who)));
+  r.post('/resume', wrap((req) => { actions.resume(req.who); return { ok: true }; }));
+  r.post('/broadcast', wrap((req) => actions.broadcast(req.body.text, req.who)));
+  r.get('/log', wrap((req) => ({ items: actions.adminLog({ limit: Math.min(Number(req.query.limit) || 200, 500), before: Number(req.query.before) || null }) })));
+  r.post('/logout', wrap((req) => { sessions.delete(req.get('x-admin-session')); return { ok: true }; }));
   r.get('/broadcast', wrap(() => actions.broadcastStatus() || {}));
   return r;
 }

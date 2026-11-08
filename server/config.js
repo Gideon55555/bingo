@@ -37,6 +37,11 @@ export const config = {
   authFailRateIp: num(process.env.AUTH_FAIL_RATE_IP, 60), // failed logins per minute per IP before blocking
   maxSocketsPerUser: num(process.env.MAX_SOCKETS_PER_USER, 5),
   initDataMaxAgeSec: num(process.env.INITDATA_MAX_AGE_HOURS, 24) * 3600,
+  // Browser admin panel 2-step login: base32 secret from `npm run admin:2fa` (empty = password only)
+  adminTotpSecret: (process.env.ADMIN_TOTP_SECRET || '').replace(/\s/g, ''),
+  adminSessionHours: num(process.env.ADMIN_SESSION_HOURS, 12),
+  // Withdrawals of this amount or more need a second, different admin (only when ADMIN_IDS has 2+ admins)
+  withdrawSecondApproval: cents(process.env.WITHDRAW_SECOND_APPROVAL, 5000),
   port: num(process.env.PORT, 3000),
   timezone: process.env.TZ,
   botToken,
@@ -162,6 +167,7 @@ export function checkConfig() {
     if (/09X|Your Name/.test(config.paymentInfo)) warnings.push('PAYMENT_INFO still has the placeholder text.');
     if (config.adminPassword && (config.adminPassword.length < 12 || /^(admin|password|123|qwerty)/i.test(config.adminPassword)))
       warnings.push('ADMIN_PASSWORD is weak — use at least 12 random characters.');
+    if (config.adminPassword && !config.adminTotpSecret) warnings.push('ADMIN_TOTP_SECRET not set — the browser admin panel only needs a password. Run "npm run admin:2fa" to add a 6-digit code.');
     if (config.trustProxy === 0) warnings.push('TRUST_PROXY=0: make sure nothing sits in front of the app, or rate limits will see one IP for everyone.');
   } else if (config.devMode) {
     warnings.push('DEV_MODE is ON — anyone can log in as any user. Never use this in production.');

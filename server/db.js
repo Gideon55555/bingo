@@ -147,6 +147,22 @@ if (!cols('transactions').includes('round_id')) db.exec('ALTER TABLE transaction
 if (!cols('games').includes('round_id')) db.exec('ALTER TABLE games ADD COLUMN round_id INTEGER');
 if (!cols('users').includes('lang')) db.exec("ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'am'");
 if (!cols('rounds').includes('game')) db.exec("ALTER TABLE rounds ADD COLUMN game TEXT NOT NULL DEFAULT 'bingo'");
+// Admins who signed off a withdrawal (JSON [{id, name, at}]) — big withdrawals need two different admins
+if (!cols('transactions').includes('approvals')) db.exec('ALTER TABLE transactions ADD COLUMN approvals TEXT');
+
+// Permanent record of every admin action (who, what, when, from where)
+db.exec(`
+CREATE TABLE IF NOT EXISTS admin_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+  admin       TEXT NOT NULL,     -- "Gedion (tg:123)" / "web-admin"
+  action      TEXT NOT NULL,     -- approve_deposit, adjust_balance, login_failed, …
+  target      TEXT,              -- user id / transaction id
+  detail      TEXT,
+  ip          TEXT
+);
+CREATE INDEX IF NOT EXISTS admin_log_time ON admin_log(created_at);
+`);
 db.exec('CREATE INDEX IF NOT EXISTS tx_round ON transactions(round_id)');
 // Indexes for the admin dashboard (stats by date) and lists
 db.exec(`
@@ -543,4 +559,26 @@ export const adjustBalance = db.transaction((userId, amount, note) => {
   stmts.credit.run(amount, String(userId));
   tx({ user_id: userId, type: 'adjust', amount, status: 'done', note: note || 'Admin adjustment' });
   return getUser(userId);
+});
+
+// ---------- Admin audit log ----------
+const insertLog = db.prepare('INSERT INTO admin_log (admin, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)');
+/** who: { id, name } of the admin. Never throws — logging must not break the action. */
+export function logAdmin(who, action, target = null, detail = null, ip = null) {
+  try {
+    const admin = who?.name ? `${who.name}${who.id && who.id !== who.name ? ` (${who.id})` : ''}` : String(who || 'system');
+    insertLog.run(admin, action, target == null ? null : String(target), detail == null ? null : (typeof detail === 'string' ? detail : JSON.stringify(detail)), ip);
+  } catch (e) { console.error('[admin-log]', e.message); }
+}
+export const listAdminLog = ({ limit = 200, before = null } = {}) =>
+  db.prepare(`SELECT * FROM admin_log ${before ? 'WHERE id < ?' : ''} ORDER BY id DESC LIMIT ?`).all(...(before ? [before, limit] : [limit]));
+
+/** Record one admin's sign-off on a pending withdrawal (first of two). Returns the updated tx or null. */
+export const addWithdrawalApproval = db.transaction((id, who) => {
+  const t = getTx(id);
+  if (!t || t.type !== 'withdraw' || t.status !== 'pending') return null;
+  const list = t.approvals ? JSON.parse(t.approvals) : [];
+  list.push({ id: who.id, name: who.name, at: Math.floor(Date.now() / 1000) });
+  db.prepare('UPDATE transactions SET approvals = ? WHERE id = ?').run(JSON.stringify(list), id);
+  return getTx(id);
 });

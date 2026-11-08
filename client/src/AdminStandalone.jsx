@@ -8,6 +8,8 @@ export default function AdminStandalone() {
   const [authed, setAuthed] = useState(false);
   const [checking, setChecking] = useState(true);
   const [pw, setPw] = useState('');
+  const [code, setCode] = useState('');
+  const [needCode, setNeedCode] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -19,18 +21,19 @@ export default function AdminStandalone() {
 
   const login = async (e) => {
     e.preventDefault();
-    adminKey.set(pw);
     try {
-      await adminApi.stats();
+      const { token } = await adminApi.login(pw, needCode ? code : undefined);
+      adminKey.set(token);
       setAuthed(true);
       setError('');
+      setCode('');
     } catch (err) {
-      adminKey.set('');
-      setError(err.status === 401 ? 'Wrong password (or ADMIN_PASSWORD is not set on the server)' : err.message);
+      if (err.needCode) setNeedCode(true);
+      setError(err.status === 401 && !err.needCode ? 'Wrong password (or ADMIN_PASSWORD is not set on the server)' : err.message);
     }
   };
 
-  const logout = () => { adminKey.set(''); setAuthed(false); setPw(''); };
+  const logout = async () => { await adminApi.logout(); adminKey.set(''); setAuthed(false); setPw(''); setNeedCode(false); };
 
   if (checking || !cfg) return <div className="center muted">{error || 'Loading…'}</div>;
 
@@ -39,7 +42,11 @@ export default function AdminStandalone() {
       <div className="center">
         <form className="login" onSubmit={login}>
           <div className="brand">🎱 Bingo Admin</div>
-          <input type="password" placeholder="Admin password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus />
+          <input type="password" placeholder="Admin password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus={!needCode} autoComplete="current-password" />
+          {needCode && (
+            <input inputMode="numeric" pattern="[0-9 ]*" maxLength={7} placeholder="6-digit code from your authenticator app" value={code}
+              onChange={(e) => setCode(e.target.value)} autoFocus autoComplete="one-time-code" />
+          )}
           <button className="primary">Log in</button>
           {error && <div className="warn small">{error}</div>}
         </form>

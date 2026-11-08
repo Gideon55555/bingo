@@ -35,7 +35,7 @@ export const inTelegram = !!initData;
 
 // ---------- Admin API ----------
 // In Telegram, admins are recognised by their Telegram id. In a normal browser, by ADMIN_PASSWORD.
-const KEY = 'bingo_admin_key';
+const KEY = 'bingo_admin_session';
 export const adminKey = {
   get: () => { try { return sessionStorage.getItem(KEY) || ''; } catch { return ''; } },
   set: (v) => { try { v ? sessionStorage.setItem(KEY, v) : sessionStorage.removeItem(KEY); } catch { /* ignore */ } },
@@ -43,13 +43,21 @@ export const adminKey = {
 async function adminRequest(method, url, body) {
   const h = headers();
   const k = adminKey.get();
-  if (k) h['x-admin-key'] = k;
+  if (k) h['x-admin-session'] = k;
   const res = await fetch('/api/admin' + url, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { const e = new Error(data.error || `Request failed (${res.status})`); e.status = res.status; throw e; }
   return data;
 }
 export const adminApi = {
+  login: async (password, code) => {
+    const res = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password, code }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(data.error || `Login failed (${res.status})`); e.status = res.status; e.needCode = !!data.needCode; throw e; }
+    return data;
+  },
+  logout: () => adminRequest('POST', '/logout').catch(() => {}),
+  log: (before) => adminRequest('GET', `/log${before ? `?before=${before}` : ''}`),
   stats: () => adminRequest('GET', '/stats'),
   pending: () => adminRequest('GET', '/pending'),
   users: (search = '', offset = 0) => adminRequest('GET', `/users?search=${encodeURIComponent(search)}&offset=${offset}`),

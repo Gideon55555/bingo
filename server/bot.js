@@ -8,6 +8,8 @@ export let bot = null;
 const isAdmin = (id) => config.adminIds.includes(String(id));
 const who = (t) => (t.username ? `@${t.username}` : t.first_name || t.user_id || t.id);
 const money = (n) => fmtMoney(n, config.currency);
+const adminWho = (ctx) => ({ id: `tg:${ctx.from.id}`, name: ctx.from.first_name || String(ctx.from.id) });
+const notifyOtherAdmins = (exceptId, text) => Promise.all(config.adminIds.filter((a) => a !== String(exceptId)).map((a) => sendMessage(a, text)));
 const fmtDate = (s) => new Date(s * 1000).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
 
 function txText(t) {
@@ -147,30 +149,30 @@ export async function startBot({ actions, app }) {
     if (!q || !amount || !Number.isFinite(toCents(amount)) || toCents(amount) === 0) {
       return ctx.reply('Usage: /addbalance <id or @username> <amount> [note]\nExample: /addbalance @abebe 50 welcome bonus\nUse a negative amount to subtract.');
     }
-    const u = await actions.adjust(q, toCents(amount), note.join(' '), ctx.from.first_name);
+    const u = await actions.adjust(q, toCents(amount), note.join(' '), adminWho(ctx));
     return ctx.reply(`✅ Done. ${who(u)} now has ${money(u.balance)}.`);
   }));
 
   bot.command('broadcast', adminOnly(async (ctx) => {
     const text = args(ctx);
     if (!text) return ctx.reply('Usage: /broadcast <message>');
-    const job = actions.broadcast(text);
+    const job = actions.broadcast(text, adminWho(ctx));
     return ctx.reply(`📣 Sending to ${job.total} players… (about ${Math.ceil(job.total / 20)}s)`);
   }));
 
   bot.command('pause', adminOnly((ctx) => {
-    const { refunded } = actions.pause();
+    const { refunded } = actions.pause(adminWho(ctx));
     return ctx.reply(`⏸ Games paused. ${refunded} waiting player(s) refunded. Running games will finish normally.\nUse /resume to reopen.`);
   }));
 
   bot.command('resume', adminOnly((ctx) => {
-    actions.resume();
+    actions.resume(adminWho(ctx));
     return ctx.reply('▶️ Games resumed.');
   }));
 
   bot.command('backup', adminOnly(async (ctx) => {
     await ctx.reply('🗄 Making a backup…');
-    await actions.backup();
+    await actions.backup(adminWho(ctx));
   }));
 
   // ---------- Approve / reject buttons ----------
@@ -178,7 +180,13 @@ export async function startBot({ actions, app }) {
     if (!isAdmin(ctx.from.id)) return ctx.answerCallbackQuery({ text: 'Not allowed' });
     const [, kind, action, idStr] = ctx.match;
     try {
-      const t = await actions.decide(kind === 'dep' ? 'deposit' : 'withdraw', Number(idStr), action === 'ok', ctx.from.first_name);
+      const t = await actions.decide(kind === 'dep' ? 'deposit' : 'withdraw', Number(idStr), action === 'ok', adminWho(ctx));
+      if (t.awaitingSecond) {
+        // Keep the buttons: a DIFFERENT admin must approve too
+        await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n☑️ First approval by ${ctx.from.first_name} — needs a second admin to approve`, { reply_markup: ctx.callbackQuery.message.reply_markup });
+        notifyOtherAdmins(ctx.from.id, `☑️ ${ctx.from.first_name} approved withdrawal #${t.id} (${money(-t.amount)} to ${t.phone}). It needs your approval too — see /pending.`);
+        return ctx.answerCallbackQuery({ text: 'First approval recorded — a second admin must approve' });
+      }
       const status = t.status === 'approved' ? '✅ APPROVED' : '❌ REJECTED';
       await ctx.editMessageText(`${ctx.callbackQuery.message.text}\n\n${status} by ${ctx.from.first_name}`);
       return ctx.answerCallbackQuery({ text: status });
