@@ -1,4 +1,4 @@
-// Responsible gambling: 18+ gate, deposit limits (with 24 h cooling-off for raises), self-exclusion.
+// Responsible gambling: 21+ gate, deposit limits (with 24 h cooling-off for raises), self-exclusion.
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -45,11 +45,11 @@ try {
   await new Promise((r) => s.on('connect', r));
   await emit(s, 'kb:enter');
 
-  console.log('18+ confirmation');
+  console.log('21+ confirmation');
   assert.equal((await call('GET', '/api/me')).data.user.ageConfirmed, false); ok('new player starts unconfirmed');
   let j = await emit(s, 'kb:join', { stake: 1000 });
-  assert.equal(j.ok, false); assert.match(j.error, /18 or older/); ok('can\'t join a game before confirming 18+');
-  assert.equal((await deposit(50)).status, 400); ok('can\'t deposit before confirming 18+');
+  assert.equal(j.ok, false); assert.match(j.error, /21 or older/); ok('can\'t join a game before confirming 21+');
+  assert.equal((await deposit(50)).status, 400); ok('can\'t deposit before confirming 21+');
   await call('POST', '/api/rg/age');
   assert.equal((await call('GET', '/api/me')).data.user.ageConfirmed, true);
   j = await emit(s, 'kb:join', { stake: 1000 });

@@ -33,6 +33,7 @@ class KerenbulaGame {
   constructor(mgr, { stake, roundId, members, practice = false }) {
     this.mgr = mgr;
     this.practice = practice;
+    this.r = { ...config.kerenbula }; // rules fixed for this match (admin changes apply to the next one)
     this.id = nextId++;
     this.stake = stake;
     this.roundId = roundId;
@@ -53,7 +54,7 @@ class KerenbulaGame {
   }
 
   get pot() { return this.stake * 2; }
-  get prize() { return Math.floor(this.pot * (1 - cfg().houseCut)); }
+  get prize() { return Math.floor(this.pot * (1 - this.r.houseCut)); }
   indexOf(uid) { return this.players.findIndex((p) => p.uid === String(uid)); }
   io() { return this.mgr.io; }
 
@@ -76,8 +77,8 @@ class KerenbulaGame {
     clearTimeout(this.timer);
     this.turn = i;
     this.phase = phase;
-    this.deadline = Date.now() + cfg().rollSec * 1000;
-    this.timer = setTimeout(() => this.onTimeout(), cfg().rollSec * 1000);
+    this.deadline = Date.now() + this.r.rollSec * 1000;
+    this.timer = setTimeout(() => this.onTimeout(), this.r.rollSec * 1000);
     this.broadcast();
     if (this.players[i].uid === BOT_UID) this.botTimer = setTimeout(() => this.botRoll(), d(1500));
   }
@@ -106,7 +107,7 @@ class KerenbulaGame {
     const before = this.balls.map((b) => ({ ...b }));
     const pinsBefore = this.pins.map((p) => ({ ...p }));
     const res = new Sim(before, pinsBefore, { n, x, dx, dy, power }).run();
-    const pts = pinPoints(this.colors, i, res.knocked, { isJackRoll: isJack, pinPoints: cfg().pinPoints });
+    const pts = pinPoints(this.colors, i, res.knocked, { isJackRoll: isJack, pinPoints: this.r.pinPoints });
     this.phase = 'rolling';
     this.io().to(this.channel).emit('kb:roll', {
       game: this.id, roller: i, n, before, pins: pinsBefore, roll: { x, dx, dy, power }, after: res.balls, pinsAfter: res.pins, ms: res.ms,
@@ -157,12 +158,12 @@ class KerenbulaGame {
     if (fs.winner !== null) this.jackBy = fs.winner; else this.jackBy = 1 - this.jackBy;
 
     const [a, b] = this.players.map((p) => p.score);
-    const reached = Math.max(a, b) >= cfg().target;
-    const capped = this.frame >= cfg().maxFrames;
+    const reached = Math.max(a, b) >= this.r.target;
+    const capped = this.frame >= this.r.maxFrames;
     if (a !== b && (reached || capped)) {
       const w = a > b ? 0 : 1;
       this.broadcast();
-      this.timer = setTimeout(() => this.finish(w, reached ? `reached ${cfg().target} points` : `led after ${this.frame} frames`), d(2500));
+      this.timer = setTimeout(() => this.finish(w, reached ? `reached ${this.r.target} points` : `led after ${this.frame} frames`), d(2500));
       return;
     }
     this.broadcast();
@@ -173,7 +174,7 @@ class KerenbulaGame {
     const i = this.turn;
     const p = this.players[i];
     p.misses++;
-    if (p.misses >= cfg().maxMisses) return this.forfeit(i, 'ran out of time too many times');
+    if (p.misses >= this.r.maxMisses) return this.forfeit(i, 'ran out of time too many times');
     this.lastEvent = { type: 'timeout', by: i };
     if (this.phase === 'jack') { this.jackBy = 1 - i; return this.setTurn(1 - i, 'jack'); }
     this.left[i].shift(); // that ball is lost for this frame
@@ -229,12 +230,12 @@ class KerenbulaGame {
     return {
       id: this.id, stake: this.stake, pot: this.pot, prize: this.prize, phase: this.phase, practice: this.practice,
       turn: this.turn, me: this.indexOf(uid), frame: this.frame, jackBy: this.jackBy,
-      target: cfg().target, maxFrames: cfg().maxFrames, pinPoints: cfg().pinPoints,
+      target: this.r.target, maxFrames: this.r.maxFrames, pinPoints: this.r.pinPoints,
       balls: (this.balls || freshBalls()).map(({ n, x, y, on }) => ({ n, x, y, on })),
       pins: (this.pins || freshPins()).map(({ x, y, color, up, by, fx, fy }) => ({ x, y, color, up, by, fx, fy })),
       next: this.phase === 'jack' ? JACK : this.left?.[this.turn]?.[0] ?? null,
       deadlineLeftMs: this.phase === 'jack' || this.phase === 'roll' ? Math.max(0, this.deadline - Date.now()) : null,
-      rollSec: cfg().rollSec, maxMisses: cfg().maxMisses,
+      rollSec: this.r.rollSec, maxMisses: this.r.maxMisses,
       players: this.players.map((p, k) => ({ name: p.name, color: p.color, score: p.score, misses: p.misses, out: p.out, left: this.left ? this.left[k].length : 4 })),
       lastEvent: this.lastEvent, frameResult: this.frameResult, result: this.result,
     };
@@ -339,7 +340,7 @@ export class KerenbulaManager {
 
   lobby() {
     return {
-      tables: [...this.tables.values()].filter((t) => !t.private).map((t) => ({ stake: t.stake, waiting: t.waiting.length, prize: Math.floor(t.stake * 2 * (1 - cfg().houseCut)) })),
+      tables: [...this.tables.values()].filter((t) => !t.private).map((t) => ({ stake: t.stake, waiting: t.waiting.length, prize: Math.floor(t.stake * 2 * (1 - cfg().houseCut)) })).sort((a, b) => a.stake - b.stake),
       playing: [...this.games.values()].filter((g) => g.phase !== 'over' && !g.practice).length * 2,
       paused: !!this.manager?.paused,
     };
@@ -349,6 +350,18 @@ export class KerenbulaManager {
     this.io.to('kb-lobby').emit('kb:lobby', this.lobby());
     this.io.to('lobby').emit('kb:home', this.lobby());
     for (const [uid] of this.userLoc) this.io.to(`user:${uid}`).emit('kb:me', this.locationOf(uid));
+  }
+
+  /** Entry fees changed in Admin → Settings: add new tables; close removed ones (refunding anyone waiting). */
+  syncTables() {
+    const want = new Map(cfg().stakes.map((stake) => ({ stake })).map((t) => [((t) => t.stake)(t), t]));
+    for (const [k, t] of want) if (!this.tables.has(k)) this.tables.set(k, { ...t, waiting: [], roundId: null });
+    for (const [k, t] of [...this.tables]) {
+      if (t.private || want.has(k)) continue;
+      for (const w of [...t.waiting]) this.leave({ id: w.uid });
+      this.tables.delete(k);
+    }
+    this.emitLobby();
   }
 
   pauseNow() {

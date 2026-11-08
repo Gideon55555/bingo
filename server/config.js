@@ -41,7 +41,7 @@ export const config = {
   // Browser admin panel 2-step login: base32 secret from `npm run admin:2fa` (empty = password only)
   adminTotpSecret: (process.env.ADMIN_TOTP_SECRET || '').replace(/\s/g, ''),
   adminSessionHours: num(process.env.ADMIN_SESSION_HOURS, 12),
-  // Players must confirm they are 18+ before playing or depositing (always on in production)
+  // Players must confirm they are MIN_AGE+ (21) before playing or depositing (always on in production)
   requireAgeConfirm: process.env.AGE_CONFIRM ? process.env.AGE_CONFIRM === 'true' : process.env.NODE_ENV === 'production',
   // Withdrawals of this amount or more need a second, different admin (only when ADMIN_IDS has 2+ admins)
   withdrawSecondApproval: cents(process.env.WITHDRAW_SECOND_APPROVAL, 5000),
@@ -131,20 +131,12 @@ export const config = {
 
   // Growth: referrals, daily reward. Amounts in ETB in .env (0 = off).
   growth: {
+    signupBonus: cents(process.env.SIGNUP_BONUS, 0),                // to every new player (once per phone)
     referralBonus: cents(process.env.REFERRAL_BONUS, 10),           // to the inviter
     referralFriendBonus: cents(process.env.REFERRAL_FRIEND_BONUS, 0), // to the new player
     referralMinDeposit: cents(process.env.REFERRAL_MIN_DEPOSIT, 50),   // friend's first deposit must be at least this
     dailyReward: cents(process.env.DAILY_REWARD, 2),
     bonusWager: num(process.env.BONUS_WAGER, 1),                       // bonus must be played this many times before withdrawal
-  },
-
-  // Chapa payment gateway (automatic deposits/payouts). Empty key = off (manual deposits only).
-  chapa: {
-    secretKey: process.env.CHAPA_SECRET_KEY || '',
-    webhookSecret: process.env.CHAPA_WEBHOOK_SECRET || '',            // defaults to the secret key
-    baseUrl: (process.env.CHAPA_API_URL || 'https://api.chapa.co/v1').replace(/\/+$/, ''),
-    autoPayoutMax: cents(process.env.CHAPA_AUTO_PAYOUT_MAX, 0),        // ETB; 0 = admins approve every payout
-    payoutBank: process.env.CHAPA_PAYOUT_BANK || 'telebirr',           // bank name (or Chapa bank id) for payouts
   },
 
   // Wallet
@@ -162,7 +154,7 @@ export const config = {
 
   // Shown on the Rules screen
   supportContact: process.env.SUPPORT_CONTACT || '',
-  minAge: num(process.env.MIN_AGE, 18),
+  minAge: num(process.env.MIN_AGE, 21),
 
   // Backups
   backupDir: fromRoot(process.env.BACKUP_DIR || './backups'),

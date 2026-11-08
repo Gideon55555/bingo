@@ -1,4 +1,4 @@
-// Responsible gambling: 18+ confirmation, self-set deposit limits, self-exclusion, play summary.
+// Responsible gambling: age (21+) confirmation, self-set deposit limits, self-exclusion, play summary.
 //
 // • Lowering a deposit limit works immediately; raising or removing one only takes effect after
 //   24 hours (a "cooling-off" period, so a limit can't be lifted in the heat of the moment).
@@ -35,7 +35,7 @@ export const excludedUntil = (uid) => {
 /** Reason the player may not put money in play right now, or null. */
 export function playBlock(uid) {
   uid = String(uid);
-  if (ageRequired() && !ageOk.has(uid)) return 'Please confirm you are 18 or older first.';
+  if (ageRequired() && !ageOk.has(uid)) return `Please confirm you are ${config.minAge} or older first.`;
   const until = excludedUntil(uid);
   if (until) return `You chose to take a break until ${new Date(until * 1000).toLocaleDateString('en-GB')}. You can still withdraw your balance.`;
   return null;

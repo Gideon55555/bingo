@@ -121,9 +121,6 @@ Only works if your host has **Setup Node.js App** in DirectAdmin, with Node.js 1
 - [ ] **SSH:** log in with a key, not a password (`PasswordAuthentication no` in `/etc/ssh/sshd_config`).
 - [ ] **`BACKUP_PASSWORD`** set, so backups sent to Telegram are encrypted. Test once: `npm run backup:decrypt -- <file>.enc`.
 - [ ] **2-step admin login:** `npm run admin:2fa`, scan the QR, put `ADMIN_TOTP_SECRET` in `.env`.
-- [ ] **Chapa (optional, needs your license for Chapa to approve you):** put `CHAPA_SECRET_KEY` in `.env`, set the
-      webhook URL `https://bingo.yourdomain.com/api/chapa/webhook` in the Chapa dashboard, test with Chapa's test keys first.
-      Start with `CHAPA_AUTO_PAYOUT_MAX=0` (admins approve payouts) and raise it once you trust it.
 - [ ] **Bot username** for invite/referral links is read from Telegram automatically (or set `BOT_USERNAME`).
 - [ ] **Voice:** optionally regenerate the bingo caller with `scripts/voice/make-azure.js` for a natural Amharic voice.
 - [ ] **Private trial:** 5–10 friends, small amounts. Do a full deposit → play → win → withdraw cycle.

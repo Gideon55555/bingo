@@ -17,6 +17,7 @@ import { metrics } from './monitor.js';
 import { verifyTotp } from './totp.js';
 import { onDepositApproved } from './growth.js';
 import { listClientErrors } from './clienterrors.js';
+import { settingsView, saveSettings } from './settings.js';
 import { sharedDevices, suspiciousPairs, lowPlayCashouts, userFlags, linkedAccounts, setFrozen } from './risk.js';
 
 export const isAdminId = (id) => config.adminIds.includes(String(id));
@@ -65,8 +66,6 @@ export function createAdmin({ games, onBalanceChange }) {
           : tr(t.user_id, 'depositRejected', { amount: money(t.amount), ref: t.reference }));
       } else {
         const cur = getTx(id);
-        if (cur && cur.type === 'withdraw' && cur.status === 'pending' && ['sending', 'sent'].includes(cur.payout_status))
-          throw new Error('This withdrawal is being paid automatically by Chapa — wait for it to finish');
         if (approve && cur && cur.type === 'withdraw' && cur.status === 'pending' && twoPersonActive() && -cur.amount >= config.withdrawSecondApproval) {
           const prior = cur.approvals ? JSON.parse(cur.approvals) : [];
           if (!prior.length) {
@@ -255,6 +254,11 @@ function adminRouter(actions) {
   r.post('/resume', wrap((req) => { actions.resume(req.who); return { ok: true }; }));
   r.post('/broadcast', wrap((req) => actions.broadcast(req.body.text, req.who)));
   r.get('/risk', wrap(() => actions.risk()));
+  r.get('/settings', wrap(() => ({ groups: settingsView() })));
+  r.post('/settings', wrap((req) => {
+    const out = saveSettings({ values: req.body?.values || {}, reset: Array.isArray(req.body?.reset) ? req.body.reset : [] }, req.who);
+    return { changed: out.changed, groups: out.settings };
+  }));
   r.get('/client-errors', wrap(() => ({ items: listClientErrors() })));
   r.post('/freeze', wrap((req) => actions.freeze(String(req.body.userId), !!req.body.on, String(req.body.reason || '').slice(0, 200), req.who)));
   r.get('/log', wrap((req) => ({ items: actions.adminLog({ limit: Math.min(Number(req.query.limit) || 200, 500), before: Number(req.query.before) || null }) })));

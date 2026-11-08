@@ -26,6 +26,7 @@ class PoolGame {
   constructor(mgr, { stake, size, roundId, members, practice = false }) {
     this.mgr = mgr;
     this.practice = practice; // free game vs the bot: no money, not recorded
+    this.cut = config.pool.houseCut; // fixed for this match
     this.id = nextId++;
     this.stake = stake;
     this.size = size;
@@ -46,7 +47,7 @@ class PoolGame {
   }
 
   get pot() { return this.stake * this.size; }
-  get prize() { return Math.floor(this.pot * (1 - config.pool.houseCut)); }
+  get prize() { return Math.floor(this.pot * (1 - this.cut)); }
   indexOf(uid) { return this.players.findIndex((p) => p.uid === String(uid)); }
   io() { return this.mgr.io; }
 
@@ -329,7 +330,7 @@ export class PoolManager {
 
   lobby() {
     return {
-      tables: [...this.tables.values()].filter((t) => !t.private).map((t) => ({ stake: t.stake, size: t.size, waiting: t.waiting.length, prize: Math.floor(t.stake * t.size * (1 - config.pool.houseCut)) })),
+      tables: [...this.tables.values()].filter((t) => !t.private).map((t) => ({ stake: t.stake, size: t.size, waiting: t.waiting.length, prize: Math.floor(t.stake * t.size * (1 - config.pool.houseCut)) })).sort((a, b) => a.stake - b.stake || a.size - b.size),
       playing: [...this.games.values()].filter((g) => g.phase !== 'over' && !g.practice).reduce((s, g) => s + g.size, 0),
       paused: !!this.manager?.paused,
     };
@@ -339,6 +340,18 @@ export class PoolManager {
     this.io.to('pool-lobby').emit('pool:lobby', this.lobby());
     this.io.to('lobby').emit('pool:home', this.lobby());
     for (const [uid] of this.userLoc) this.io.to(`user:${uid}`).emit('pool:me', this.locationOf(uid));
+  }
+
+  /** Entry fees changed in Admin → Settings: add new tables; close removed ones (refunding anyone waiting). */
+  syncTables() {
+    const want = new Map(config.pool.stakes.flatMap((stake) => config.pool.sizes.map((size) => ({ stake, size }))).map((t) => [((t) => `${t.stake}:${t.size}`)(t), t]));
+    for (const [k, t] of want) if (!this.tables.has(k)) this.tables.set(k, { ...t, waiting: [], roundId: null });
+    for (const [k, t] of [...this.tables]) {
+      if (t.private || want.has(k)) continue;
+      for (const w of [...t.waiting]) this.leave({ id: w.uid });
+      this.tables.delete(k);
+    }
+    this.emitLobby();
   }
 
   pauseNow() {

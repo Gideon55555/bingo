@@ -41,7 +41,7 @@ export class CrashGame {
     clearInterval(this.ticker);
     this.bets = new Map(); // userId -> { name, amount, auto, cashedAt, win }
     this.roundId = null;
-    if (this.manager?.paused) {
+    if (this.manager?.paused || !config.crash.enabled) { // paused by admin, or game switched off
       this.phase = 'paused';
       this.broadcast();
       this.timer = setTimeout(() => this.startBetting(), 2000);

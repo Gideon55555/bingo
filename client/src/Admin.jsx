@@ -29,6 +29,7 @@ export default function Admin({ cfg, onLogout }) {
   if (err && !stats) return <div className="center muted">{err}</div>;
   const tabs = [
     ['overview', '📊 Overview'],
+    ['settings', '⚙️ Settings'],
     ['requests', `💰 Requests${pendingCount ? ` (${pendingCount})` : ''}`],
     ['players', '👥 Players'],
     ['games', '🎱 Games'],
@@ -55,6 +56,7 @@ export default function Admin({ cfg, onLogout }) {
           {tab === 'broadcast' && <Broadcast users={stats.users} />}
           {tab === 'log' && <AdminLog />}
           {tab === 'risk' && <Risk cfg={cfg} />}
+          {tab === 'settings' && <Settings cfg={cfg} />}
           {tab === 'errors' && <ClientErrors />}
         </>
       )}
@@ -811,6 +813,92 @@ function ClientErrors() {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** Everything the owner can change while the app runs: prices, cuts, cartelas, bonuses, timers, games on/off. */
+function Settings({ cfg }) {
+  const [groups, setGroups] = useState(null);
+  const [edit, setEdit] = useState({});   // key -> value being typed
+  const [open, setOpen] = useState('wallet');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { adminApi.settings().then((r) => setGroups(r.groups)).catch((e) => toast(e.message)); }, []);
+  if (!groups) return <div className="muted">Loading…</div>;
+  const show = (f) => (f.type === 'moneyList' ? f.value.join(', ') : f.value);
+  const unit = (f) => ({ money: cfg.currency, moneyList: cfg.currency, percent: '%', seconds: 'sec', mult: '×' }[f.type] || '');
+  const dirty = (g) => g.fields.filter((f) => edit[f.key] !== undefined && String(edit[f.key]) !== String(show(f)));
+  const save = async (g) => {
+    const changes = dirty(g);
+    if (!changes.length) return toast('Nothing changed');
+    const lines = changes.map((f) => `• ${f.label}: ${show(f)} → ${edit[f.key]}`).join('\n');
+    if (!(await confirmBox(`Save these changes? They apply right away.\n\n${lines}`))) return;
+    setBusy(true);
+    try {
+      const r = await adminApi.saveSettings(Object.fromEntries(changes.map((f) => [f.key, edit[f.key]])));
+      setGroups(r.groups);
+      setEdit((e) => { const n = { ...e }; for (const f of changes) delete n[f.key]; return n; });
+      haptic('success');
+      toast(`Saved ${r.changed.length} setting(s) ✅`);
+    } catch (e) { haptic('error'); toast(e.message); } finally { setBusy(false); }
+  };
+  const reset = async (f) => {
+    if (!(await confirmBox(`Reset "${f.label}" to the default (${Array.isArray(f.default) ? f.default.join(', ') : f.default})?`))) return;
+    try { const r = await adminApi.saveSettings({}, [f.key]); setGroups(r.groups); toast('Reset ✅'); } catch (e) { toast(e.message); }
+  };
+  // a plain function (not a component) so inputs keep focus while typing
+  const field = (f) => {
+    const v = edit[f.key] !== undefined ? edit[f.key] : show(f);
+    const set = (x) => setEdit((e) => ({ ...e, [f.key]: x }));
+    let input;
+    if (f.type === 'bool') input = <label className="toggle"><input type="checkbox" checked={!!v} onChange={(e) => set(e.target.checked)} /> {v ? 'On' : 'Off'}</label>;
+    else if (f.type === 'textarea') input = <textarea rows={3} value={v} maxLength={f.max} onChange={(e) => set(e.target.value)} />;
+    else if (f.type === 'text') input = <input value={v} maxLength={f.max} onChange={(e) => set(e.target.value)} />;
+    else input = (
+      <div className="set-num">
+        <input inputMode="decimal" value={v} onChange={(e) => set(e.target.value)} placeholder={f.type === 'moneyList' ? 'e.g. 10, 20, 50, 100' : ''} />
+        {unit(f) && <span className="muted small">{unit(f)}</span>}
+      </div>
+    );
+    return (
+      <div key={f.key} className={`set-row ${edit[f.key] !== undefined && String(edit[f.key]) !== String(show(f)) ? 'dirty' : ''}`}>
+        <div className="set-label">
+          <b>{f.label}</b>
+          {f.help && <div className="small muted">{f.help}</div>}
+          {f.changed && (
+            <div className="small muted">
+              Default: {Array.isArray(f.default) ? f.default.join(', ') : String(f.default)}{unit(f) ? ` ${unit(f)}` : ''}
+              {f.updatedBy ? ` · changed by ${f.updatedBy}` : ''} · <button className="link-btn" onClick={() => reset(f)}>reset</button>
+            </div>
+          )}
+        </div>
+        {input}
+      </div>
+    );
+  };
+  return (
+    <div className="admin-section settings">
+      <p className="muted small">Changes apply immediately. Games already running keep their rules; the next game uses the new ones.
+        Removing an entry fee refunds anyone waiting at that table. Every change is recorded in the Admin log.</p>
+      {groups.map((g) => {
+        const n = dirty(g).length;
+        return (
+          <div key={g.id} className="set-group">
+            <button className="set-head" onClick={() => setOpen(open === g.id ? null : g.id)}>
+              <span>{g.label}</span><span className="muted">{n ? `${n} unsaved · ` : ''}{open === g.id ? '▲' : '▼'}</span>
+            </button>
+            {open === g.id && (
+              <div className="set-body">
+                {g.fields.map((f) => field(f))}
+                <div className="set-actions">
+                  <button className="primary" disabled={busy || !n} onClick={() => save(g)}>💾 Save {g.label.replace(/^\S+\s/, '')}</button>
+                  {n > 0 && <button className="ghost" onClick={() => setEdit((e) => { const x = { ...e }; for (const f of g.fields) delete x[f.key]; return x; })}>Undo</button>}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -65,7 +65,7 @@ export class KenoGame {
     this.roundId = null;
     this.revealed = [];
     this.result = null;
-    if (this.manager?.paused) {
+    if (this.manager?.paused || !config.keno.enabled) { // paused by admin, or game switched off
       this.phase = 'paused';
       this.broadcast();
       this.timer = setTimeout(() => this.startBetting(), 2000);

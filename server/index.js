@@ -12,10 +12,6 @@ import { seen, isFrozen, assertNotFrozen } from './risk.js';
 import * as rg from './rg.js';
 import * as growth from './growth.js';
 import { recordClientError } from './clienterrors.js';
-import * as chapa from './chapa.js';
-import { userFlags } from './risk.js';
-import { invalidateStats, logAdmin, getTx } from './db.js';
-import { sendMessage } from './bot.js';
 import { setReferralHandler } from './bot.js';
 import { upsertUser } from './db.js';
 import { startMonitor, health } from './monitor.js';
@@ -32,6 +28,7 @@ import { limit, allow } from './ratelimit.js';
 import { scheduleBackups } from './backup.js';
 import { fmtMoney } from '../shared/money.js';
 import { tr } from './i18n.js';
+import { onSettingsChanged } from './settings.js';
 
 checkConfig();
 
@@ -63,11 +60,29 @@ const recovered = refundOpenRounds('refunded (game interrupted by server restart
 if (recovered.length) console.log(`[recovery] refunded ${recovered.length} entr(ies) from interrupted rounds`);
 
 const games = new GameManager(io, onBalanceChange);
-games.crash = config.crash.enabled ? new CrashGame(io, onBalanceChange, games) : null;
-games.keno = config.keno.enabled ? new KenoGame(io, onBalanceChange, games) : null;
-games.ludo = config.ludo.enabled ? new LudoManager(io, onBalanceChange, games) : null;
-games.pool = config.pool.enabled ? new PoolManager(io, onBalanceChange, games) : null;
-games.kerenbula = config.kerenbula.enabled ? new KerenbulaManager(io, onBalanceChange, games) : null;
+// Every game always exists; Admin → Settings can switch each one on or off while the app runs.
+games.crash = new CrashGame(io, onBalanceChange, games);
+games.keno = new KenoGame(io, onBalanceChange, games);
+games.ludo = new LudoManager(io, onBalanceChange, games);
+games.pool = new PoolManager(io, onBalanceChange, games);
+games.kerenbula = new KerenbulaManager(io, onBalanceChange, games);
+/** Throws when the admin has switched this game off (games already in progress may still finish). */
+const isOn = (game) => { if (!config[game].enabled) throw new Error('This game is switched off right now'); };
+
+// Admin changed settings → apply right away
+onSettingsChanged((keys) => {
+  const has = (re) => keys.some((k) => re.test(k));
+  if (has(/^stakes$/)) games.syncRooms(onBalanceChange);
+  if (has(/^ludo\.stakes$/)) games.ludo.syncTables();
+  if (has(/^pool\.stakes$/)) games.pool.syncTables();
+  if (has(/^kerenbula\.stakes$/)) games.kerenbula.syncTables();
+  for (const g of ['ludo', 'pool', 'kerenbula']) if (keys.includes(`${g}.enabled`) && !config[g].enabled) games[g].pauseNow(); // refund anyone waiting
+  for (const g of ['crash', 'keno']) if (keys.includes(`${g}.enabled`) && config[g].enabled) games[g].start();
+  if (has(/^(houseCut|minPlayers|stakes)$/)) io.emit('lobby:all', games.lobby());
+  for (const g of ['ludo', 'pool', 'kerenbula']) games[g].emitLobby();
+  io.emit('config:changed'); // phones reload the settings (prices, names, games on/off…)
+  console.log(`[settings] changed: ${keys.join(', ')}`);
+});
 const admin = createAdmin({ games, onBalanceChange, io });
 // Referral links open the bot first: remember who invited a brand-new player
 setReferralHandler((from, inviterId) => {
@@ -78,7 +93,7 @@ setReferralHandler((from, inviterId) => {
 startMonitor({ io, games });
 
 // ---------------- REST API ----------------
-app.use(express.json({ limit: '20kb', verify: (req, _res, buf) => { if (req.url.startsWith('/api/chapa/webhook')) req.rawBody = Buffer.from(buf); } }));
+app.use(express.json({ limit: '20kb' }));
 app.use('/api', limit('api', config.apiRateIp, 60 * 1000)); // per IP (generous: many phones share one carrier IP)
 
 // Health check for uptime monitors / load balancers: 200 when healthy, 503 when not
@@ -125,7 +140,6 @@ app.get('/api/config', (_req, res) =>
       : null,
     devMode: config.devMode,
     botUsername: botUsername(),
-    chapa: chapa.chapaEnabled() ? { enabled: true, autoPayoutMax: config.chapa.autoPayoutMax } : null,
   }));
 
 app.get('/api/me', requireAuth, (req, res) => {
@@ -144,67 +158,6 @@ app.post('/api/client-error', limit('clienterr', 20, 60 * 1000), (req, res) => {
 
 const perUser = (req) => req.user.id;
 const walletLimit = limit('wallet', config.walletRate, 10 * 60 * 1000, perUser); // deposit/withdraw requests per 10 min per player
-
-// ---- Chapa: automatic deposits & payouts ----
-const chapaHooks = {
-  async onCredited(t) { // a Chapa deposit was verified and credited (exactly once)
-    invalidateStats();
-    onBalanceChange(t.user_id);
-    await notifyUser(t.user_id, tr(t.user_id, 'depositApproved', { amount: money(t.amount) }));
-    const ref = growth.onDepositApproved(t);
-    if (ref) { onBalanceChange(ref.inviterId); notifyUser(ref.inviterId, tr(ref.inviterId, 'refBonus', { amount: money(ref.amount) })); }
-  },
-  async onPaid(t) {
-    invalidateStats();
-    await notifyUser(t.user_id, tr(t.user_id, 'withdrawSent', { amount: money(-t.amount), phone: t.phone }));
-  },
-  async onFailed(t) { // automatic payout failed → hand it to the admins as a normal request
-    for (const a of config.adminIds) await sendMessage(a, `⚠️ Automatic payout for withdrawal #${t.id} (${money(-t.amount)} to ${t.phone}) failed. Please pay it manually.`);
-    notifyAdmins(t.id);
-  },
-};
-const sweepChapa = chapa.startChapaSweeper(chapaHooks);
-
-app.post('/api/chapa/deposit', requireAuth, walletLimit, async (req, res) => {
-  if (!chapa.chapaEnabled()) return res.status(400).json({ error: 'Online payment is not available' });
-  const amount = Math.floor(Number(req.body.amount));
-  if (!Number.isFinite(amount) || amount < config.minDeposit) return res.status(400).json({ error: `Minimum deposit is ${money(config.minDeposit)}` });
-  if (amount > config.maxDeposit) return res.status(400).json({ error: `Maximum deposit is ${money(config.maxDeposit)}` });
-  try { rg.checkDeposit(req.user.id, amount); } catch (e) { return res.status(400).json({ error: e.message, rg: true }); }
-  if (countPending(req.user.id, 'deposit') >= config.maxPendingDeposits)
-    return res.status(400).json({ error: 'You already have deposits waiting. Please finish or wait for them first.' });
-  try { res.json(await chapa.createCheckout(req.user, amount)); } catch (e) { res.status(502).json({ error: publicMessage(e) }); }
-});
-
-// The app asks "did my payment arrive?" — answered by asking Chapa, never by trusting the phone
-app.get('/api/chapa/status/:ref', requireAuth, async (req, res) => {
-  const t = getTx(Number(String(req.params.ref).replace(/\D/g, '')) || 0);
-  const mine = t && t.user_id === String(req.user.id) ? t : null;
-  const byRef = mine || db.prepare("SELECT * FROM transactions WHERE reference = ? AND user_id = ? AND provider = 'chapa'").get(String(req.params.ref), String(req.user.id));
-  if (!byRef) return res.status(404).json({ error: 'Not found' });
-  try { const r = await chapa.confirmDeposit(byRef.reference, chapaHooks); res.json({ status: r.status }); } catch (e) { res.json({ status: 'pending' }); }
-});
-
-// Chapa → us: signed webhook (x-chapa-signature). Every event is re-checked with Chapa's verify API.
-app.post('/api/chapa/webhook', async (req, res) => {
-  if (!chapa.chapaEnabled()) return res.status(404).end();
-  if (!chapa.validSignature(req.rawBody || Buffer.from(JSON.stringify(req.body)), req.headers)) {
-    console.warn(`[security] Chapa webhook with a bad signature from ${req.ip}`);
-    return res.status(401).json({ error: 'bad signature' });
-  }
-  const ev = req.body || {};
-  res.status(200).json({ ok: true }); // acknowledge fast; then process
-  try {
-    if (String(ev.type).toLowerCase() === 'payout' || String(ev.event || '').startsWith('payout')) await chapa.confirmPayout(ev.reference, chapaHooks);
-    else await chapa.confirmDeposit(ev.tx_ref || ev.trx_ref || ev.reference, chapaHooks);
-  } catch (e) { console.error('[chapa] webhook processing failed:', e.message); }
-});
-// Chapa also calls the callback_url after checkout (GET ?trx_ref=…): same verify-then-credit path
-app.get('/api/chapa/callback', async (req, res) => {
-  const ref = String(req.query.trx_ref || req.query.tx_ref || '');
-  if (chapa.chapaEnabled() && ref) { try { await chapa.confirmDeposit(ref, chapaHooks); } catch { /* sweeper retries */ } }
-  res.type('text').send('ok');
-});
 
 // ---- Growth: referrals, daily reward, leaderboard ----
 app.get('/api/growth', requireAuth, (req, res) => res.json({
@@ -275,14 +228,6 @@ app.post('/api/withdraw', requireAuth, walletLimit, (req, res) => {
   try {
     const id = createWithdrawal(req.user.id, amount, phone);
     onBalanceChange(req.user.id);
-    const t = getTx(id);
-    if (chapa.canAutoPay(t, userFlags(req.user.id))) {
-      // Small, clean withdrawal: paid automatically through Chapa (admins get an FYI, no buttons)
-      chapa.sendPayout(t)
-        .then(() => Promise.all(config.adminIds.map((a) => sendMessage(a, `🤖 Withdrawal #${id}: ${money(amount)} to ${phone} is being paid automatically via Chapa.`))))
-        .catch(() => chapaHooks.onFailed(t));
-      return res.json({ ok: true, id, auto: true });
-    }
     notifyAdmins(id);
     res.json({ ok: true, id });
   } catch (e) {
@@ -302,6 +247,7 @@ io.use((socket, next) => {
   if (!user) { recordAuthFailure(ip); return next(new Error('Unauthorized')); }
   socket.data.user = user;
   seen(user.id, { ip, device: socket.handshake.auth?.device });
+  socket.data.signupBonus = growth.maybeSignupBonus(user.id, socket.handshake.auth?.device);
   next();
 });
 
@@ -336,6 +282,7 @@ io.on('connection', (socket) => {
     if (loc?.game) socket.join(`kb:${loc.game}`);
   }
   onBalanceChange(user.id);
+  if (socket.data.signupBonus) socket.emit('bonus', { kind: 'signup', amount: socket.data.signupBonus });
 
   // Wrap handlers: rate-limit, and send thrown errors back to the client as ack errors
   const handle = (event, fn) =>
@@ -346,7 +293,7 @@ io.on('connection', (socket) => {
       // Frozen accounts can look around but not put money in play
       if (/(:join|:bet|:buy|card:pick)$/.test(event)) {
         if (isFrozen(user.id)) return ack({ ok: false, error: 'Your account is under review. Please contact support.' });
-        const block = rg.playBlock(user.id); // not confirmed 18+, or on a self-chosen break
+        const block = rg.playBlock(user.id); // not confirmed the minimum age, or on a self-chosen break
         if (block) return ack({ ok: false, error: block, rg: true });
       }
       try {
@@ -387,7 +334,7 @@ io.on('connection', (socket) => {
     return { state: crash().publicState(), me: crash().myBet(user.id) };
   });
   handle('crash:exit', () => { socket.leave('crash'); });
-  handle('crash:bet', ({ amount, auto }) => ({ me: crash().bet(getUser(user.id), amount, auto) }));
+  handle('crash:bet', ({ amount, auto }) => isOn('crash') || ({ me: crash().bet(getUser(user.id), amount, auto) }));
   handle('crash:cancel', () => ({ me: crash().cancel(user) }));
   // ---- Ludo ----
   const ludo = () => {
@@ -405,8 +352,8 @@ io.on('connection', (socket) => {
     return { lobby: ludo().lobby(), me, game };
   });
   handle('ludo:exit', () => { socket.leave('ludo-lobby'); });
-  handle('ludo:join', ({ stake, size, invite, code }) => ({ me: ludo().join(getUser(user.id), stake, size, { private: !!invite, code }) }));
-  handle('ludo:practice', () => ({ me: ludo().practice(getUser(user.id)) }));
+  handle('ludo:join', ({ stake, size, invite, code }) => isOn('ludo') || ({ me: ludo().join(getUser(user.id), stake, size, { private: !!invite, code }) }));
+  handle('ludo:practice', () => isOn('ludo') || ({ me: ludo().practice(getUser(user.id)) }));
   handle('ludo:leave', () => ({ me: ludo().leave(user) }));
   handle('ludo:roll', () => { ludo().game(user.id).actRoll(user.id); });
   handle('ludo:move', ({ token }) => { ludo().game(user.id).actMove(user.id, token); });
@@ -433,8 +380,8 @@ io.on('connection', (socket) => {
     return { lobby: pool().lobby(), me, game };
   });
   handle('pool:exit', () => { socket.leave('pool-lobby'); });
-  handle('pool:join', ({ stake, size, invite, code }) => ({ me: pool().join(getUser(user.id), stake, size || 2, { private: !!invite, code }) }));
-  handle('pool:practice', () => ({ me: pool().practice(getUser(user.id)) }));
+  handle('pool:join', ({ stake, size, invite, code }) => isOn('pool') || ({ me: pool().join(getUser(user.id), stake, size || 2, { private: !!invite, code }) }));
+  handle('pool:practice', () => isOn('pool') || ({ me: pool().practice(getUser(user.id)) }));
   handle('pool:leave', () => ({ me: pool().leave(user) }));
   handle('pool:shoot', (shot) => pool().game(user.id).shoot(user.id, shot));
 
@@ -454,8 +401,8 @@ io.on('connection', (socket) => {
     return { lobby: kb().lobby(), me, game };
   });
   handle('kb:exit', () => { socket.leave('kb-lobby'); });
-  handle('kb:join', ({ stake, invite, code }) => ({ me: kb().join(getUser(user.id), stake, { private: !!invite, code }) }));
-  handle('kb:practice', () => ({ me: kb().practice(getUser(user.id)) }));
+  handle('kb:join', ({ stake, invite, code }) => isOn('kerenbula') || ({ me: kb().join(getUser(user.id), stake, { private: !!invite, code }) }));
+  handle('kb:practice', () => isOn('kerenbula') || ({ me: kb().practice(getUser(user.id)) }));
   handle('kb:leave', () => ({ me: kb().leave(user) }));
   handle('kb:roll', (r) => kb().game(user.id).roll(user.id, r));
 
@@ -469,7 +416,7 @@ io.on('connection', (socket) => {
     return { state: keno().publicState(), me: keno().myTicket(user.id) };
   });
   handle('keno:exit', () => { socket.leave('keno'); });
-  handle('keno:buy', ({ picks, amount }) => ({ me: keno().buy(getUser(user.id), picks, amount) }));
+  handle('keno:buy', ({ picks, amount }) => isOn('keno') || ({ me: keno().buy(getUser(user.id), picks, amount) }));
   handle('keno:cancel', () => ({ me: keno().cancel(user) }));
 
   handle('crash:cashout', () => ({ me: crash().myBet(user.id), cashed: !!crash().cashout(user) }));

@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { api, socket, tg, withEndsAt, peekJoin } from './api.js';
+import { api, socket, tg, withEndsAt, peekJoin, toast } from './api.js';
 import { t, useLang, getLang, setLang, crashName } from './i18n.js';
 import Home from './Home.jsx';
 import Wallet from './Wallet.jsx';
@@ -105,6 +105,11 @@ export default function App() {
     socket.on('connect', () => setError(''));
     socket.on('server:restart', () => setError('restarting'));
     socket.on('server:replaced', () => setError('replaced'));
+    // Admin changed settings (prices, games on/off, names…): reload them without restarting the app
+    const onCfg = () => api.config().then(setCfg).catch(() => {});
+    socket.on('config:changed', onCfg);
+    const onBonus = ({ amount }) => toast(t('signupBonusGot', { amount: `${(amount / 100).toFixed(0)} ETB` }));
+    socket.on('bonus', onBonus);
     return () => {
       socket.off('lobby:all', onAll);
       socket.off('lobby', onOne);

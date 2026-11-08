@@ -33,6 +33,7 @@ export class Room {
     this.countdownEndsAt = null;
     this.result = null;
     this.roundId = null; // DB round, created when the first player pays
+    this.cut = config.houseCut; // fixed for this round even if the admin changes it
   }
 
   get cardsInPlay() {
@@ -46,7 +47,8 @@ export class Room {
   }
 
   get prize() {
-    return Math.floor(this.pot * (1 - config.houseCut));
+    // The cut is fixed once the first player pays into this round; before that, the current setting applies
+    return Math.floor(this.pot * (1 - (this.roundId ? this.cut : config.houseCut)));
   }
 
   summary() {
@@ -96,6 +98,7 @@ export class Room {
     cardId = Number(cardId);
     if (this.manager?.paused) throw new Error('Games are paused for maintenance. Please try again later.');
     if (!['waiting', 'countdown'].includes(this.state)) throw new Error('Game already started');
+    if (this.retired) throw new Error('This room has closed. Please pick another room.');
     if (!Number.isInteger(cardId) || cardId < 1 || cardId > config.cardCount) throw new Error('Invalid card');
     const owner = this.cardOwners.get(cardId);
     if (owner === uid) return; // already yours
@@ -103,7 +106,7 @@ export class Room {
     const existing = this.players.get(uid);
     if (existing && existing.cards.length >= config.maxCards) throw new Error(`You can hold up to ${config.maxCards} cards`);
 
-    if (!this.roundId) this.roundId = openRound(this.stake);
+    if (!this.roundId) { this.roundId = openRound(this.stake); this.cut = config.houseCut; }
     if (!debit(uid, this.stake, 'bet', `Bingo ${fmt(this.stake)} card #${cardId}`, this.roundId)) {
       throw new Error('Insufficient balance. Please deposit first.');
     }
@@ -247,6 +250,11 @@ export class Room {
     this.broadcast();
     this.timer = setTimeout(() => {
       this.reset();
+      if (this.retired) { // the admin removed this room's entry fee: it closes after its last game
+        this.manager?.rooms.delete(this.stake);
+        this.io.emit('lobby:all', this.manager.lobby());
+        return;
+      }
       this.broadcast();
     }, config.resultShowSec * 1000);
   }
@@ -257,6 +265,17 @@ export class GameManager {
     this.io = io;
     this.paused = false;
     this.rooms = new Map(config.stakes.map((s) => [s, new Room(s, io, onBalanceChange, this)]));
+  }
+
+  /** Entry fees changed in Admin → Settings: open new rooms, close removed ones (refunding anyone waiting). */
+  syncRooms(onBalanceChange) {
+    for (const s of config.stakes) if (!this.rooms.has(s)) this.rooms.set(s, new Room(s, this.io, onBalanceChange, this));
+    for (const [s, r] of this.rooms) {
+      if (config.stakes.includes(s)) { r.retired = false; continue; }
+      if (['waiting', 'countdown'].includes(r.state)) { r.cancelAndRefund('room closed by admin'); this.rooms.delete(s); }
+      else r.retired = true; // finishes its current game first
+    }
+    this.io.emit('lobby:all', this.lobby());
   }
 
   /** Stop new games. Rounds not yet started are refunded; running games finish normally. */
@@ -305,7 +324,7 @@ export class GameManager {
     return r;
   }
   lobby() {
-    return [...this.rooms.values()].map((r) => r.summary());
+    return [...this.rooms.values()].filter((r) => !r.retired).sort((a, b) => a.stake - b.stake).map((r) => r.summary());
   }
 }
 

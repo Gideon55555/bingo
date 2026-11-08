@@ -7,7 +7,7 @@ import { lowData, setLowData } from './prefs.js';
 
 const dateOf = (s) => new Date(s * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' });
 
-/** Shown once: the player must confirm they are 18+ before anything else. */
+/** Shown once: the player must confirm they are old enough (21+) before anything else. */
 export function AgeGate({ cfg, onConfirmed }) {
   useLang();
   const [no, setNo] = useState(false);

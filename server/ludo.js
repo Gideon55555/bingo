@@ -38,6 +38,7 @@ class LudoGame {
   constructor(mgr, { stake, size, roundId, members, practice = false }) {
     this.mgr = mgr;
     this.practice = practice;
+    this.cut = config.ludo.houseCut; // fixed for this game even if the admin changes it
     this.id = nextGameId++;
     this.stake = stake;
     this.size = size;
@@ -60,7 +61,7 @@ class LudoGame {
   }
 
   get pot() { return this.stake * this.size; }
-  get prize() { return Math.floor(this.pot * (1 - config.ludo.houseCut)); }
+  get prize() { return Math.floor(this.pot * (1 - this.cut)); }
   indexOf(uid) { return this.players.findIndex((p) => p.uid === String(uid)); }
 
   start() {
@@ -353,7 +354,7 @@ export class LudoManager {
   lobby() {
     return {
       tables: [...this.tables.values()].filter((t) => !t.private).map((t) => ({ stake: t.stake, size: t.size, waiting: t.waiting.length,
-        prize: Math.floor(t.stake * t.size * (1 - config.ludo.houseCut)) })),
+        prize: Math.floor(t.stake * t.size * (1 - config.ludo.houseCut)) })).sort((a, b) => a.stake - b.stake || a.size - b.size),
       playing: this.games.size ? [...this.games.values()].filter((g) => g.phase !== 'over' && !g.practice).reduce((s, g) => s + g.size, 0) : 0,
       paused: !!this.manager?.paused,
     };
@@ -366,6 +367,18 @@ export class LudoManager {
   }
 
   /** Pause: refund everyone waiting at a table. Games in progress finish normally. */
+  /** Entry fees changed in Admin → Settings: add new tables; close removed ones (refunding anyone waiting). */
+  syncTables() {
+    const want = new Map(config.ludo.stakes.flatMap((stake) => [2, 4].map((size) => ({ stake, size }))).map((t) => [((t) => `${t.stake}:${t.size}`)(t), t]));
+    for (const [k, t] of want) if (!this.tables.has(k)) this.tables.set(k, { ...t, waiting: [], roundId: null });
+    for (const [k, t] of [...this.tables]) {
+      if (t.private || want.has(k)) continue;
+      for (const w of [...t.waiting]) this.leave({ id: w.uid });
+      this.tables.delete(k);
+    }
+    this.emitLobby();
+  }
+
   pauseNow() {
     let any = false;
     for (const t of this.tables.values()) {

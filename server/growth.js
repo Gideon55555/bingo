@@ -14,12 +14,34 @@ const cols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
 if (!cols.includes('referred_by')) db.exec('ALTER TABLE users ADD COLUMN referred_by TEXT');
 if (!cols.includes('ref_paid')) db.exec('ALTER TABLE users ADD COLUMN ref_paid INTEGER NOT NULL DEFAULT 0');
 if (!cols.includes('last_daily')) db.exec('ALTER TABLE users ADD COLUMN last_daily TEXT');
+if (!cols.includes('signup_bonus')) db.exec('ALTER TABLE users ADD COLUMN signup_bonus TEXT'); // given | denied
 db.exec('CREATE INDEX IF NOT EXISTS users_ref ON users(referred_by)');
 
 const g = () => config.growth;
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const credit = db.prepare('UPDATE users SET balance = balance + ? WHERE id = ?');
 const insertTx = db.prepare("INSERT INTO transactions (user_id, type, amount, status, note) VALUES (?, 'bonus', ?, 'done', ?)");
+
+/**
+ * Sign-up bonus for a brand-new account (created in the last hour), once per phone:
+ * if another account already used this phone, no bonus. Returns the amount given (cents) or 0.
+ */
+export const maybeSignupBonus = db.transaction((uid, device) => {
+  uid = String(uid);
+  const amount = g().signupBonus;
+  if (!amount || !device) return 0;
+  const u = db.prepare('SELECT created_at, signup_bonus FROM users WHERE id = ?').get(uid);
+  if (!u || u.signup_bonus || Date.now() / 1000 - u.created_at > 3600) return 0;
+  const otherOnPhone = db.prepare("SELECT 1 FROM user_seen WHERE kind = 'device' AND value = ? AND user_id != ? LIMIT 1").get(String(device), uid);
+  if (otherOnPhone) {
+    db.prepare("UPDATE users SET signup_bonus = 'denied' WHERE id = ?").run(uid);
+    return 0;
+  }
+  db.prepare("UPDATE users SET signup_bonus = 'given' WHERE id = ?").run(uid);
+  credit.run(amount, uid);
+  insertTx.run(uid, amount, 'Sign-up bonus');
+  return amount;
+});
 
 /** Opened the bot from a referral link. Only counts for brand-new players. */
 export function recordReferral(newUser, inviterId, { wasNew }) {
