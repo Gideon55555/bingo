@@ -501,3 +501,168 @@ textarea { width: 100%; resize: vertical; }
 .set-num input { min-width: 0; }
 .set-actions { display: flex; gap: 8px; margin-top: 12px; }
 @media (max-width: 420px) { .set-row { grid-template-columns: 1fr; } }
+
+/* =====================================================================
+   THEME — red, black & gold casino.
+   Signature: the woven gold-and-red tibeb band (from the habesha kemis border) on the header,
+   promo banners and game tiles. Money is always gold; live/hot is red; numbers use a condensed
+   scoreboard face.
+   ===================================================================== */
+@font-face { font-family: 'Score'; font-weight: 700; font-display: swap;
+  src: url('@fontsource/barlow-condensed/files/barlow-condensed-latin-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Score'; font-weight: 800; font-display: swap;
+  src: url('@fontsource/barlow-condensed/files/barlow-condensed-latin-800-normal.woff2') format('woff2'); }
+
+:root {
+  --black: #0a0606;
+  --bg: #0a0606;
+  --bg2: #1a0d0e;          /* raised panels: black with a red undertone */
+  --panel: #241012;
+  --line: rgba(233, 185, 73, .22);
+  --red: #c8102e;
+  --red-hot: #ff2b43;
+  --gold: #e9b949;
+  --gold-hi: #fbe39a;
+  --gold-lo: #a8741c;
+  --text: #fff4e2;
+  --hint: #b9a596;
+  --btn: var(--gold);
+  --btn-text: #1a0a00;
+  --accent: var(--gold);
+  --ok: #2fd17f;
+  --bad: var(--red-hot);
+  --gold-grad: linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 45%, var(--gold-lo) 100%);
+  --red-grad: linear-gradient(180deg, #ff3b4f 0%, var(--red) 55%, #7d0717 100%);
+  /* woven band: gold diamonds on red, edged in black */
+  --tibeb: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Crect width='24' height='10' fill='%23c8102e'/%3E%3Cpath d='M0 5 6 0 12 5 6 10Z M12 5 18 0 24 5 18 10Z' fill='%23e9b949'/%3E%3Cpath d='M3 5 6 2.5 9 5 6 7.5Z M15 5 18 2.5 21 5 18 7.5Z' fill='%230a0606'/%3E%3Crect width='24' height='1' fill='%230a0606'/%3E%3Crect y='9' width='24' height='1' fill='%230a0606'/%3E%3C/svg%3E");
+}
+html, body { background: var(--black); }
+body { background-image: radial-gradient(120% 60% at 50% -10%, rgba(200, 16, 46, .28), transparent 60%); background-attachment: fixed; }
+.score, .bal-amt, .huge, .pt-amt, .ls-amt, .tile-value, .lb-net, .req-amt, .kb-score { font-family: 'Score', 'Noto Sans Ethiopic', system-ui, sans-serif; letter-spacing: .01em; }
+
+.tibeb { height: 8px; background: var(--tibeb) repeat-x; background-size: 24px 8px; }
+
+/* Header */
+.topbar { padding: 0; flex-direction: column; align-items: stretch; background: rgba(10, 6, 6, .94); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.topbar-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; gap: 8px; }
+.brand { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 900; color: var(--gold-hi); min-width: 0; }
+.brand-mark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex: none;
+  background: var(--red-grad); color: var(--gold-hi); font-size: 17px; box-shadow: inset 0 0 0 1.5px var(--gold); }
+.brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.balance { display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 12px; background: #000; border: 1px solid var(--line); }
+.bal-amt { font-size: 19px; font-weight: 800; color: var(--gold-hi); }
+.bal-cur { font-size: 11px; color: var(--hint); font-weight: 700; }
+.bal-plus { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; font-size: 18px;
+  background: var(--gold-grad); color: var(--btn-text); }
+.lang-switch { background: #000; border: 1px solid var(--line); }
+.lang-switch button.on { background: var(--red-grad); color: #fff; }
+.rules-btn { background: #000; border: 1px solid var(--line); color: var(--gold-hi); }
+
+/* Buttons */
+.primary { background: var(--gold-grad); color: var(--btn-text); font-weight: 900; border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(233, 185, 73, .25), inset 0 1px 0 rgba(255, 255, 255, .5); }
+.ghost { background: var(--panel); border: 1px solid var(--line); color: var(--text); }
+.danger { background: var(--red-grad); }
+input, textarea, select { background: #120808; border-color: rgba(233, 185, 73, .15); color: var(--text); }
+input:focus { border-color: var(--gold); }
+.seg { background: #000; border: 1px solid var(--line); }
+.seg button.active { background: var(--red-grad); color: #fff; }
+
+/* Bottom bar with the raised gold deposit button */
+.tabs { background: #000; border-top: 1px solid var(--line); align-items: flex-end; padding-top: 6px; }
+.tabs button { background: none; color: var(--hint); display: grid; justify-items: center; gap: 2px; font-size: 12px; padding: 6px 4px; }
+.tabs button .ic { font-size: 20px; line-height: 1; }
+.tabs button.active { background: none; color: var(--gold-hi); }
+.tabs button.active .ic { filter: drop-shadow(0 0 6px rgba(233, 185, 73, .7)); }
+.tabs .deposit-fab { flex: 0 0 74px; margin-top: -28px; }
+.deposit-fab .fab { width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; font-size: 26px;
+  background: var(--gold-grad); color: var(--btn-text); border: 4px solid #000; box-shadow: 0 0 0 1.5px var(--gold), 0 8px 24px rgba(233, 185, 73, .35); }
+.deposit-fab span:last-child { color: var(--gold-hi); font-weight: 800; }
+
+/* Home: promo carousel */
+.promo { position: relative; margin: 0 -14px 12px; }
+.promo-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 0 14px; gap: 10px; }
+.promo-track::-webkit-scrollbar { display: none; }
+.slide { position: relative; flex: 0 0 100%; aspect-ratio: 2 / 1; border-radius: 18px; overflow: hidden; scroll-snap-align: center;
+  background: #000; border: 1px solid var(--line); text-align: left; padding: 0; }
+.slide img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.slide .slide-art { position: absolute; right: -6%; top: 0; bottom: 0; width: 62%; }
+.slide .slide-art svg { width: 100%; height: 100%; }
+.slide::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 7px; background: var(--tibeb) repeat-x; background-size: 22px 7px; }
+.slide-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10, 6, 6, .96) 0%, rgba(10, 6, 6, .82) 42%, rgba(10, 6, 6, 0) 75%); }
+.slide-text { position: absolute; left: 16px; top: 14px; bottom: 18px; width: 62%; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.slide-title { font-size: 23px; line-height: 1.12; font-weight: 900; color: var(--gold-hi); text-shadow: 0 2px 10px rgba(0, 0, 0, .6); }
+.slide-sub { font-size: 13px; color: var(--text); opacity: .9; line-height: 1.3; }
+.slide-cta { align-self: flex-start; margin-top: 4px; padding: 7px 16px; border-radius: 999px; font-weight: 900; font-size: 14px;
+  background: var(--red-grad); color: #fff; box-shadow: inset 0 0 0 1.5px var(--gold), 0 4px 14px rgba(200, 16, 46, .45); }
+.promo-dots { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+.promo-dots button { width: 7px; height: 7px; border-radius: 4px; background: #3a2a22; padding: 0; transition: width .2s; }
+.promo-dots button.on { width: 20px; background: var(--gold); }
+
+/* Live winners ticker */
+.ticker { display: flex; align-items: center; gap: 8px; background: #000; border: 1px solid var(--line); border-radius: 12px; padding: 7px 10px; overflow: hidden; margin-bottom: 12px; }
+.ticker-live { flex: none; display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 900; color: #fff; background: var(--red-grad); padding: 3px 8px; border-radius: 6px; }
+.ticker-live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: pulse 1.4s infinite; }
+.ticker-view { overflow: hidden; flex: 1; mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+.ticker-row { display: inline-flex; gap: 22px; white-space: nowrap; animation: ticker var(--dur, 40s) linear infinite; }
+.ticker-item { font-size: 13px; color: var(--hint); }
+.ticker-item b { color: var(--text); font-weight: 700; }
+.ticker-item .won { color: var(--gold-hi); font-family: 'Score', sans-serif; font-weight: 800; font-size: 15px; }
+@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* Category chips */
+.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 0 12px; }
+.chips::-webkit-scrollbar { display: none; }
+.chip-btn { flex: none; padding: 7px 14px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 14px; font-weight: 700; color: var(--hint); }
+.chip-btn.on { background: var(--gold-grad); color: var(--btn-text); border-color: transparent; }
+
+/* Game tiles */
+.game-tile { background: #000; border: 1px solid var(--line); box-shadow: 0 10px 24px rgba(0, 0, 0, .5); }
+.game-tile.hot { border-color: rgba(255, 43, 67, .7); box-shadow: 0 0 0 1px rgba(255, 43, 67, .35), 0 10px 28px rgba(200, 16, 46, .35); }
+.tile-text { background: linear-gradient(180deg, #1c0b0d, #0d0505); border-top: 1px solid var(--line); padding-bottom: 12px; }
+.tile-text::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: var(--tibeb) repeat-x; background-size: 20px 6px; opacity: .9; }
+.tile-name { color: var(--gold-hi); }
+.tile-status { background: rgba(0, 0, 0, .75); border: 1px solid var(--line); color: var(--gold-hi); }
+.tile-status.hot { background: var(--red-grad); border-color: transparent; color: #fff; }
+.tile-status.new { background: var(--gold-grad); color: var(--btn-text); border-color: transparent; }
+.online-pill { color: var(--gold-hi); }
+
+/* Cards & panels everywhere pick up the warm black */
+.gcard, .playsafe, .set-group, .pool-chip, .room-card, .ludo-table, .balance-card, .tile, .history, .req, .invite-box, .growth .gcard { border: 1px solid var(--line); }
+.balance-card { background: radial-gradient(120% 140% at 0% 0%, #5a0d16 0%, #200a0c 55%, #0d0505 100%); }
+.balance-card .huge { color: var(--gold-hi); }
+.gcard.daily.ready { background: linear-gradient(135deg, #5a0d16, #1a0d0e); }
+.lb-net.pos { color: var(--gold-hi); }
+.room-card .stake, .pt-amt, .ls-amt { color: var(--gold-hi); }
+.status-bar.countdown { background: var(--red-grad); color: #fff; }
+.bingo-btn { background: var(--red-grad) !important; box-shadow: inset 0 0 0 2px var(--gold), 0 8px 24px rgba(200, 16, 46, .5) !important; }
+.overlay .result { border: 1px solid var(--line); background: linear-gradient(180deg, #1c0b0d, #0a0606); }
+.overlay .result h2 { color: var(--gold-hi); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-row { animation: none; }
+  .ticker-view { overflow-x: auto; }
+  .tile-status.hot, .ticker-live::before { animation: none; }
+}
+
+/* Admin banners */
+.banner-form { display: grid; gap: 8px; background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+.banner-form h3 { margin: 0; }
+.banner-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.banner-form select { width: 100%; padding: 12px; border-radius: 10px; }
+.banner-list { display: grid; gap: 10px; }
+.banner-item { display: grid; grid-template-columns: 140px 1fr; gap: 10px; background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
+.banner-item.off { opacity: .5; }
+.banner-item img { width: 140px; aspect-ratio: 2 / 1; object-fit: cover; border-radius: 8px; }
+.banner-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+@media (max-width: 420px) { .banner-item { grid-template-columns: 1fr; } .banner-item img { width: 100%; } .banner-row { grid-template-columns: 1fr; } }
+/* theme fixes */
+.slide .slide-art { right: 0; width: 46%; }
+.slide-text { width: 56%; }
+.slide-title { font-size: 21px; }
+.brand { font-size: 16px; }
+.lang-switch button { padding: 3px 7px; font-size: 11px; }
+.topbar-right { gap: 5px; }
+input[type=checkbox], input[type=radio] { accent-color: var(--gold); }
+.room-card .stake, .stake { font-family: 'Score', 'Noto Sans Ethiopic', sans-serif; }
+@media (max-width: 380px) { .brand-name { display: none; } }

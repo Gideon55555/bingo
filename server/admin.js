@@ -18,6 +18,7 @@ import { verifyTotp } from './totp.js';
 import { onDepositApproved } from './growth.js';
 import { listClientErrors } from './clienterrors.js';
 import { settingsView, saveSettings } from './settings.js';
+import { addBanner, listBanners, updateBanner, deleteBanner } from './banners.js';
 import { sharedDevices, suspiciousPairs, lowPlayCashouts, userFlags, linkedAccounts, setFrozen } from './risk.js';
 
 export const isAdminId = (id) => config.adminIds.includes(String(id));
@@ -255,6 +256,12 @@ function adminRouter(actions) {
   r.post('/broadcast', wrap((req) => actions.broadcast(req.body.text, req.who)));
   r.get('/risk', wrap(() => actions.risk()));
   r.get('/settings', wrap(() => ({ groups: settingsView() })));
+  // Promo banners: upload = raw image body (max 8 MB), details in the query string
+  r.get('/banners', wrap(() => ({ items: listBanners() })));
+  r.post('/banners', express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: '8mb' }),
+    wrap((req) => addBanner(req.body, req.query, req.who)));
+  r.patch('/banners/:id', wrap((req) => updateBanner(req.params.id, req.body || {}, req.who)));
+  r.delete('/banners/:id', wrap((req) => deleteBanner(req.params.id, req.who)));
   r.post('/settings', wrap((req) => {
     const out = saveSettings({ values: req.body?.values || {}, reset: Array.isArray(req.body?.reset) ? req.body.reset : [] }, req.who);
     return { changed: out.changed, groups: out.settings };

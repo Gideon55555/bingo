@@ -39,6 +39,8 @@ export const api = {
   growth: () => request('GET', '/api/growth'),
   claimDaily: () => request('POST', '/api/daily'),
   leaderboard: () => request('GET', '/api/leaderboard'),
+  recentWins: () => request('GET', '/api/recent-wins'),
+  banners: () => request('GET', '/api/banners'),
   rg: () => request('GET', '/api/rg'),
   rgToday: () => request('GET', '/api/rg/today'),
   confirmAge: () => request('POST', '/api/rg/age'),
@@ -93,6 +95,19 @@ export const adminApi = {
   logout: () => adminRequest('POST', '/logout').catch(() => {}),
   risk: () => adminRequest('GET', '/risk'),
   settings: () => adminRequest('GET', '/settings'),
+  banners: () => adminRequest('GET', '/banners'),
+  updateBanner: (id, patch) => adminRequest('PATCH', `/banners/${id}`, patch),
+  deleteBanner: (id) => adminRequest('DELETE', `/banners/${id}`),
+  uploadBanner: async (file, meta) => {
+    const h = headers();
+    const k = adminKey.get();
+    if (k) h['x-admin-session'] = k;
+    h['Content-Type'] = file.type;
+    const res = await fetch(`/api/admin/banners?${new URLSearchParams(meta)}`, { method: 'POST', headers: h, body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || (res.status === 413 ? 'Image is too big (max 8 MB)' : `Upload failed (${res.status})`));
+    return data;
+  },
   saveSettings: (values, reset) => adminRequest('POST', '/settings', { values, reset }),
   clientErrors: () => adminRequest('GET', '/client-errors'),
   freeze: (userId, on, reason) => adminRequest('POST', '/freeze', { userId, on, reason }),

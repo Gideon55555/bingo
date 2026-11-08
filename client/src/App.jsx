@@ -146,11 +146,19 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">{game ? `${icons[game]} ${gameName}` : `🎮 ${cfg.appName || t('games')}`}</div>
-        <div className="topbar-right">
-          {game && <button className="rules-btn" onClick={() => setShowRules(true)}>📖 {t('rules')}</button>}
-          <LangSwitch />
-          <button className="balance" onClick={() => { goHome(); setTab('wallet'); }}>{fmt(balance)} {cfg.currency}</button>
+        <div className="tibeb" />
+        <div className="topbar-row">
+          <div className="brand">
+            <span className="brand-mark">{game ? icons[game] : '♛'}</span>
+            <span className="brand-name">{game ? gameName : (cfg.appName || t('games'))}</span>
+          </div>
+          <div className="topbar-right">
+            {game && <button className="rules-btn" onClick={() => setShowRules(true)}>📖 {t('rules')}</button>}
+            <LangSwitch />
+            <button className="balance" onClick={() => { goHome(); setTab('wallet'); }} aria-label={t('deposit')}>
+              <span className="bal-amt">{fmt(balance)}</span><span className="bal-cur">{cfg.currency}</span><span className="bal-plus">+</span>
+            </button>
+          </div>
         </div>
       </header>
       {error && <div className="banner">{errText}</div>}
@@ -165,7 +173,7 @@ export default function App() {
           : game === 'bingo' ? (stake !== null
             ? <Room stake={stake} cfg={cfg} user={user} balance={balance} onExit={() => setStake(null)} />
             : <BingoRooms rooms={rooms} cfg={cfg} onEnter={setStake} />)
-          : tab === 'play' ? <Home cfg={cfg} live={live} rooms={rooms} onOpen={openGame} user={user} />
+          : tab === 'play' ? <Home cfg={cfg} live={live} rooms={rooms} onOpen={openGame} onWallet={() => setTab('wallet')} user={user} />
           : tab === 'admin' && user.isAdmin ? <Admin cfg={cfg} />
           : <Wallet cfg={cfg} balance={balance} />}
         </Suspense>
@@ -178,9 +186,10 @@ export default function App() {
       {inGame && !tg?.initData && <button className="floating-back" onClick={goBack}>{stake !== null ? `← ${t('bingoRooms')}` : t('backToGames')}</button>}
       {!inGame && (
         <nav className="tabs">
-          <button className={tab === 'play' ? 'active' : ''} onClick={() => setTab('play')}>🎮 {t('games')}</button>
-          <button className={tab === 'wallet' ? 'active' : ''} onClick={() => setTab('wallet')}>💳 {t('wallet')}</button>
-          {user.isAdmin && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>🛠 Admin</button>}
+          <button className={tab === 'play' ? 'active' : ''} onClick={() => setTab('play')}><span className="ic">🎰</span><span>{t('games')}</span></button>
+          <button className="deposit-fab" onClick={() => setTab('wallet')} aria-label={t('deposit')}><span className="fab">＋</span><span>{t('deposit')}</span></button>
+          <button className={tab === 'wallet' ? 'active' : ''} onClick={() => setTab('wallet')}><span className="ic">👛</span><span>{t('wallet')}</span></button>
+          {user.isAdmin && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}><span className="ic">🛠</span><span>Admin</span></button>}
         </nav>
       )}
     </div>

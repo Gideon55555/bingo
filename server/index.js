@@ -11,6 +11,7 @@ import { serveStatic } from './static.js';
 import { seen, isFrozen, assertNotFrozen } from './risk.js';
 import * as rg from './rg.js';
 import * as growth from './growth.js';
+import { activeBanners, BANNER_DIR } from './banners.js';
 import { recordClientError } from './clienterrors.js';
 import { setReferralHandler } from './bot.js';
 import { upsertUser } from './db.js';
@@ -140,6 +141,7 @@ app.get('/api/config', (_req, res) =>
       : null,
     devMode: config.devMode,
     botUsername: botUsername(),
+    growth: { signupBonus: config.growth.signupBonus, referralBonus: config.growth.referralBonus, dailyReward: config.growth.dailyReward },
   }));
 
 app.get('/api/me', requireAuth, (req, res) => {
@@ -170,7 +172,25 @@ app.post('/api/daily', requireAuth, (req, res) => {
     res.json(r);
   } catch (e) { res.status(400).json({ error: publicMessage(e) }); }
 });
+app.get('/api/banners', (_req, res) => res.set('Cache-Control', 'no-cache').json({ items: activeBanners() }));
+app.get('/banners/:file', (req, res) => {
+  if (!/^[a-f0-9]{24}\.webp$/.test(req.params.file)) return res.status(404).end();
+  res.set('Cache-Control', 'public, max-age=2592000, immutable');
+  res.type('image/webp').sendFile(path.join(BANNER_DIR, req.params.file), (e) => { if (e && !res.headersSent) res.status(404).end(); });
+});
 app.get('/api/leaderboard', requireAuth, (req, res) => res.json(growth.leaderboard()));
+// Live winners ticker on the home screen: latest real wins, first name shortened (privacy). Cached 15 s.
+let winsCache = { at: 0, items: [] };
+app.get('/api/recent-wins', requireAuth, (req, res) => {
+  if (Date.now() - winsCache.at > 15000) {
+    const rows = db.prepare(`SELECT t.amount, t.created_at, u.first_name, r.game FROM transactions t
+      JOIN users u ON u.id = t.user_id LEFT JOIN rounds r ON r.id = t.round_id
+      WHERE t.type = 'win' ORDER BY t.id DESC LIMIT 20`).all();
+    const short = (n) => { const s = String(n || 'Player').trim(); return s.length <= 2 ? `${s}***` : `${[...s].slice(0, 2).join('')}***`; };
+    winsCache = { at: Date.now(), items: rows.map((w) => ({ name: short(w.first_name), amount: w.amount, game: w.game || 'bingo', at: w.created_at })) };
+  }
+  res.json({ items: winsCache.items });
+});
 
 // ---- Responsible gambling ----
 const rgRoute = (fn) => (req, res) => { try { res.json(fn(req)); } catch (e) { res.status(400).json({ error: publicMessage(e) }); } };

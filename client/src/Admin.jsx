@@ -30,6 +30,7 @@ export default function Admin({ cfg, onLogout }) {
   const tabs = [
     ['overview', '📊 Overview'],
     ['settings', '⚙️ Settings'],
+    ['banners', '🖼 Banners'],
     ['requests', `💰 Requests${pendingCount ? ` (${pendingCount})` : ''}`],
     ['players', '👥 Players'],
     ['games', '🎱 Games'],
@@ -57,6 +58,7 @@ export default function Admin({ cfg, onLogout }) {
           {tab === 'log' && <AdminLog />}
           {tab === 'risk' && <Risk cfg={cfg} />}
           {tab === 'settings' && <Settings cfg={cfg} />}
+          {tab === 'banners' && <Banners />}
           {tab === 'errors' && <ClientErrors />}
         </>
       )}
@@ -899,6 +901,68 @@ function Settings({ cfg }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+const BANNER_TARGETS = [['', 'Nothing (picture only)'], ['aviator', 'Aviator'], ['bingo', 'Bingo'], ['keno', 'Keno'], ['ludo', 'Ludo'],
+  ['pool', '8-Ball Pool'], ['kerenbula', 'Kerenbula'], ['wallet', 'Deposit screen'], ['invite', 'Invite friends (share link)']];
+
+/** Home-screen promo banners: upload your own pictures, add a headline and a button. */
+function Banners() {
+  const [items, setItems] = useState(null);
+  const [form, setForm] = useState({ title: '', subtitle: '', cta: '', target: 'bingo' });
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => adminApi.banners().then((r) => setItems(r.items)).catch((e) => toast(e.message));
+  useEffect(() => { load(); }, []);
+  const upload = async (e) => {
+    e.preventDefault();
+    if (!file) return toast('Choose a picture first');
+    setBusy(true);
+    try { await adminApi.uploadBanner(file, form); toast('Banner added ✅'); setFile(null); setForm({ title: '', subtitle: '', cta: '', target: 'bingo' }); e.target.reset(); load(); }
+    catch (err) { toast(err.message); } finally { setBusy(false); }
+  };
+  const patch = async (b, p) => { try { await adminApi.updateBanner(b.id, p); load(); } catch (e) { toast(e.message); } };
+  const del = async (b) => { if (await confirmBox(`Delete banner "${b.title || b.id}"?`)) { await adminApi.deleteBanner(b.id).catch((e) => toast(e.message)); load(); } };
+  return (
+    <div className="admin-section">
+      <p className="muted small">Banners slide across the top of the players' home screen. Use pictures you own or have a licence for —
+        wide pictures work best (they are cropped to 2:1 and shrunk automatically). With no banners, the app shows its own game slides.</p>
+      <form className="banner-form" onSubmit={upload}>
+        <h3>Add a banner</h3>
+        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <input placeholder="Headline (optional), e.g. Weekend jackpot 10,000 ETB" maxLength={60} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        <input placeholder="Small text (optional)" maxLength={90} value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
+        <div className="banner-row">
+          <input placeholder="Button text, e.g. Play now" maxLength={20} value={form.cta} onChange={(e) => setForm({ ...form, cta: e.target.value })} />
+          <select value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })}>
+            {BANNER_TARGETS.map(([v, l]) => <option key={v} value={v}>Opens: {l}</option>)}
+          </select>
+        </div>
+        <button className="primary" disabled={busy}>{busy ? 'Uploading…' : 'Upload banner'}</button>
+      </form>
+      <h3>Banners ({items?.length ?? 0})</h3>
+      {!items ? <div className="muted">Loading…</div> : !items.length ? <div className="empty">No banners yet — the app shows its built-in slides.</div> : (
+        <div className="banner-list">
+          {items.map((b, k) => (
+            <div key={b.id} className={`banner-item ${b.active ? '' : 'off'}`}>
+              <img src={`/banners/${b.file}`} alt="" />
+              <div className="banner-meta">
+                <b>{b.title || <span className="muted">(no headline)</span>}</b>
+                <div className="small muted">{b.subtitle}</div>
+                <div className="small">{b.cta ? `Button "${b.cta}" → ` : 'Tap → '}{BANNER_TARGETS.find(([v]) => v === b.target)?.[1] || 'nothing'}</div>
+                <div className="banner-actions">
+                  <button className="ghost sm" disabled={k === 0} onClick={() => patch(b, { move: 'up' })}>↑</button>
+                  <button className="ghost sm" disabled={k === items.length - 1} onClick={() => patch(b, { move: 'down' })}>↓</button>
+                  <button className="ghost sm" onClick={() => patch(b, { active: !b.active })}>{b.active ? 'Hide' : 'Show'}</button>
+                  <button className="danger sm" onClick={() => del(b)}>Delete</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
