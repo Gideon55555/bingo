@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { socket, emit, haptic, toast } from './api.js';
 import { fmt, toCents } from '../../shared/money.js';
 import { PAYTABLE, KENO_MAX_PICKS, countHits } from '../../shared/keno.js';
+import { t, useLang } from './i18n.js';
 
 const loadPref = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 const savePref = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
@@ -17,10 +18,11 @@ function quickPick(count) {
 function Countdown({ endsAt }) {
   const [, force] = useState(0);
   useEffect(() => { const t = setInterval(() => force((x) => x + 1), 200); return () => clearInterval(t); }, []);
-  return <>{Math.max(0, Math.ceil((endsAt - performance.now()) / 1000))}s</>;
+  return <>{t('seconds', { n: Math.max(0, Math.ceil((endsAt - performance.now()) / 1000)) })}</>;
 }
 
 export default function Keno({ cfg, balance }) {
+  useLang();
   const [st, setSt] = useState(null);
   const [me, setMe] = useState(null);
   const [picks, setPicks] = useState(() => { try { return JSON.parse(loadPref('kn_picks', '[]')); } catch { return []; } });
@@ -77,7 +79,7 @@ export default function Keno({ cfg, balance }) {
     haptic('light');
     setPicks((p) => {
       const next = p.includes(n) ? p.filter((x) => x !== n) : p.length >= KENO_MAX_PICKS ? p : [...p, n].sort((a, b) => a - b);
-      if (!p.includes(n) && p.length >= KENO_MAX_PICKS) toast(`You can pick up to ${KENO_MAX_PICKS} numbers`);
+      if (!p.includes(n) && p.length >= KENO_MAX_PICKS) toast(t('maxPicks', { n: KENO_MAX_PICKS }));
       savePref('kn_picks', JSON.stringify(next));
       return next;
     });
@@ -97,7 +99,7 @@ export default function Keno({ cfg, balance }) {
   }
   const cancel = () => run(async () => { await emit('keno:cancel'); setMe(null); });
 
-  if (!st) return <div className="center muted">Loading Keno…</div>;
+  if (!st) return <div className="center muted">{t('loading')}</div>;
 
   const n = shownPicks.length;
   const table = PAYTABLE[n] || {};
@@ -105,19 +107,19 @@ export default function Keno({ cfg, balance }) {
 
   // ---- status line ----
   let status;
-  if (phase === 'betting') status = <>Next draw in <b><Countdown endsAt={endsAt.current} /></b> · {st.players} ticket(s)</>;
-  else if (phase === 'drawing') status = <>Drawing… <b>{revealed.length}/20</b>{n ? <> · you hit <b className="kn-hitcount">{hitsSoFar}</b></> : null}</>;
-  else if (phase === 'results') status = me ? (me.win > 0 ? <>🎉 You hit <b>{me.hits}/{me.picks.length}</b> — won <b>{fmt(me.win)} {cfg.currency}</b></> : <>You hit {me.hits}/{me.picks.length} — no win this time</>) : <>Draw complete</>;
-  else status = <>⏸ Paused for maintenance</>;
+  if (phase === 'betting') status = <>{t('nextDrawIn')} <b><Countdown endsAt={endsAt.current} /></b> · {t('tickets', { n: st.players })}</>;
+  else if (phase === 'drawing') status = <><b>{t('drawingN', { n: revealed.length })}</b>{n ? <> · <b className="kn-hitcount">{t('youHitSoFar', { n: hitsSoFar })}</b></> : null}</>;
+  else if (phase === 'results') status = me ? (me.win > 0 ? <b>{t('hitWon', { h: me.hits, p: me.picks.length, amount: `${fmt(me.win)} ${cfg.currency}` })}</b> : <>{t('hitNoWin', { h: me.hits, p: me.picks.length })}</>) : <>{t('drawDone')}</>;
+  else status = <>{t('pausedMaint')}</>;
 
   // ---- main button ----
   let btn;
-  if (phase === 'paused') btn = <button key="p" className="rk-btn" disabled>Paused</button>;
-  else if (phase === 'betting' && me) btn = <button key="c" className="rk-btn cancel" disabled={busy} onClick={cancel}>Cancel ticket<small>{me.picks.length} numbers · {fmt(me.amount)} {cfg.currency}</small></button>;
-  else if (phase === 'betting') btn = <button key="b" className="rk-btn bet" disabled={busy || !n || !(amountCents > 0)} onClick={buy}>{n ? 'BUY TICKET' : 'Pick numbers'}<small>{n ? `${n} numbers · ${fmt(amountCents)} ${cfg.currency}` : `choose 1–${KENO_MAX_PICKS} on the board`}</small></button>;
-  else if (queued) btn = <button key="q" className="rk-btn cancel" onClick={() => setQueued(false)}>Cancel<small>ticket for next draw</small></button>;
-  else if (locked) btn = <button key="l" className="rk-btn" disabled>Ticket in play<small>{me.picks.length} numbers · {fmt(me.amount)} {cfg.currency}</small></button>;
-  else btn = <button key="n" className="rk-btn bet" disabled={!n || !(amountCents > 0)} onClick={() => { setQueued(true); haptic('light'); }}>BUY<small>for next draw · {n || 0} numbers · {fmt(amountCents)} {cfg.currency}</small></button>;
+  if (phase === 'paused') btn = <button key="p" className="rk-btn" disabled>{t('pausedShort')}</button>;
+  else if (phase === 'betting' && me) btn = <button key="c" className="rk-btn cancel" disabled={busy} onClick={cancel}>{t('cancelTicket')}<small>{t('nNumbers', { n: me.picks.length, amount: `${fmt(me.amount)} ${cfg.currency}` })}</small></button>;
+  else if (phase === 'betting') btn = <button key="b" className="rk-btn bet" disabled={busy || !n || !(amountCents > 0)} onClick={buy}>{n ? t('buyTicket') : t('pickNumbers')}<small>{n ? t('nNumbers', { n, amount: `${fmt(amountCents)} ${cfg.currency}` }) : t('pickRange', { max: KENO_MAX_PICKS })}</small></button>;
+  else if (queued) btn = <button key="q" className="rk-btn cancel" onClick={() => setQueued(false)}>{t('cancel')}<small>{t('cancelNextTicket')}</small></button>;
+  else if (locked) btn = <button key="l" className="rk-btn" disabled>{t('ticketInPlay')}<small>{t('nNumbers', { n: me.picks.length, amount: `${fmt(me.amount)} ${cfg.currency}` })}</small></button>;
+  else btn = <button key="n" className="rk-btn bet" disabled={!n || !(amountCents > 0)} onClick={() => { setQueued(true); haptic('light'); }}>{t('buy')}<small>{t('forNextDraw', { n: n || 0, amount: `${fmt(amountCents)} ${cfg.currency}` })}</small></button>;
 
   return (
     <div className="keno">
@@ -144,10 +146,10 @@ export default function Keno({ cfg, balance }) {
 
       <div className="rk-panel">
         <div className="row-between">
-          <span className="small"><b>{n}</b>/{KENO_MAX_PICKS} numbers picked</span>
+          <span className="small">{t('numbersPicked', { n, max: KENO_MAX_PICKS })}</span>
           <span className="kn-tools">
-            <button onClick={doQuick} disabled={locked}>🎲 Quick pick</button>
-            <button onClick={clear} disabled={locked || !picks.length}>Clear</button>
+            <button onClick={doQuick} disabled={locked}>{t('quickPick')}</button>
+            <button onClick={clear} disabled={locked || !picks.length}>{t('clear')}</button>
           </span>
         </div>
         <div className="rk-amount">
@@ -159,19 +161,19 @@ export default function Keno({ cfg, balance }) {
           {[5, 10, 50, 100].map((v) => <button key={v} disabled={locked} onClick={() => setAmt(v * 100)}>{v}</button>)}
         </div>
         {btn}
-        {!me && balance < amountCents && <div className="warn small center-text">Balance too low — deposit in Wallet.</div>}
+        {!me && balance < amountCents && <div className="warn small center-text">{t('balanceLow')}</div>}
       </div>
 
       {n > 0 && (
         <div className="kn-pay">
-          <h3>Payouts for {n} number{n > 1 ? 's' : ''}</h3>
+          <h3>{t('payoutsFor', { n })}</h3>
           <div className="kn-paygrid">
             {Object.entries(table).sort((a, b) => Number(b[0]) - Number(a[0])).map(([hits, mult]) => {
               const active = (phase === 'drawing' || phase === 'results') && Number(hits) === hitsSoFar;
               const stake = me ? me.amount : amountCents;
               return (
                 <div key={hits} className={`kn-payrow ${active ? 'active' : ''}`}>
-                  <span>{hits} hit{hits === '1' ? '' : 's'}</span>
+                  <span>{t('hits', { n: hits })}</span>
                   <span className="mono">{mult}×</span>
                   <span>{fmt(Math.min(Math.floor(stake * mult), cfg.keno.maxWin))} {cfg.currency}</span>
                 </div>
@@ -183,33 +185,19 @@ export default function Keno({ cfg, balance }) {
 
       {phase === 'results' && st.result?.winners?.length > 0 && (
         <div className="rk-bets">
-          <h3>Winners this draw</h3>
+          <h3>{t('winnersDraw')}</h3>
           {st.result.winners.map((w, i) => (
             <div key={i} className="rk-bet won"><span>{w.name}</span><span>{w.hits}/{w.picks}</span><span /><span>+{fmt(w.win)}</span></div>
           ))}
         </div>
       )}
 
-      <button className="ghost sm" onClick={() => setShowInfo((v) => !v)}>{showInfo ? 'Hide' : '📖 How to play & fairness'}</button>
+      <button className="ghost sm" onClick={() => setShowInfo((v) => !v)}>{showInfo ? t('hide') : t('howFair')}</button>
       {showInfo && (
         <div className="rk-info">
-          <h3>How to play</h3>
-          <ol>
-            <li>Pick 1–{KENO_MAX_PICKS} numbers from 1 to 80 (or tap Quick pick), choose your stake and buy a ticket.</li>
-            <li>When betting closes, 20 numbers are drawn one by one.</li>
-            <li>The more of your numbers are drawn, the more you win. See the payout table for your ticket.</li>
-          </ol>
-          <p className="small muted">
-            Tickets: {fmt(cfg.keno.minBet)}–{fmt(cfg.keno.maxBet)} {cfg.currency}. Maximum win per ticket: {fmt(cfg.keno.maxWin)} {cfg.currency}.
-            Average return to players: about 94%. If a draw is interrupted by a technical problem, all tickets are refunded.
-          </p>
-          <h3>Provably fair</h3>
-          <p className="small">
-            Before betting opens we publish the hash of a secret seed. After the draw we reveal the seed. SHA-256(seed) must equal the
-            hash, and the 20 numbers are the first 20 of a shuffle of 1–80 driven by HMAC-SHA256(seed, "keno:0", "keno:1", …).
-          </p>
-          <div className="mono small break">This round's hash: {st.hash || '—'}</div>
-          {st.seed && <div className="mono small break">Seed: {st.seed}</div>}
+          <p className="small">{t('kenoFair')}</p>
+          <div className="mono small break">{t('roundHash')}: {st.hash || '—'}</div>
+          {st.seed && <div className="mono small break">{t('lastSeed')}: {st.seed}</div>}
         </div>
       )}
     </div>

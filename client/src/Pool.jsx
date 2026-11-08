@@ -3,6 +3,7 @@ import { socket, emit, haptic, toast, confirmBox } from './api.js';
 import { fmt } from '../../shared/money.js';
 import { SOLIDS, STRIPES, BALL_COLORS, R, W, H, HEAD_LINE } from '../../shared/pool.js';
 import { startPoolRender, toTable, Sim, canPlaceCue } from './poolRender.js';
+import { t, useLang, trServer } from './i18n.js';
 
 function MiniBall({ n, gone }) {
   const stripe = n >= 9;
@@ -14,6 +15,7 @@ function MiniBall({ n, gone }) {
 }
 
 export default function Pool({ cfg, balance }) {
+  useLang();
   const [lobby, setLobby] = useState(null);
   const [me, setMe] = useState(null);
   const [game, setGame] = useState(null);
@@ -67,7 +69,7 @@ export default function Pool({ cfg, balance }) {
         onDone: () => {
           view.balls = after;
           setTimeout(() => { view.replay = null; }, 50);
-          if (foul) setMsg(`Foul by ${gameRef.current?.players[shooter]?.name}: ${foul}`);
+          if (foul) setMsg(t('foulBy', { name: gameRef.current?.players[shooter]?.name, reason: trServer(foul) }));
         },
       };
       haptic('heavy');
@@ -78,12 +80,15 @@ export default function Pool({ cfg, balance }) {
     socket.on('pool:me', onMe);
     socket.on('pool:state', onState);
     socket.on('pool:shot', onShot);
+    const onEvent = ({ name, reason }) => toast(`${name} ${trServer(reason)}`);
+    socket.on('pool:event', onEvent);
     return () => {
       socket.off('connect', enter);
       socket.off('pool:lobby', onLobby);
       socket.off('pool:me', onMe);
       socket.off('pool:state', onState);
       socket.off('pool:shot', onShot);
+      socket.off('pool:event', onEvent);
       emit('pool:exit').catch(() => {});
     };
   }, []);
@@ -96,7 +101,7 @@ export default function Pool({ cfg, balance }) {
   }, [hasTable]);
 
   // clear the foul message when a new turn starts
-  useEffect(() => { if (game?.phase === 'aim' && !game.lastFoul) setMsg(null); else if (game?.lastFoul) setMsg(`Foul by ${game.lastFoul.by}: ${game.lastFoul.reason} — ball in hand`); }, [game?.turn, game?.phase]);
+  useEffect(() => { if (game?.phase === 'aim' && !game.lastFoul) setMsg(null); else if (game?.lastFoul) setMsg(t('foulBallInHand', { name: game.lastFoul.by, reason: trServer(game.lastFoul.reason) })); }, [game?.turn, game?.phase]);
 
   // ---------- touch handling on the table ----------
   const dragging = useRef(null);
@@ -125,7 +130,7 @@ export default function Pool({ cfg, balance }) {
   const onPointerUp = () => {
     if (dragging.current === 'cue' && view.cueDrag) {
       if (view.cueDrag.valid) view.cuePlaced = { x: view.cueDrag.x, y: view.cueDrag.y };
-      else toast(view.breakShot ? 'On the break, place the cue ball behind the line' : 'The cue ball can’t go there');
+      else toast(view.breakShot ? t('breakPlace') : t('cantPlace'));
       view.cueDrag = null;
     }
     dragging.current = null;
@@ -169,7 +174,7 @@ export default function Pool({ cfg, balance }) {
   };
 
   if (cfg.devMode) window.__pool = { game, view }; // test hook (DEV_MODE only)
-  if (!lobby) return <div className="center muted">Loading pool…</div>;
+  if (!lobby) return <div className="center muted">{t('loading')}</div>;
 
   // ================= Match =================
   if (game) {
@@ -177,16 +182,16 @@ export default function Pool({ cfg, balance }) {
     const chip = (i) => {
       const p = game.players[i];
       const active = game.turn === i && game.phase !== 'over';
-      const set = p.group ? (p.group === 'solids' ? SOLIDS : STRIPES) : null;
+      const set = p.set || (p.group ? (p.group === 'solids' ? SOLIDS : STRIPES) : null);
       return (
-        <div className={`pool-chip ${active ? 'active' : ''}`}>
-          <div className="lc-name">{p.name}{i === game.me ? ' (you)' : ''}</div>
+        <div key={i} className={`pool-chip ${active ? 'active' : ''} ${p.out || p.eliminated ? 'out' : ''}`}>
+          <div className="lc-name">{p.name}{i === game.me ? ` (${t('you')})` : ''}</div>
           <div className="pool-group">
             {set ? set.map((n) => <MiniBall key={n} n={n} gone={game.balls.find((b) => b.n === n).in} />)
-              : <span className="muted small">{game.breakShot ? (active ? 'breaking' : '') : 'open table'}</span>}
-            {set && p.left === 0 && <MiniBall n={8} />}
+              : <span className="muted small">{game.breakShot ? (active ? t('breaking') : '') : t('openTable')}</span>}
+            {set && !p.set && p.left === 0 && <MiniBall n={8} />}
           </div>
-          {p.misses > 0 && <div className="small warn">⏱ {p.misses}/{game.maxMisses} timeouts</div>}
+          {p.misses > 0 && <div className="small warn">{t('timeoutsN', { n: p.misses, max: game.maxMisses })}</div>}
           {active && !rolling && game.deadlineLeftMs != null && (
             <div className="lc-timer"><span key={`${game.turn}-${game.balls.map((b) => b.in ? 1 : 0).join('')}-${game.deadlineLeftMs > 0}`} style={{ animationDuration: `${game.deadlineLeftMs}ms` }} /></div>
           )}
@@ -194,23 +199,23 @@ export default function Pool({ cfg, balance }) {
       );
     };
     let hint = '';
-    if (game.phase === 'starting') hint = 'Match starting…';
+    if (game.phase === 'starting') hint = t('matchStarting');
     else if (game.phase === 'shooting' || rolling) hint = '';
-    else if (myTurn && game.ballInHand) hint = game.breakShot ? 'Your break! Drag the white ball (behind the line), aim, then pull the cue' : 'Ball in hand: drag the white ball anywhere, aim, then pull the cue';
-    else if (myTurn) hint = 'Your shot: touch the table to aim, pull the cue down to shoot';
-    else if (game.phase === 'aim') hint = `${game.players[game.turn].name} is aiming…`;
+    else if (myTurn && game.ballInHand) hint = game.breakShot ? t('yourBreak') : t('ballInHand');
+    else if (myTurn) hint = t('yourShot');
+    else if (game.phase === 'aim') hint = t('isAiming', { name: game.players[game.turn].name });
     const leave = async () => {
-      if (game.phase !== 'over' && !(await confirmBox(`Leave and forfeit this match? You will lose your ${fmt(game.stake)} ${cfg.currency} entry.`))) return;
+      if (game.phase !== 'over' && !(await confirmBox(t('confirmForfeit', { amount: `${fmt(game.stake)} ${cfg.currency}` })))) return;
       if (game.phase !== 'over') await emit('pool:leave');
       setGame(null); enter();
     };
     return (
       <div className="pool">
         <div className="row-between ludo-top">
-          <span className="small">Prize <b className="accent">{fmt(game.prize)} {cfg.currency}</b></span>
-          <button className="ghost sm" onClick={leave}>{game.phase === 'over' ? '← Tables' : 'Leave'}</button>
+          <span className="small">{t('prize')} <b className="accent">{fmt(game.prize)} {cfg.currency}</b></span>
+          <button className="ghost sm" onClick={leave}>{game.phase === 'over' ? t('tables') : t('leave')}</button>
         </div>
-        <div className="pool-chips">{chip(0)}{chip(1)}</div>
+        <div className="pool-chips">{game.players.map((_, i) => chip(i))}</div>
         {msg && <div className="pool-msg">{msg}</div>}
         <div className="pool-play">
           <canvas ref={canvasRef} className="pool-canvas"
@@ -219,21 +224,21 @@ export default function Pool({ cfg, balance }) {
             onPointerDown={onPowerDown} onPointerMove={onPowerMove} onPointerUp={onPowerUp} onPointerCancel={onPowerUp}>
             <div className="pp-fill" style={{ transform: `scaleY(${powerUi})` }} />
             <div className="pp-cue" style={{ transform: `translateY(${powerUi * 70}%)` }} />
-            <div className="pp-label">{powerUi > 0 ? `${Math.round(powerUi * 100)}%` : 'PULL'}</div>
+            <div className="pp-label">{powerUi > 0 ? `${Math.round(powerUi * 100)}%` : t('pull')}</div>
           </div>
         </div>
         <div className="pool-under">
-          <button className="ghost sm" disabled={!myTurn} onClick={() => nudge(-0.4)}>◀ fine</button>
+          <button className="ghost sm" disabled={!myTurn} onClick={() => nudge(-0.4)}>◀ {t('fine')}</button>
           <div className="pool-hint">{hint}</div>
-          <button className="ghost sm" disabled={!myTurn} onClick={() => nudge(0.4)}>fine ▶</button>
+          <button className="ghost sm" disabled={!myTurn} onClick={() => nudge(0.4)}>{t('fine')} ▶</button>
         </div>
 
         {game.phase === 'over' && game.result && (
           <div className="overlay">
             <div className="result">
-              <h2>{game.result.winner === game.me ? `🏆 You won ${fmt(game.result.prize)} ${cfg.currency}!` : `${game.result.winnerName} won`}</h2>
-              <p className="muted small">{game.result.how === 'potted the 8 ball' ? 'Potted the 8 ball.' : game.result.how}</p>
-              <button className="primary" onClick={() => { setGame(null); enter(); }}>Back to tables</button>
+              <h2>{game.result.winner === game.me ? t('youWonPrize', { amount: `${fmt(game.result.prize)} ${cfg.currency}` }) : t('nameWon', { name: game.result.winnerName })}</h2>
+              <p className="muted small">{game.result.how === 'potted the 8 ball' ? t('pottedEight') : trServer(game.result.how)}</p>
+              <button className="primary" onClick={() => { setGame(null); enter(); }}>{t('backToTables')}</button>
             </div>
           </div>
         )}
@@ -248,38 +253,60 @@ export default function Pool({ cfg, balance }) {
       <div className="ludo">
         <div className="ludo-wait">
           <div className="spinner" />
-          <h2>Finding an opponent…</h2>
-          <p className="muted">Entry {fmt(q.stake)} {cfg.currency} · winner gets {fmt(Math.floor(q.stake * 2 * (1 - cfg.pool.houseCut)))} {cfg.currency}</p>
-          <p className="small muted">The match starts as soon as another player joins. We'll also message you on Telegram.</p>
-          <button className="ghost" disabled={busy} onClick={() => run(async () => { await emit('pool:leave'); setMe(null); })}>Leave table & refund</button>
+          <h2>{q.size > 2 ? t('waitingPlayers') : t('findingOpp')}</h2>
+          {q.size > 2 && <div className="big">{q.waiting}/{q.size}</div>}
+          <p className="muted">{t('poolEntryInfo', { stake: `${fmt(q.stake)} ${cfg.currency}`, prize: `${fmt(Math.floor(q.stake * (q.size || 2) * (1 - cfg.pool.houseCut)))} ${cfg.currency}` })}</p>
+          <p className="small muted">{q.size > 2 ? t('startsWhenFull') : t('matchStartsWhen')}</p>
+          <button className="ghost" disabled={busy} onClick={() => run(async () => { await emit('pool:leave'); setMe(null); })}>{t('leaveTable')}</button>
         </div>
       </div>
     );
   }
 
   // ================= Tables =================
+  const sizes = [...new Set(lobby.tables.map((x) => x.size))].sort();
+  const stakes = [...new Set(lobby.tables.map((x) => x.stake))];
+  const joinTable = (tb) => run(async () => {
+    if (balance < tb.stake) throw new Error(t('balanceLow'));
+    const r = await emit('pool:join', { stake: tb.stake, size: tb.size }); setMe(r.me); haptic('medium');
+  });
   return (
     <div className="ludo">
-      {lobby.paused && <div className="banner">⏸ Games are paused for maintenance.</div>}
+      {lobby.paused && <div className="banner">⏸ {t('paused')}</div>}
       <p className="muted small">
-        Classic 8-ball, 1 vs 1. Pot all your solids or stripes, then the 8. Fouls give your opponent ball in hand.
-        {' '}{cfg.pool.shotSec}s per shot. Winner gets {Math.round((1 - cfg.pool.houseCut) * 100)}% of the pot.
-        {lobby.playing ? ` · ${lobby.playing} playing now` : ''}
+        {t('poolIntro', { sec: cfg.pool.shotSec, pct: Math.round((1 - cfg.pool.houseCut) * 100) })}
+        {lobby.playing ? ` · ${t('playingNow', { n: lobby.playing })}` : ''}
       </p>
-      <div className="pool-tables">
-        {lobby.tables.map((t) => (
-          <button key={t.stake} className="ludo-table pool-table" disabled={busy || lobby.paused}
-            onClick={() => run(async () => {
-              if (balance < t.stake) throw new Error('Balance too low — deposit in Wallet.');
-              const r = await emit('pool:join', { stake: t.stake }); setMe(r.me); haptic('medium');
-            })}>
-            <div className="pt-amt">{fmt(t.stake)} <small>{cfg.currency}</small></div>
-            <div className="lt-prize">🏆 Win {fmt(t.prize)}</div>
-            <div className="lt-wait">{t.waiting ? '1 player waiting — join now!' : 'Join'}</div>
-          </button>
-        ))}
-      </div>
-      <p className="muted small center-text">Every shot is calculated on the server with the same physics for both players.</p>
+      {sizes.length === 1 ? (
+        <div className="pool-tables">
+          {lobby.tables.map((tb) => (
+            <button key={tb.stake} className="ludo-table pool-table" disabled={busy || lobby.paused} onClick={() => joinTable(tb)}>
+              <div className="pt-amt">{fmt(tb.stake)} <small>{cfg.currency}</small></div>
+              <div className="lt-prize">{t('winX', { amount: fmt(tb.prize) })}</div>
+              <div className="lt-wait">{tb.waiting ? t('oneWaiting') : t('join')}</div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="ludo-tables">
+          {stakes.map((stake) => (
+            <div key={stake} className="ludo-stake" style={{ gridTemplateColumns: `88px repeat(${sizes.length}, 1fr)` }}>
+              <div className="ls-amt">{fmt(stake)} <small>{cfg.currency}</small></div>
+              {sizes.map((size) => {
+                const tb = lobby.tables.find((x) => x.stake === stake && x.size === size);
+                return (
+                  <button key={size} className="ludo-table" disabled={busy || lobby.paused} onClick={() => joinTable(tb)}>
+                    <div className="lt-size">{size === 2 ? t('oneVone') : t('nPlayersCut', { n: size })}</div>
+                    <div className="lt-prize">🏆 {fmt(tb.prize)}</div>
+                    <div className="lt-wait">{tb.waiting ? t('waitingN', { n: tb.waiting, size }) : t('join')}</div>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="muted small center-text">{t('serverPhysics')}</p>
     </div>
   );
 }

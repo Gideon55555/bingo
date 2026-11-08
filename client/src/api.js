@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import { trServer } from './i18n.js';
 
 export const tg = window.Telegram?.WebApp;
 const initData = tg?.initData || '';
@@ -24,6 +25,7 @@ export const api = {
   history: () => request('GET', '/api/history'),
   deposit: (amount, reference) => request('POST', '/api/deposit', { amount, reference }),
   withdraw: (amount, phone) => request('POST', '/api/withdraw', { amount, phone }),
+  setLang: (lang) => request('POST', '/api/lang', { lang }),
 };
 
 // Default transports: starts with HTTP long-polling and upgrades to WebSocket when the host allows it
@@ -88,6 +90,7 @@ export const haptic = (type = 'light') => {
 };
 
 export const toast = (msg) => {
+  msg = trServer(msg); // server messages arrive in English
   if (tg?.showAlert && tg.initData) tg.showAlert(msg);
   else alert(msg);
 };

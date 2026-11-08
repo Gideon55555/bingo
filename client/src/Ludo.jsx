@@ -3,6 +3,7 @@ import { socket, emit, haptic, toast, confirmBox } from './api.js';
 import { fmt } from '../../shared/money.js';
 import { COLORS, COLOR_HEX, HOME_POS } from '../../shared/ludo.js';
 import LudoBoard from './LudoBoard.jsx';
+import { t, useLang, trServer } from './i18n.js';
 
 const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
 function Die({ value, rolling, color, onClick, big }) {
@@ -17,6 +18,7 @@ function Die({ value, rolling, color, onClick, big }) {
 }
 
 export default function Ludo({ cfg, balance }) {
+  useLang();
   const [lobby, setLobby] = useState(null);
   const [me, setMe] = useState(null);
   const [game, setGame] = useState(null);
@@ -97,7 +99,7 @@ export default function Ludo({ cfg, balance }) {
   const myTurn = game && game.turnSeat === game.mySeat && game.mySeat !== null;
   useEffect(() => { if (myTurn && game.phase === 'roll') haptic('medium'); }, [myTurn, game?.phase]);
 
-  if (!lobby) return <div className="center muted">Loading Ludo…</div>;
+  if (!lobby) return <div className="center muted">{t('loading')}</div>;
 
   // ================= In a game =================
   if (game) {
@@ -116,7 +118,7 @@ export default function Ludo({ cfg, balance }) {
     const bySeat = Object.fromEntries(game.players.map((p) => [p.seat, p]));
     const canRoll = myTurn && game.phase === 'roll';
     const leave = async () => {
-      if (game.phase !== 'over' && !(await confirmBox(`Leave and forfeit this game? You will lose your ${fmt(game.stake)} ${cfg.currency} entry.`))) return;
+      if (game.phase !== 'over' && !(await confirmBox(t('confirmForfeit', { amount: `${fmt(game.stake)} ${cfg.currency}` })))) return;
       if (game.phase !== 'over') await emit('ludo:leave');
       setGame(null); enter();
     };
@@ -127,9 +129,9 @@ export default function Ludo({ cfg, balance }) {
       const home = p.tokens.filter((t) => t === HOME_POS).length;
       return (
         <div className={`ludo-chip ${active ? 'active' : ''} ${p.out ? 'out' : ''}`} style={{ '--c': COLOR_HEX[p.color] }}>
-          <div className="lc-name"><span className="lc-dot" />{p.name}{seat === game.mySeat ? ' (you)' : ''}</div>
+          <div className="lc-name"><span className="lc-dot" />{p.name}{seat === game.mySeat ? ` (${t('you')})` : ''}</div>
           <div className="lc-meta">
-            {p.out ? 'left the game' : <>🏠 {home}/{p.tokens.length}{p.misses ? <span className="warn"> · ⚠️ {p.misses}/{game.maxMisses} missed</span> : null}</>}
+            {p.out ? t('leftGame') : <>🏠 {home}/{p.tokens.length}{p.misses ? <span className="warn"> · {t('missedN', { n: p.misses, max: game.maxMisses })}</span> : null}</>}
           </div>
           {active && game.deadlineLeftMs != null && (
             <div className="lc-timer"><span key={`${game.turnSeat}-${game.phase}-${game.roll}`} style={{ animationDuration: `${game.deadlineLeftMs}ms` }} /></div>
@@ -139,17 +141,17 @@ export default function Ludo({ cfg, balance }) {
     };
     let hint;
     if (game.phase === 'over') hint = '';
-    else if (game.phase === 'starting') hint = 'Game starting…';
-    else if (canRoll) hint = 'Your turn — tap the dice!';
-    else if (myTurn && game.phase === 'move') hint = 'Tap a glowing token to move';
-    else if (myTurn) hint = game.roll === 6 && game.phase === 'anim' ? 'Six! Roll again…' : game.legal.length === 0 && game.roll && game.phase === 'rolled' ? 'No move possible' : `You rolled ${game.roll ?? ''}`;
-    else hint = `${current?.name}'s turn`;
+    else if (game.phase === 'starting') hint = t('gameStarting');
+    else if (canRoll) hint = t('yourTurnRoll');
+    else if (myTurn && game.phase === 'move') hint = t('tapToken');
+    else if (myTurn) hint = game.roll === 6 && game.phase === 'anim' ? t('sixAgain') : game.legal.length === 0 && game.roll && game.phase === 'rolled' ? t('noMove') : t('youRolled', { n: game.roll ?? '' });
+    else hint = t('turnOf', { name: current?.name });
 
     return (
       <div className="ludo">
         <div className="row-between ludo-top">
-          <span className="small">Pot <b>{fmt(game.pot)}</b> · Prize <b className="accent">{fmt(game.prize)} {cfg.currency}</b></span>
-          <button className="ghost sm" onClick={leave}>{game.phase === 'over' ? '← Tables' : 'Leave'}</button>
+          <span className="small">{t('pot')} <b>{fmt(game.pot)}</b> · {t('prize')} <b className="accent">{fmt(game.prize)} {cfg.currency}</b></span>
+          <button className="ghost sm" onClick={leave}>{game.phase === 'over' ? t('tables') : t('leave')}</button>
         </div>
         <div className="ludo-chips">{chip(0)}{chip(1)}</div>
         <LudoBoard tokens={tokens} stepMs={cfg.ludo.stepMs} tokensPerPlayer={cfg.ludo.tokens} onTokenClick={(i) => run(() => emit('ludo:move', { token: i }))} />
@@ -163,10 +165,10 @@ export default function Ludo({ cfg, balance }) {
         {game.phase === 'over' && game.result && (
           <div className="overlay">
             <div className="result">
-              <h2>{game.result.winnerSeat === game.mySeat ? `🏆 You won ${fmt(game.result.prize)} ${cfg.currency}!` : `${game.result.winnerName} won`}</h2>
-              <p className="muted small">{game.result.how === 'all tokens home' ? 'All tokens home first.' : `Won because ${game.result.how}.`}</p>
-              <button className="primary" onClick={() => { setGame(null); enter(); }}>Back to tables</button>
-              <p className="mono small muted break">Dice seed: {game.seed}</p>
+              <h2>{game.result.winnerSeat === game.mySeat ? t('youWonPrize', { amount: `${fmt(game.result.prize)} ${cfg.currency}` }) : t('nameWon', { name: game.result.winnerName })}</h2>
+              <p className="muted small">{game.result.how === 'all tokens home' ? t('allHome') : t('wonBecause', { how: trServer(game.result.how) })}</p>
+              <button className="primary" onClick={() => { setGame(null); enter(); }}>{t('backToTables')}</button>
+              <p className="mono small muted break">{t('diceSeed', { seed: game.seed })}</p>
             </div>
           </div>
         )}
@@ -181,11 +183,11 @@ export default function Ludo({ cfg, balance }) {
       <div className="ludo">
         <div className="ludo-wait">
           <div className="spinner" />
-          <h2>Waiting for players…</h2>
+          <h2>{t('waitingPlayers')}</h2>
           <div className="big">{q.waiting}/{q.size}</div>
-          <p className="muted">{q.size === 2 ? '1 vs 1' : '4 players'} · entry {fmt(q.stake)} {cfg.currency} · prize {fmt(Math.floor(q.stake * q.size * (1 - cfg.ludo.houseCut)))} {cfg.currency}</p>
-          <p className="small muted">The game starts as soon as the table is full. We'll also message you on Telegram.</p>
-          <button className="ghost" disabled={busy} onClick={() => run(async () => { await emit('ludo:leave'); setMe(null); })}>Leave table & refund</button>
+          <p className="muted">{t('tableInfo', { kind: q.size === 2 ? t('oneVone') : t('fourPlayers'), stake: `${fmt(q.stake)} ${cfg.currency}`, prize: `${fmt(Math.floor(q.stake * q.size * (1 - cfg.ludo.houseCut)))} ${cfg.currency}` })}</p>
+          <p className="small muted">{t('startsWhenFull')}</p>
+          <button className="ghost" disabled={busy} onClick={() => run(async () => { await emit('ludo:leave'); setMe(null); })}>{t('leaveTable')}</button>
         </div>
       </div>
     );
@@ -195,34 +197,33 @@ export default function Ludo({ cfg, balance }) {
   const stakes = [...new Set(lobby.tables.map((t) => t.stake))];
   return (
     <div className="ludo">
-      {lobby.paused && <div className="banner">⏸ Games are paused for maintenance.</div>}
+      {lobby.paused && <div className="banner">⏸ {t('paused')}</div>}
       <p className="muted small">
-        Race your {cfg.ludo.tokens} tokens home before your opponents. Roll a 6 to leave base, land on others to send them back.
-        Winner takes the pot ({Math.round((1 - cfg.ludo.houseCut) * 100)}%). {cfg.ludo.turnSec}s per turn.
-        {lobby.playing ? ` · ${lobby.playing} playing now` : ''}
+        {t('ludoIntro', { tokens: cfg.ludo.tokens, pct: Math.round((1 - cfg.ludo.houseCut) * 100), sec: cfg.ludo.turnSec })}
+        {lobby.playing ? ` · ${t('playingNow', { n: lobby.playing })}` : ''}
       </p>
       <div className="ludo-tables">
         {stakes.map((stake) => (
           <div key={stake} className="ludo-stake">
             <div className="ls-amt">{fmt(stake)} <small>{cfg.currency}</small></div>
             {[2, 4].map((size) => {
-              const t = lobby.tables.find((x) => x.stake === stake && x.size === size);
+              const tb = lobby.tables.find((x) => x.stake === stake && x.size === size);
               return (
                 <button key={size} className="ludo-table" disabled={busy || lobby.paused}
                   onClick={() => run(async () => {
-                    if (balance < stake) throw new Error('Balance too low — deposit in Wallet.');
+                    if (balance < stake) throw new Error(t('balanceLow'));
                     const r = await emit('ludo:join', { stake, size }); setMe(r.me); haptic('medium');
                   })}>
-                  <div className="lt-size">{size === 2 ? '1 vs 1' : '4 players'}</div>
-                  <div className="lt-prize">🏆 {fmt(t.prize)}</div>
-                  <div className="lt-wait">{t.waiting ? `${t.waiting}/${size} waiting` : 'Join'}</div>
+                  <div className="lt-size">{size === 2 ? t('oneVone') : t('fourPlayers')}</div>
+                  <div className="lt-prize">🏆 {fmt(tb.prize)}</div>
+                  <div className="lt-wait">{tb.waiting ? t('waitingN', { n: tb.waiting, size }) : t('join')}</div>
                 </button>
               );
             })}
           </div>
         ))}
       </div>
-      <p className="muted small center-text">Dice are rolled on the server and can be verified with the seed shown after each game.</p>
+      <p className="muted small center-text">{t('diceVerify')}</p>
     </div>
   );
 }

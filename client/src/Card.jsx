@@ -1,5 +1,6 @@
 import React from 'react';
 import { getCard } from '../../shared/cards.js';
+import { t } from './i18n.js';
 
 /**
  * Renders a 5x5 bingo card.
@@ -31,7 +32,7 @@ export default function Card({ id, called, marked, onToggle, winLine, size = 'lg
             </button>
           );
         }))}
-      <div className="card-id">Card #{id}</div>
+      <div className="card-id">{t('card', { n: id })}</div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { Bot, InlineKeyboard, InputFile, webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { fmtMoney, fmt, toCents } from '../shared/money.js';
 import { getUser, getTx } from './db.js';
+import { tr } from './i18n.js';
 
 export let bot = null;
 const isAdmin = (id) => config.adminIds.includes(String(id));
@@ -73,7 +74,7 @@ export async function startBot({ actions, app }) {
   }
   bot = new Bot(config.botToken);
 
-  const playKeyboard = () => new InlineKeyboard().webApp('🎱 Play Bingo', config.webAppUrl);
+  const playKeyboard = (uid) => new InlineKeyboard().webApp(tr(uid, 'playButton'), config.webAppUrl);
   const adminOnly = (fn) => async (ctx) => {
     if (!isAdmin(ctx.from?.id)) return ctx.reply('This command is for admins only.');
     try {
@@ -86,19 +87,17 @@ export async function startBot({ actions, app }) {
 
   // ---------- Player commands ----------
   bot.command('start', (ctx) =>
-    ctx.reply('Welcome to Bingo! Pick a card, wait for the numbers, and shout BINGO first to win the pot.', {
-      reply_markup: playKeyboard(),
-    }));
+    ctx.reply(tr(ctx.from.id, 'welcome'), { reply_markup: playKeyboard(ctx.from.id) }));
 
   bot.command('balance', (ctx) => {
     const u = getUser(ctx.from.id);
-    return ctx.reply(`Your balance: ${money(u ? u.balance : 0)}`, { reply_markup: playKeyboard() });
+    return ctx.reply(tr(ctx.from.id, 'balance', { amount: money(u ? u.balance : 0) }), { reply_markup: playKeyboard(ctx.from.id) });
   });
 
-  bot.command('id', (ctx) => ctx.reply(`Your Telegram id: ${ctx.from.id}`));
+  bot.command('id', (ctx) => ctx.reply(tr(ctx.from.id, 'yourId', { id: ctx.from.id })));
 
   bot.command('help', (ctx) =>
-    ctx.reply(isAdmin(ctx.from.id) ? ADMIN_HELP : '/start — play\n/balance — your balance\n/id — your Telegram id'));
+    ctx.reply(isAdmin(ctx.from.id) ? ADMIN_HELP : tr(ctx.from.id, 'help')));
 
   // ---------- Admin commands ----------
   bot.command('admin', adminOnly((ctx) =>

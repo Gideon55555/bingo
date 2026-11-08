@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { Server } from 'socket.io';
 import { config, checkConfig, ROOT } from './config.js';
 import { authenticate, requireAuth } from './auth.js';
-import { db, getUser, history, createDeposit, createWithdrawal, countPending, refundOpenRounds } from './db.js';
+import { db, setUserLang, getUser, history, createDeposit, createWithdrawal, countPending, refundOpenRounds } from './db.js';
 import { GameManager } from './game.js';
 import { CrashGame } from './crash.js';
 import { KenoGame } from './keno.js';
@@ -16,6 +16,7 @@ import { createAdmin, isAdminId } from './admin.js';
 import { limit, allow } from './ratelimit.js';
 import { scheduleBackups } from './backup.js';
 import { fmtMoney } from '../shared/money.js';
+import { tr } from './i18n.js';
 
 checkConfig();
 
@@ -73,7 +74,7 @@ app.get('/api/config', (_req, res) =>
           name: config.crash.name }
       : null,
     pool: config.pool.enabled
-      ? { stakes: config.pool.stakes, houseCut: config.pool.houseCut, shotSec: config.pool.shotSec, maxMisses: config.pool.maxMisses }
+      ? { stakes: config.pool.stakes, sizes: config.pool.sizes, houseCut: config.pool.houseCut, shotSec: config.pool.shotSec, maxMisses: config.pool.maxMisses }
       : null,
     ludo: config.ludo.enabled
       ? { stakes: config.ludo.stakes, houseCut: config.ludo.houseCut, tokens: config.ludo.tokens, turnSec: config.ludo.turnSec,
@@ -86,6 +87,8 @@ app.get('/api/config', (_req, res) =>
   }));
 
 app.get('/api/me', requireAuth, (req, res) => res.json({ user: { ...req.user, isAdmin: isAdminId(req.user.id) } }));
+
+app.post('/api/lang', requireAuth, (req, res) => { setUserLang(req.user.id, req.body.lang); res.json({ ok: true }); });
 
 app.get('/api/history', requireAuth, (req, res) => res.json({ items: history(req.user.id) }));
 
@@ -249,7 +252,7 @@ io.on('connection', (socket) => {
     return { lobby: pool().lobby(), me, game };
   });
   handle('pool:exit', () => { socket.leave('pool-lobby'); });
-  handle('pool:join', ({ stake }) => ({ me: pool().join(getUser(user.id), stake) }));
+  handle('pool:join', ({ stake, size }) => ({ me: pool().join(getUser(user.id), stake, size || 2) }));
   handle('pool:leave', () => ({ me: pool().leave(user) }));
   handle('pool:shoot', (shot) => pool().game(user.id).shoot(user.id, shot));
 
@@ -270,8 +273,8 @@ io.on('connection', (socket) => {
 });
 
 // ---------------- Startup ----------------
-const tellRefunds = (list, why) =>
-  Promise.all(list.map((r) => notifyUser(r.userId, `↩️ Your ${money(r.amount)} entry (${r.label}) was refunded — ${why}.`)));
+const tellRefunds = (list, whyKey) =>
+  Promise.all(list.map((r) => notifyUser(r.userId, tr(r.userId, 'refunded', { amount: money(r.amount), label: r.label, why: tr(r.userId, whyKey) }))));
 
 async function main() {
   // Registers the webhook route synchronously (before the catch-all below), then connects to
@@ -298,7 +301,7 @@ async function main() {
   games.crash?.start();
   games.keno?.start();
   scheduleBackups();
-  if (recovered.length) tellRefunds(recovered, 'the game was interrupted by a server restart');
+  if (recovered.length) tellRefunds(recovered, 'whyRestart');
 }
 
 // ---------------- Shutdown ----------------
@@ -314,7 +317,7 @@ async function shutdown(signal, code = 0) {
     const refunds = refundOpenRounds('refunded (server maintenance)');
     if (refunds.length) {
       console.log(`[shutdown] refunded ${refunds.length} entr(ies)`);
-      await tellRefunds(refunds, 'the server is restarting for maintenance');
+      await tellRefunds(refunds, 'whyMaintenance');
     }
     await stopBot();
     io.close();

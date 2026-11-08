@@ -50,7 +50,7 @@ export const config = {
   // Rocket (crash game). Amounts in ETB in .env, cents internally.
   crash: {
     enabled: process.env.CRASH_ENABLED !== 'false',
-    name: process.env.CRASH_NAME || 'Sky High',
+    name: process.env.CRASH_NAME || 'Aviator',
     houseEdge: num(process.env.CRASH_HOUSE_EDGE, 0.03),
     minBet: cents(process.env.CRASH_MIN_BET, 5),
     maxBet: cents(process.env.CRASH_MAX_BET, 5000),
@@ -86,6 +86,8 @@ export const config = {
   pool: {
     enabled: process.env.POOL_ENABLED !== 'false',
     stakes: list(process.env.POOL_STAKES || '10,20,50,100').map(toCents),
+    // Players per table: 2 = 8-ball (1 vs 1); 3–6 = Cutthroat
+    sizes: list(process.env.POOL_SIZES || '2').map(Number).filter((n) => n >= 2 && n <= 6),
     houseCut: num(process.env.POOL_HOUSE_CUT, 0.1),
     shotSec: num(process.env.POOL_SHOT_SEC, 30),
     maxMisses: num(process.env.POOL_MAX_MISSES, 3),
@@ -103,7 +105,7 @@ export const config = {
   maxPendingWithdrawals: num(process.env.MAX_PENDING_WITHDRAWALS, 2),
 
   // Name shown in the app header
-  appName: process.env.APP_NAME || 'Bingo',
+  appName: process.env.APP_NAME || '',
 
   // Shown on the Rules screen
   supportContact: process.env.SUPPORT_CONTACT || '',

@@ -91,7 +91,7 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
       <div className="tiles">
         <Tile label="House earnings" value={c(r.houseEarnings)} accent />
         <Tile label="· from Bingo" value={c(r.bingoEarnings)} />
-        <Tile label={`· from ${cfg.crash?.name || 'Sky High'}`} value={c(r.crashEarnings)} />
+        <Tile label={`· from ${cfg.crash?.name || 'Aviator'}`} value={c(r.crashEarnings)} />
         <Tile label="· from Keno" value={c(r.kenoEarnings)} />
         <Tile label="· from Ludo" value={c(r.ludoEarnings)} />
         <Tile label="· from Pool" value={c(r.poolEarnings)} />
@@ -99,7 +99,7 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
         <Tile label="Withdrawals" value={c(r.withdrawals)} />
         <Tile label="Net cash in" value={c(r.deposits - r.withdrawals)} />
         <Tile label="Bingo games" value={r.games} />
-        <Tile label={`${cfg.crash?.name || 'Sky High'} rounds (with bets)`} value={r.crashRounds} />
+        <Tile label={`${cfg.crash?.name || 'Aviator'} rounds (with bets)`} value={r.crashRounds} />
         <Tile label="Keno draws (with tickets)" value={r.kenoRounds} />
         <Tile label="Ludo games" value={r.ludoGames} />
         <Tile label="Pool matches" value={r.poolGames} />
@@ -121,7 +121,7 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
       {s.crash && (
         <div className="tile rk-admin">
           <div className="row-between">
-            <b>✈️ {cfg.crash?.name || 'Sky High'} — round #{s.crash.round} · <span className={`pill ${s.crash.phase === 'flying' ? 'playing' : s.crash.phase}`}>{s.crash.phase}</span></b>
+            <b>✈️ {cfg.crash?.name || 'Aviator'} — round #{s.crash.round} · <span className={`pill ${s.crash.phase === 'flying' ? 'playing' : s.crash.phase}`}>{s.crash.phase}</span></b>
             <span className="small">{s.crash.players} bettor(s) · bets {c(s.crash.betsTotal)} · paid {c(s.crash.paidOut)}</span>
           </div>
           <div className="rc-chips">{s.crash.last.map((p, i) => <span key={i} className={`x-chip ${p < 200 ? 'x-low' : p < 1000 ? 'x-mid' : 'x-high'}`}>{fmtX(p)}</span>)}</div>
@@ -388,7 +388,7 @@ function Games({ cfg }) {
     <div className="admin-section">
       <div className="seg small-seg">
         <button className={which === 'bingo' ? 'active' : ''} onClick={() => setWhich('bingo')}>🎱 Bingo</button>
-        <button className={which === 'rocket' ? 'active' : ''} onClick={() => setWhich('rocket')}>✈️ {cfg.crash?.name || 'Sky High'}</button>
+        <button className={which === 'rocket' ? 'active' : ''} onClick={() => setWhich('rocket')}>✈️ {cfg.crash?.name || 'Aviator'}</button>
         <button className={which === 'keno' ? 'active' : ''} onClick={() => setWhich('keno')}>🎯 Keno</button>
         <button className={which === 'ludo' ? 'active' : ''} onClick={() => setWhich('ludo')}>🎲 Ludo</button>
         <button className={which === 'pool' ? 'active' : ''} onClick={() => setWhich('pool')}>🎱 Pool</button>

@@ -3,12 +3,14 @@ import { socket, emit, haptic, toast } from './api.js';
 import { fmt, toCents } from '../../shared/money.js';
 import { fmtX, msFor } from '../../shared/crash.js';
 import { startFlight } from './flight.js';
+import { t, useLang } from './i18n.js';
 
 const loadPref = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 const savePref = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 const colorFor = (p) => (p < 200 ? 'x-low' : p < 1000 ? 'x-mid' : 'x-high');
 
 export default function Crash({ cfg, balance }) {
+  useLang();
   const [st, setSt] = useState(null);
   const [me, setMe] = useState(null);
   const [amount, setAmount] = useState(() => loadPref('rk_amount', String(Math.max(10, cfg.crash.minBet / 100))));
@@ -120,17 +122,17 @@ export default function Crash({ cfg, balance }) {
     setAmount(String(c / 100));
   };
 
-  if (!st) return <div className="center muted">Loading {cfg.crash.name}…</div>;
+  if (!st) return <div className="center muted">{t('loading')}</div>;
 
   // ---------- main button ----------
   let btn;
   const live = me && !me.cashedAt && phase === 'flying';
-  if (phase === 'paused') btn = <button key="paused" className="rk-btn" disabled>Paused for maintenance</button>;
-  else if (phase === 'betting' && me) btn = <button key="cancel" className="rk-btn cancel" disabled={busy} onClick={cancel}>Cancel<small>waiting for take-off</small></button>;
-  else if (phase === 'betting') btn = <button key="bet" className="rk-btn bet" disabled={busy || !(amountCents > 0)} onClick={placeBet}>BET<small>{fmt(amountCents)} {cfg.currency}</small></button>;
-  else if (live) btn = <button key="cash" className="rk-btn cash" disabled={busy} onPointerDown={cashout}>CASH OUT<small ref={cashRef}>{fmt(me.amount)} {cfg.currency}</small></button>;
-  else if (queued) btn = <button key="unqueue" className="rk-btn cancel" onClick={() => setQueued(false)}>Cancel<small>bet for next round</small></button>;
-  else btn = <button key="queue" className="rk-btn bet" disabled={!(amountCents > 0)} onClick={() => { setQueued(true); haptic('light'); }}>BET<small>next round · {fmt(amountCents)} {cfg.currency}</small></button>;
+  if (phase === 'paused') btn = <button key="paused" className="rk-btn" disabled>{t('pausedMaint')}</button>;
+  else if (phase === 'betting' && me) btn = <button key="cancel" className="rk-btn cancel" disabled={busy} onClick={cancel}>{t('cancel')}<small>{t('waitingTakeoff')}</small></button>;
+  else if (phase === 'betting') btn = <button key="bet" className="rk-btn bet" disabled={busy || !(amountCents > 0)} onClick={placeBet}>{t('bet')}<small>{fmt(amountCents)} {cfg.currency}</small></button>;
+  else if (live) btn = <button key="cash" className="rk-btn cash" disabled={busy} onPointerDown={cashout}>{t('cashOut')}<small ref={cashRef}>{fmt(me.amount)} {cfg.currency}</small></button>;
+  else if (queued) btn = <button key="unqueue" className="rk-btn cancel" onClick={() => setQueued(false)}>{t('cancel')}<small>{t('betNextRound')}</small></button>;
+  else btn = <button key="queue" className="rk-btn bet" disabled={!(amountCents > 0)} onClick={() => { setQueued(true); haptic('light'); }}>{t('bet')}<small>{t('nextRound')} · {fmt(amountCents)} {cfg.currency}</small></button>;
 
   return (
     <div className="rocket">
@@ -143,7 +145,7 @@ export default function Crash({ cfg, balance }) {
         <div className="rk-center">
           {phase === 'betting' && (
             <>
-              <div className="rk-wait">Place your bets</div>
+              <div className="rk-wait">{t('placeBets')}</div>
               <div className="rk-count" ref={countRef}>{(st.bettingLeftMs / 1000).toFixed(1)}s</div>
               <div className="rk-bar"><span ref={barRef} /></div>
             </>
@@ -153,8 +155,8 @@ export default function Crash({ cfg, balance }) {
               {phase === 'crashed' ? fmtX(st.point) : '1.00x'}
             </div>
           )}
-          {phase === 'crashed' && <div className="rk-wait rk-away">Flew away!</div>}
-          {phase === 'paused' && <div className="rk-wait">⏸ Paused for maintenance</div>}
+          {phase === 'crashed' && <div className="rk-wait rk-away">{t('flewAway')}</div>}
+          {phase === 'paused' && <div className="rk-wait">{t('pausedMaint')}</div>}
         </div>
         {flash && <div className="rk-flash">🎉 {flash}</div>}
       </div>
@@ -170,22 +172,22 @@ export default function Crash({ cfg, balance }) {
         </div>
         <label className="rk-auto">
           <input type="checkbox" checked={autoOn} onChange={(e) => setAutoOn(e.target.checked)} />
-          Auto cash out at
+          {t('autoCashAt')}
           <input inputMode="decimal" value={auto} disabled={!autoOn} onChange={(e) => setAuto(e.target.value.replace(/[^\d.]/g, ''))} />x
         </label>
         {btn}
         {me && (
           <div className="muted small center-text" style={{ marginTop: 6 }}>
-            Your bet: {fmt(me.amount)} {cfg.currency}{me.auto ? ` · auto ${fmtX(me.auto)}` : ''}
-            {me.cashedAt ? ` · won ${fmt(me.win)} at ${fmtX(me.cashedAt)}` : phase === 'crashed' ? ' · lost' : ''}
+            {t('yourBet', { amount: `${fmt(me.amount)} ${cfg.currency}` })}{me.auto ? ` · ${t('autoX', { x: fmtX(me.auto) })}` : ''}
+            {me.cashedAt ? ` · ${t('wonAt', { amount: fmt(me.win), x: fmtX(me.cashedAt) })}` : phase === 'crashed' ? ` · ${t('lost')}` : ''}
           </div>
         )}
-        {!me && balance < amountCents && <div className="warn small center-text">Balance too low — deposit in Wallet.</div>}
+        {!me && balance < amountCents && <div className="warn small center-text">{t('balanceLow')}</div>}
       </div>
 
       <div className="rk-bets">
-        <div className="row-between"><h3>Bets this round</h3><span className="muted small">{st.bets.length} players</span></div>
-        {st.bets.length === 0 && <div className="muted small">No bets yet.</div>}
+        <div className="row-between"><h3>{t('betsThisRound')}</h3><span className="muted small">{st.bets.length} {t('players')}</span></div>
+        {st.bets.length === 0 && <div className="muted small">{t('noBets')}</div>}
         {st.bets.map((b, i) => (
           <div key={i} className={`rk-bet ${b.cashedAt ? 'won' : phase === 'crashed' ? 'lost' : ''}`}>
             <span>{b.name}</span>
@@ -196,35 +198,19 @@ export default function Crash({ cfg, balance }) {
         ))}
       </div>
 
-      <button className="ghost sm" onClick={() => setShowInfo((v) => !v)}>{showInfo ? 'Hide' : '📖 How to play & fairness'}</button>
+      <button className="ghost sm" onClick={() => setShowInfo((v) => !v)}>{showInfo ? t('hide') : t('howFair')}</button>
       {showInfo && <Info cfg={cfg} st={st} />}
     </div>
   );
 }
 
 function Info({ cfg, st }) {
-  const edge = Math.round(cfg.crash.houseEdge * 100);
+  useLang();
   return (
     <div className="rk-info">
-      <h3>How to play</h3>
-      <ol>
-        <li>Place a bet before take-off.</li>
-        <li>The multiplier rises from 1.00x. Press <b>CASH OUT</b> any time to win your bet × the multiplier.</li>
-        <li>If the plane flies away before you cash out, you lose the bet.</li>
-        <li>Turn on <b>Auto cash out</b> to cash out automatically at the multiplier you choose.</li>
-      </ol>
-      <p className="small muted">
-        Bets: {fmt(cfg.crash.minBet)}–{fmt(cfg.crash.maxBet)} {cfg.currency}. Maximum win per bet: {fmt(cfg.crash.maxWin)} {cfg.currency}.
-        Average return to players: {100 - edge}%. If a round is interrupted by a technical problem, bets that weren't cashed out are refunded.
-      </p>
-      <h3>Provably fair</h3>
-      <p className="small">
-        Before each round, we publish a fingerprint (hash) of a secret seed. After the round, we reveal the seed.
-        Check that SHA-256(seed) equals the hash, so the result was fixed before anyone bet. The crash point comes from
-        HMAC-SHA256(key = seed, message = "rocket").
-      </p>
-      <div className="mono small break">Current round hash: {st.hash || '—'}</div>
-      {st.seed && <div className="mono small break">Last seed: {st.seed}</div>}
+      <p className="small">{t('provablyFair')}</p>
+      <div className="mono small break">{t('roundHash')}: {st.hash || '—'}</div>
+      {st.seed && <div className="mono small break">{t('lastSeed')}: {st.seed}</div>}
     </div>
   );
 }

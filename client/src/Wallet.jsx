@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { api, haptic, toast } from './api.js';
 import { fmt, toCents } from '../../shared/money.js';
+import { t, useLang } from './i18n.js';
 
-const LABELS = { deposit: 'Deposit', withdraw: 'Withdrawal', bet: 'Game entry', win: 'Win', refund: 'Refund', adjust: 'Bonus / adjustment' };
 const cleanAmount = (v) => v.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1').replace(/(\.\d{2}).*/, '$1');
 
 export default function Wallet({ cfg, balance }) {
+  useLang();
   const [mode, setMode] = useState('deposit');
   const [amount, setAmount] = useState('');
   const [ref, setRef] = useState('');
@@ -22,11 +23,11 @@ export default function Wallet({ cfg, balance }) {
     try {
       if (mode === 'deposit') {
         await api.deposit(toCents(amount), ref);
-        toast('Deposit submitted! Your balance updates as soon as it is approved.');
+        toast(t('depositSent'));
         setRef('');
       } else {
         await api.withdraw(toCents(amount), phone);
-        toast('Withdrawal requested. You will be notified when it is sent.');
+        toast(t('withdrawSent'));
       }
       haptic('success');
       setAmount('');
@@ -42,53 +43,51 @@ export default function Wallet({ cfg, balance }) {
   return (
     <div className="wallet">
       <div className="balance-card">
-        <div className="muted small">Balance</div>
+        <div className="muted small">{t('balance')}</div>
         <div className="huge">{fmt(balance)} <small>{cfg.currency}</small></div>
       </div>
 
       <div className="seg">
-        <button className={mode === 'deposit' ? 'active' : ''} onClick={() => setMode('deposit')}>Deposit</button>
-        <button className={mode === 'withdraw' ? 'active' : ''} onClick={() => setMode('withdraw')}>Withdraw</button>
+        <button className={mode === 'deposit' ? 'active' : ''} onClick={() => setMode('deposit')}>{t('deposit')}</button>
+        <button className={mode === 'withdraw' ? 'active' : ''} onClick={() => setMode('withdraw')}>{t('withdraw')}</button>
       </div>
 
       <form className="form" onSubmit={submit}>
         {mode === 'deposit' ? (
           <>
             <div className="howto">
-              <b>1.</b> Send money to:
+              <b>1.</b> {t('sendMoneyTo')}
               <div className="payinfo">{cfg.paymentInfo}</div>
-              <b>2.</b> Enter the amount and the transaction ID from your confirmation SMS.
+              <b>2.</b> {t('depositStep2')}
             </div>
-            <input inputMode="decimal" placeholder={`Amount (min ${fmt(cfg.minDeposit)})`} value={amount}
+            <input inputMode="decimal" placeholder={t('amountMin', { min: fmt(cfg.minDeposit) })} value={amount}
               onChange={(e) => setAmount(cleanAmount(e.target.value))} required />
-            <input placeholder="Transaction ID (e.g. CHK3A1B2C)" value={ref}
-              onChange={(e) => setRef(e.target.value)} required />
+            <input placeholder={t('txId')} value={ref} onChange={(e) => setRef(e.target.value)} required />
           </>
         ) : (
           <>
-            <input inputMode="decimal" placeholder={`Amount (min ${fmt(cfg.minWithdraw)})`} value={amount}
+            <input inputMode="decimal" placeholder={t('amountMin', { min: fmt(cfg.minWithdraw) })} value={amount}
               onChange={(e) => setAmount(cleanAmount(e.target.value))} required />
-            <input inputMode="tel" placeholder="Phone number to receive money" value={phone}
-              onChange={(e) => setPhone(e.target.value)} required />
+            <input inputMode="tel" placeholder={t('phoneReceive')} value={phone} onChange={(e) => setPhone(e.target.value)} required />
           </>
         )}
-        <button className="primary" disabled={busy}>{busy ? 'Sending…' : mode === 'deposit' ? 'Submit deposit' : 'Request withdrawal'}</button>
+        <button className="primary" disabled={busy}>{busy ? t('sending') : mode === 'deposit' ? t('submitDeposit') : t('requestWithdraw')}</button>
       </form>
 
-      <h3>History</h3>
+      <h3>{t('history')}</h3>
       <div className="history">
-        {items.length === 0 && <div className="muted small">No transactions yet.</div>}
-        {items.map((t) => (
-          <div key={t.id} className="tx">
+        {items.length === 0 && <div className="muted small">{t('noTx')}</div>}
+        {items.map((tx) => (
+          <div key={tx.id} className="tx">
             <div>
-              <div>{LABELS[t.type] || t.type}</div>
+              <div>{t(`tx_${tx.type}`)}</div>
               <div className="muted small">
-                {new Date(t.created_at * 1000).toLocaleString()} {t.reference ? `· ${t.reference}` : ''}
+                {new Date(tx.created_at * 1000).toLocaleString()} {tx.reference ? `· ${tx.reference}` : ''}
               </div>
             </div>
             <div className="right">
-              <div className={t.amount >= 0 ? 'pos' : 'neg'}>{t.amount > 0 ? '+' : ''}{fmt(t.amount)}</div>
-              {t.status !== 'done' && <div className={`pill ${t.status}`}>{t.status}</div>}
+              <div className={tx.amount >= 0 ? 'pos' : 'neg'}>{tx.amount > 0 ? '+' : ''}{fmt(tx.amount)}</div>
+              {tx.status !== 'done' && <div className={`pill ${tx.status}`}>{t(`s_${tx.status}`)}</div>}
             </div>
           </div>
         ))}

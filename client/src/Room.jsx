@@ -4,12 +4,14 @@ import { useCountdown } from './hooks.js';
 import { letterFor } from '../../shared/cards.js';
 import Card from './Card.jsx';
 import { fmt } from '../../shared/money.js';
+import { t, useLang } from './i18n.js';
 
 const loadAutoMark = () => {
   try { return localStorage.getItem('automark') !== '0'; } catch { return true; }
 };
 
 export default function Room({ stake, cfg, user, balance, onExit }) {
+  useLang();
   const [room, setRoom] = useState(null);
   const [preview, setPreview] = useState(null);
   const [marked, setMarked] = useState(new Set());
@@ -61,7 +63,7 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
   );
   const secs = useCountdown(room?.countdownEndsAt);
 
-  if (!room) return <div className="center muted">Joining room…</div>;
+  if (!room) return <div className="center muted">{t('loading')}</div>;
 
   const inGame = room.myCard !== null;
   const lastCall = room.called[room.called.length - 1];
@@ -101,15 +103,15 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
   const header = (
     <div className="room-head">
       <div>
-        <div className="muted small">Room</div>
+        <div className="muted small">{t('room')}</div>
         <div className="big">{fmt(stake)} {cfg.currency}</div>
       </div>
       <div>
-        <div className="muted small">Players</div>
+        <div className="muted small">{t('players')}</div>
         <div className="big">{room.players}</div>
       </div>
       <div>
-        <div className="muted small">Prize</div>
+        <div className="muted small">{t('prize')}</div>
         <div className="big accent">{fmt(room.prize)}</div>
       </div>
     </div>
@@ -124,8 +126,8 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
         {header}
         <div className={`status-bar ${room.state}`}>
           {room.state === 'countdown'
-            ? <>Game starts in <b>{secs}s</b></>
-            : <>Waiting for {Math.max(0, cfg.minPlayers - room.players)} more player(s)…</>}
+            ? <b>{t('gameStartsIn', { n: secs })}</b>
+            : <>{t('waitingMore', { n: Math.max(0, cfg.minPlayers - room.players) })}</>}
         </div>
 
         {showing && (
@@ -134,18 +136,18 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
             <div className="preview-actions">
               {preview && preview !== room.myCard ? (
                 <button className="primary" disabled={busy} onClick={() => pick(preview)}>
-                  {inGame ? `Switch to card #${preview}` : `Play card #${preview} — ${fmt(stake)} ${cfg.currency}`}
+                  {inGame ? t('switchCard', { n: preview }) : t('playCard', { n: preview, amount: `${fmt(stake)} ${cfg.currency}` })}
                 </button>
               ) : (
-                <div className="ok">✅ You're in with card #{room.myCard}</div>
+                <div className="ok">{t('inWithCard', { n: room.myCard })}</div>
               )}
-              {inGame && <button className="ghost" disabled={busy} onClick={unpick}>Leave & refund</button>}
-              {!inGame && balance < stake && <div className="warn small">Balance too low — deposit in Wallet.</div>}
+              {inGame && <button className="ghost" disabled={busy} onClick={unpick}>{t('leaveRefund')}</button>}
+              {!inGame && balance < stake && <div className="warn small">{t('balanceLow')}</div>}
             </div>
           </div>
         )}
 
-        <h3>{inGame ? 'Change card' : 'Pick your card'}</h3>
+        <h3>{inGame ? t('changeCard') : t('pickCard')}</h3>
         <div className="picker">
           {Array.from({ length: cfg.cardCount }, (_, i) => i + 1).map((n) => {
             const mine = n === room.myCard;
@@ -182,13 +184,13 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
           {room.called.slice(-6, -1).reverse().map((n) => (
             <span key={n} className={`mini-ball ball-${letterFor(n)}`}>{n}</span>
           ))}
-          <div className="muted small">{room.called.length}/75 called</div>
+          <div className="muted small">{t('calledOf', { n: room.called.length })}</div>
         </div>
       </div>
 
       {inGame ? (
         <>
-          {room.disqualified && <div className="banner">❌ False BINGO — you're out of this round.</div>}
+          {room.disqualified && <div className="banner">{t('falseBingo')}</div>}
           <Card
             id={room.myCard}
             called={called}
@@ -198,19 +200,19 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
           />
           <div className="controls">
             <label className="toggle">
-              <input type="checkbox" checked={autoMark} onChange={toggleAuto} /> Auto-mark
+              <input type="checkbox" checked={autoMark} onChange={toggleAuto} /> {t('autoMark')}
             </label>
             <button
               className="bingo-btn"
               disabled={busy || room.state !== 'playing' || room.disqualified}
               onClick={claim}
             >
-              BINGO!
+              {t('bingoBtn')}
             </button>
           </div>
         </>
       ) : (
-        <div className="banner info">You're watching this game. Next round opens when it ends.</div>
+        <div className="banner info">{t('watching')}</div>
       )}
 
       <CalledBoard called={called} />
@@ -218,16 +220,16 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
       {result && (
         <div className="overlay">
           <div className="result">
-            {myWin ? <h2>🎉 You won {fmt(result.amountEach)} {cfg.currency}!</h2>
-              : result.winners.length ? <h2>Game over</h2> : <h2>No winner</h2>}
+            {myWin ? <h2>{t('youWon', { amount: `${fmt(result.amountEach)} ${cfg.currency}` })}</h2>
+              : result.winners.length ? <h2>{t('gameOver')}</h2> : <h2>{t('noWinner')}</h2>}
             {result.winners.map((w) => (
               <div key={w.userId} className="winner">
                 <div>🏆 <b>{w.name}</b> — card #{w.card} — {fmt(result.amountEach)} {cfg.currency}</div>
                 <Card id={w.card} called={called} marked={called} winLine={w.line} size="sm" />
               </div>
             ))}
-            <p className="muted small">Next round starting shortly…</p>
-            <button className="ghost" onClick={onExit}>Back to lobby</button>
+            <p className="muted small">{t('nextRoundSoon')}</p>
+            <button className="ghost" onClick={onExit}>{t('backToRooms')}</button>
           </div>
         </div>
       )}

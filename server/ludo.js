@@ -13,6 +13,7 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 import { debit, credit, openRound, refundRound, settleLudo } from './db.js';
 import { notifyUser } from './bot.js';
+import { tr } from './i18n.js';
 import { fmt } from '../shared/money.js';
 import { COLORS, SEATS_FOR, legalMoves, applyMove, hasWon, bestMove } from '../shared/ludo.js';
 
@@ -175,9 +176,7 @@ class LudoGame {
     this.broadcast();
     for (const p of this.players) {
       this.mgr.userLoc.delete(p.uid);
-      notifyUser(p.uid, p === w
-        ? `🏆 You won the Ludo game! +${money(payout)} added to your balance.`
-        : `Ludo game over — ${w.name} won. Better luck next time!`);
+      notifyUser(p.uid, p === w ? tr(p.uid, 'ludoWon', { amount: money(payout) }) : tr(p.uid, 'ludoLost', { name: w.name }));
     }
     this.mgr.emitLobby();
     // keep the finished game visible for a minute, then forget it
@@ -306,7 +305,7 @@ export class LudoManager {
       this.io.in(`user:${m.uid}`).socketsJoin(game.channel);
       this.io.to(`user:${m.uid}`).emit('ludo:me', { game: game.id });
       const others = members.filter((x) => x !== m).map((x) => x.name).join(', ');
-      notifyUser(m.uid, `🎲 Your Ludo game has started against ${others}! Open the app to play — your turn timer is running.`);
+      notifyUser(m.uid, tr(m.uid, 'ludoStarted', { names: others }));
     }
     game.start();
     this.emitLobby();

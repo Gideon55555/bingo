@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS games (
 const cols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
 if (!cols('transactions').includes('round_id')) db.exec('ALTER TABLE transactions ADD COLUMN round_id INTEGER');
 if (!cols('games').includes('round_id')) db.exec('ALTER TABLE games ADD COLUMN round_id INTEGER');
+if (!cols('users').includes('lang')) db.exec("ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'am'");
 if (!cols('rounds').includes('game')) db.exec("ALTER TABLE rounds ADD COLUMN game TEXT NOT NULL DEFAULT 'bingo'");
 db.exec('CREATE INDEX IF NOT EXISTS tx_round ON transactions(round_id)');
 
@@ -178,6 +179,7 @@ export function upsertUser(u) {
 }
 
 export const getUser = (id) => stmts.getUser.get(String(id));
+export const setUserLang = (id, lang) => db.prepare('UPDATE users SET lang = ? WHERE id = ?').run(lang === 'en' ? 'en' : 'am', String(id));
 export const getTx = (id) => stmts.getTx.get(id);
 export const history = (userId) => stmts.history.all(String(userId));
 export const pendingTx = () => stmts.pending.all();

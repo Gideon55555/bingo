@@ -10,6 +10,7 @@ import {
 } from './db.js';
 import { notifyUser, sendMessage } from './bot.js';
 import { runBackup } from './backup.js';
+import { tr } from './i18n.js';
 
 export const isAdminId = (id) => config.adminIds.includes(String(id));
 const money = (n) => fmtMoney(n, config.currency);
@@ -42,13 +43,13 @@ export function createAdmin({ games, onBalanceChange }) {
       if (kind === 'deposit') {
         t = approve ? approveDeposit(id) : rejectDeposit(id);
         msg = t && (approve
-          ? `✅ Your deposit of ${money(t.amount)} was approved. Good luck!`
-          : `❌ Your deposit of ${money(t.amount)} (ref ${t.reference}) was rejected. Contact support if this is a mistake.`);
+          ? tr(t.user_id, 'depositApproved', { amount: money(t.amount) })
+          : tr(t.user_id, 'depositRejected', { amount: money(t.amount), ref: t.reference }));
       } else {
         t = approve ? markWithdrawalPaid(id) : rejectWithdrawal(id);
         msg = t && (approve
-          ? `✅ Your withdrawal of ${money(-t.amount)} has been sent to ${t.phone}.`
-          : `❌ Your withdrawal of ${money(-t.amount)} was rejected and refunded to your balance.`);
+          ? tr(t.user_id, 'withdrawSent', { amount: money(-t.amount), phone: t.phone })
+          : tr(t.user_id, 'withdrawRejected', { amount: money(-t.amount) }));
       }
       if (!t) throw new Error('Already handled (or not found)');
       onBalanceChange(t.user_id);
@@ -64,8 +65,8 @@ export function createAdmin({ games, onBalanceChange }) {
       onBalanceChange(u.id);
       const amt = Math.trunc(Number(amount)); // cents
       await notifyUser(u.id, amt > 0
-        ? `🎁 ${money(amt)} was added to your balance.${note ? ` (${note})` : ''}`
-        : `ℹ️ ${money(-amt)} was deducted from your balance.${note ? ` (${note})` : ''}`);
+        ? tr(u.id, 'bonusAdded', { amount: money(amt), note: note ? ` (${note})` : '' })
+        : tr(u.id, 'deducted', { amount: money(-amt), note: note ? ` (${note})` : '' }));
       console.log(`[admin] ${adminName} adjusted ${u.id} by ${amt}`);
       return updated;
     },

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { api, socket, tg, withEndsAt } from './api.js';
-import Lobby from './Lobby.jsx';
+import { t, useLang, getLang, setLang, crashName } from './i18n.js';
+import Home from './Home.jsx';
+import BingoRooms from './BingoRooms.jsx';
 import Room from './Room.jsx';
 import Wallet from './Wallet.jsx';
 import Admin from './Admin.jsx';
@@ -8,26 +10,43 @@ import Crash from './Crash.jsx';
 import Keno from './Keno.jsx';
 import Ludo from './Ludo.jsx';
 import Pool from './Pool.jsx';
+import GameRules, { rulesSeen, markRulesSeen } from './GameRules.jsx';
 import { fmt } from '../../shared/money.js';
 
+function LangSwitch() {
+  const lang = useLang();
+  const pick = (l) => {
+    setLang(l);
+    api.setLang(l).catch(() => {}); // so the bot also messages you in this language
+  };
+  return (
+    <div className="lang-switch" role="group" aria-label="Language">
+      <button className={lang === 'am' ? 'on' : ''} onClick={() => pick('am')}>አማ</button>
+      <button className={lang === 'en' ? 'on' : ''} onClick={() => pick('en')}>EN</button>
+    </div>
+  );
+}
+
 export default function App() {
+  useLang();
   const [cfg, setCfg] = useState(null);
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
   const [rooms, setRooms] = useState([]);
   const [tab, setTab] = useState(new URLSearchParams(location.search).get('admin') ? 'admin' : 'play');
-  const [stake, setStake] = useState(null);
-  const [rocket, setRocket] = useState(false);
-  const [crashLobby, setCrashLobby] = useState(null);
-  const [keno, setKeno] = useState(false);
-  const [kenoLobby, setKenoLobby] = useState(null);
-  const [ludo, setLudo] = useState(false);
-  const [ludoHome, setLudoHome] = useState(null);
-  const [pool, setPool] = useState(false);
-  const [poolHome, setPoolHome] = useState(null);
-  const inGame = stake !== null || rocket || keno || ludo || pool;
-  const goHome = () => { setStake(null); setRocket(false); setKeno(false); setLudo(false); setPool(false); };
+  const [game, setGame] = useState(null);       // null | 'aviator' | 'bingo' | 'keno' | 'ludo' | 'pool'
+  const [stake, setStake] = useState(null);     // bingo room inside the bingo screen
+  const [showRules, setShowRules] = useState(false);
+  const [live, setLive] = useState({});         // lobby summaries for the home tiles
   const [error, setError] = useState('');
+
+  const openGame = (g) => {
+    setStake(null);
+    setGame(g);
+    setShowRules(!rulesSeen(g));
+  };
+  const goHome = () => { setStake(null); setGame(null); setShowRules(false); };
+  const goBack = () => (stake !== null ? setStake(null) : goHome());
 
   useEffect(() => {
     socket.connect();
@@ -36,98 +55,94 @@ export default function App() {
         setCfg(c);
         setUser(m.user);
         setBalance(m.user.balance);
+        api.setLang(getLang()).catch(() => {});
       })
       .catch((e) => setError(e.message));
 
     const onAll = (list) => setRooms(list.map(withEndsAt));
     const onOne = (r) => setRooms((prev) => prev.map((x) => (x.stake === r.stake ? withEndsAt(r) : x)));
     const onBal = ({ balance }) => setBalance(balance);
-    const onErr = (e) => setError(e.message === 'Unauthorized' ? 'Please open this app from the Telegram bot.' : e.message);
+    const onErr = (e) => setError(e.message === 'Unauthorized' ? 'openFromBot' : e.message);
+    const put = (k) => (v) => setLive((p) => ({ ...p, [k]: v }));
+    const onCrash = put('aviator'), onKeno = put('keno'), onLudo = put('ludo'), onPool = put('pool');
+    // A Ludo or pool game started while you're elsewhere in the app → jump straight to it
+    const onLudoMe = (m) => { if (m?.game) { setStake(null); setGame('ludo'); } };
+    const onPoolMe = (m) => { if (m?.game) { setStake(null); setGame('pool'); } };
     socket.on('lobby:all', onAll);
     socket.on('lobby', onOne);
     socket.on('balance', onBal);
-    socket.on('crash:lobby', setCrashLobby);
-    socket.on('keno:lobby', setKenoLobby);
-    socket.on('ludo:home', setLudoHome);
-    // If a Ludo game starts while you're elsewhere in the app, jump straight to it
-    const onLudoMe = (m) => { if (m?.game) { setStake(null); setRocket(false); setKeno(false); setPool(false); setLudo(true); } };
+    socket.on('crash:lobby', onCrash);
+    socket.on('keno:lobby', onKeno);
+    socket.on('ludo:home', onLudo);
+    socket.on('pool:home', onPool);
     socket.on('ludo:me', onLudoMe);
-    socket.on('pool:home', setPoolHome);
-    const onPoolMe = (m) => { if (m?.game) { setStake(null); setRocket(false); setKeno(false); setLudo(false); setPool(true); } };
     socket.on('pool:me', onPoolMe);
     socket.on('connect_error', onErr);
     socket.on('connect', () => setError(''));
-    socket.on('server:restart', () => setError('Server is restarting for maintenance — reconnecting… Any unfinished game entry is refunded.'));
+    socket.on('server:restart', () => setError('restarting'));
     return () => {
       socket.off('lobby:all', onAll);
       socket.off('lobby', onOne);
       socket.off('balance', onBal);
-      socket.off('crash:lobby', setCrashLobby);
-      socket.off('keno:lobby', setKenoLobby);
-      socket.off('ludo:home', setLudoHome);
+      socket.off('crash:lobby', onCrash);
+      socket.off('keno:lobby', onKeno);
+      socket.off('ludo:home', onLudo);
+      socket.off('pool:home', onPool);
       socket.off('ludo:me', onLudoMe);
-      socket.off('pool:home', setPoolHome);
       socket.off('pool:me', onPoolMe);
       socket.off('connect_error', onErr);
     };
   }, []);
 
-  // Telegram back button leaves the room
+  // Telegram's own back button
+  const inGame = game !== null;
   useEffect(() => {
     const back = tg?.BackButton;
     if (!back) return;
-    const goBack = goHome;
-    if (inGame) {
-      back.show();
-      back.onClick(goBack);
-    } else back.hide();
+    if (inGame) { back.show(); back.onClick(goBack); } else back.hide();
     return () => back.offClick(goBack);
-  }, [inGame]);
+  }, [inGame, stake]);
 
-  if (error && !cfg) return <div className="center muted">{error}</div>;
-  if (!cfg || !user) return <div className="center muted">Loading…</div>;
+  const errText = error === 'openFromBot' ? t('openFromBot') : error === 'restarting' ? t('restarting') : error;
+  if (error && !cfg) return <div className="center muted">{errText}</div>;
+  if (!cfg || !user) return <div className="center muted">{t('loading')}</div>;
+
+  const gameName = game === 'aviator' ? crashName(cfg) : game ? t(`g_${game}`) : null;
+  const icons = { aviator: '✈️', bingo: '🔢', keno: '🎯', ludo: '🎲', pool: '🎱' };
 
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">{rocket ? `✈️ ${cfg.crash?.name || 'Sky High'}` : keno ? '🎯 Keno' : ludo ? '🎲 Ludo' : pool ? '🎱 8-Ball Pool' : stake !== null ? '🎱 Bingo' : `🎮 ${cfg.appName || 'Games'}`}</div>
-        <button className="balance" onClick={() => { goHome(); setTab('wallet'); }}>
-          {fmt(balance)} {cfg.currency}
-        </button>
+        <div className="brand">{game ? `${icons[game]} ${gameName}` : `🎮 ${cfg.appName || t('games')}`}</div>
+        <div className="topbar-right">
+          {game && <button className="rules-btn" onClick={() => setShowRules(true)}>📖 {t('rules')}</button>}
+          <LangSwitch />
+          <button className="balance" onClick={() => { goHome(); setTab('wallet'); }}>{fmt(balance)} {cfg.currency}</button>
+        </div>
       </header>
-      {error && <div className="banner">{error}</div>}
+      {error && <div className="banner">{errText}</div>}
 
       <main>
-        {pool ? (
-          <Pool cfg={cfg} balance={balance} />
-        ) : ludo ? (
-          <Ludo cfg={cfg} balance={balance} />
-        ) : keno ? (
-          <Keno cfg={cfg} balance={balance} />
-        ) : rocket ? (
-          <Crash cfg={cfg} balance={balance} />
-        ) : stake !== null ? (
-          <Room stake={stake} cfg={cfg} user={user} balance={balance} onExit={goHome} />
-        ) : tab === 'play' ? (
-          <Lobby rooms={rooms} cfg={cfg} onEnter={setStake} crash={cfg.crash ? crashLobby : null} onRocket={() => setRocket(true)}
-            keno={cfg.keno ? kenoLobby : null} onKeno={() => setKeno(true)}
-            ludo={cfg.ludo ? (ludoHome || { playing: 0 }) : null} onLudo={() => setLudo(true)}
-            pool={cfg.pool ? (poolHome || { playing: 0 }) : null} onPool={() => setPool(true)} />
-        ) : tab === 'admin' && user.isAdmin ? (
-          <Admin cfg={cfg} />
-        ) : (
-          <Wallet cfg={cfg} balance={balance} />
-        )}
+        {game === 'pool' ? <Pool cfg={cfg} balance={balance} />
+          : game === 'ludo' ? <Ludo cfg={cfg} balance={balance} />
+          : game === 'keno' ? <Keno cfg={cfg} balance={balance} />
+          : game === 'aviator' ? <Crash cfg={cfg} balance={balance} />
+          : game === 'bingo' ? (stake !== null
+            ? <Room stake={stake} cfg={cfg} user={user} balance={balance} onExit={() => setStake(null)} />
+            : <BingoRooms rooms={rooms} cfg={cfg} onEnter={setStake} />)
+          : tab === 'play' ? <Home cfg={cfg} live={live} rooms={rooms} onOpen={openGame} />
+          : tab === 'admin' && user.isAdmin ? <Admin cfg={cfg} />
+          : <Wallet cfg={cfg} balance={balance} />}
       </main>
 
-      {inGame && !tg?.initData && <button className="floating-back" onClick={goHome}>← Games</button>}
+      {game && showRules && <GameRules game={game} cfg={cfg} onClose={() => { markRulesSeen(game); setShowRules(false); }} />}
+
+      {inGame && !tg?.initData && <button className="floating-back" onClick={goBack}>{stake !== null ? `← ${t('bingoRooms')}` : t('backToGames')}</button>}
       {!inGame && (
         <nav className="tabs">
-          <button className={tab === 'play' ? 'active' : ''} onClick={() => setTab('play')}>🎮 Play</button>
-          <button className={tab === 'wallet' ? 'active' : ''} onClick={() => setTab('wallet')}>💳 Wallet</button>
-          {user.isAdmin && (
-            <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>🛠 Admin</button>
-          )}
+          <button className={tab === 'play' ? 'active' : ''} onClick={() => setTab('play')}>🎮 {t('games')}</button>
+          <button className={tab === 'wallet' ? 'active' : ''} onClick={() => setTab('wallet')}>💳 {t('wallet')}</button>
+          {user.isAdmin && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>🛠 Admin</button>}
         </nav>
       )}
     </div>

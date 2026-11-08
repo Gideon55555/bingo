@@ -101,3 +101,24 @@ console.log('Rules');
 }
 
 console.log(`\nAll ${passed} pool physics + rules checks passed ✅`);
+
+console.log('Cutthroat (3+ players)');
+{
+  const { cutthroatSets, rackCutthroat, judgeCutthroat, aliveFromBalls } = await import('../shared/pool.js');
+  assert.deepEqual(cutthroatSets(3), [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10], [11, 12, 13, 14, 15]]);
+  assert.deepEqual(cutthroatSets(4).map((s) => s.length), [3, 3, 3, 3]); ok('ball sets: 3 players × 5 balls, 4 players × 3 balls');
+  const r4 = rackCutthroat(4, () => 0.5);
+  assert.equal(r4.length, 13); assert.equal(r4[0].n, 0); ok('4-player rack has 12 balls + cue');
+  const sets = cutthroatSets(3);
+  const balls = Array.from({ length: 16 }, (_, n) => ({ n, x: 10, y: 10, in: false }));
+  const res = (over) => ({ firstHit: 6, potted: [], railAfterHit: true, balls: balls.map((b) => ({ ...b })), ...over });
+  let j = judgeCutthroat({ turn: 0, breakShot: false, sets, alive: [true, true, true] }, balls, res({ potted: [7] }));
+  assert.equal(j.foul, false); assert.equal(j.keepTurn, true); ok('potting any ball legally keeps your turn');
+  const afterFoul = res({ potted: [0] });
+  afterFoul.balls.find((b) => b.n === 7).in = true; afterFoul.balls.find((b) => b.n === 12).in = true; afterFoul.balls.find((b) => b.n === 13).in = true;
+  j = judgeCutthroat({ turn: 0, breakShot: false, sets, alive: [true, true, true] }, balls, afterFoul);
+  assert.equal(j.foul, true); assert.deepEqual(j.returnBalls, [7, 12]); ok('foul: each opponent gets one potted ball back');
+  const gone = balls.map((b) => ({ ...b, in: b.n >= 1 && b.n <= 5 }));
+  assert.deepEqual(aliveFromBalls(sets, gone), [false, true, true]); ok('player with no balls left is out');
+}
+console.log(`\nAll ${passed} pool checks (incl. cutthroat) passed ✅`);

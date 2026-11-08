@@ -1,8 +1,19 @@
-# 🎱 Telegram Bingo + ✈️ Sky High + 🎯 Keno + 🎲 Ludo + 🎱 8-Ball Pool Mini App
+# 🎱 Telegram Bingo + ✈️ Aviator + 🎯 Keno + 🎲 Ludo + 🎱 8-Ball Pool Mini App
 
 A multiplayer 75-ball bingo game that runs inside Telegram, with a player wallet.
 Players send you money (Telebirr, bank and so on), submit the transaction ID in the app,
 and you approve it from the bot with one tap. Their balance updates instantly.
+
+## Languages
+The app is in **Amharic (default) and English**. Players switch with the **አማ | EN** button at the top, and the choice
+is remembered. The bot then messages each player in their language too (deposit approvals, game starts, wins).
+Translations are in `client/src/i18n.js` (app) and `server/i18n.js` (bot messages). The admin panel stays in English.
+**Have a native speaker review the Amharic before launch.**
+
+## Home screen and rules
+Games appear as square tiles with their own illustration (`client/src/GameArt.jsx`). The first time a player opens
+a game, they see its **rules: how to play, how to win, penalties and payouts** (`client/src/GameRules.jsx`).
+A 📖 button shows the rules again at any time.
 
 ## How it works
 
@@ -28,7 +39,7 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
 6. The winner gets the pot minus the house cut (20% by default). If several players complete
    a line on the same ball, they split the prize. The room then resets.
 
-**✈️ Sky High (crash game)** (rename it with `CRASH_NAME`)
+**✈️ Aviator (crash game)** (rename it with `CRASH_NAME`; note: "Aviator" is a trademark of Spribe — consider your own name for a public launch)
 1. One shared round for everyone. Players bet during a 7-second betting window.
 2. The plane takes off and the multiplier climbs from 1.00x. Players press **CASH OUT** to win bet × multiplier,
    or set **auto cash out** (for example 2.00x).
@@ -62,7 +73,7 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
    at the end, so every roll can be checked.
 6. A server restart mid-game refunds everyone at that table.
 
-**🎱 8-Ball Pool (1 vs 1, skill)**
+**🎱 8-Ball Pool (1 vs 1, skill)** · any number of matches run at the same time
 1. Tables per stake (`POOL_STAKES`). The winner takes the pot minus 10% (`POOL_HOUSE_CUT`).
 2. Standard online 8-ball rules: open table after the break, groups (solids/stripes) are assigned on the first
    legal pot, pot your group and then the 8. Fouls (scratch, no ball hit, wrong ball first, no cushion after
@@ -73,6 +84,9 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
    identical results on every phone, and both players watch exactly the same shot.
 5. 30-second shot clock (`POOL_SHOT_SEC`): running out is a foul (ball in hand). 3 in a row forfeits.
 6. A server restart mid-match refunds both players.
+7. Optional multi-player tables: `POOL_SIZES=2,3,4` adds **Cutthroat** for 3–6 players (each player owns a set of
+   balls; last one with balls left wins). Off by default, because players can secretly team up against a third
+   player in real-money Cutthroat.
 
 **Wallet flow**
 - **Deposit:** the player sends money to your account, then enters the amount and transaction ID.
@@ -146,11 +160,12 @@ npm test
 ```
 This runs, with real signed Telegram auth: a full Bingo game (41 checks): auth forgery,
 deposits, duplicate references, entry fees, refunds, false BINGO, payouts, house cut,
-withdrawals and every admin feature. crash recovery (10 checks), Sky High end-to-end (26 checks: bets, cash-outs, fairness, pause, restart),
+withdrawals and every admin feature. crash recovery (10 checks), Aviator end-to-end (26 checks: bets, cash-outs, fairness, pause, restart),
 a statistical check of the crash game's house edge over 200,000 simulated rounds,
 Keno end-to-end (24 checks), Keno math (exact paytable returns + draw fairness over 100,000 draws),
 Ludo rules (17 checks), Ludo end-to-end (21 checks: bots play full 2- and 4-player games, timeouts, forfeits, refunds),
-pool physics + rules (22 checks) and pool end-to-end (14 checks: bots play complete matches with real aiming).
+pool physics + rules (22 checks) pool end-to-end (16 checks: bots play complete matches with real aiming, several matches at once),
+and a 3-player Cutthroat match.
 
 ## Deploying
 
@@ -173,7 +188,7 @@ See **[DEPLOY.md](DEPLOY.md)** for step-by-step guides (VPS, or DirectAdmin Node
 server/
   index.js    Express API + Socket.IO + static hosting
   game.js     Bingo room state machine (picking → countdown → playing → finished)
-  crash.js    Sky High crash game (betting → flying → crashed), provably fair
+  crash.js    Aviator crash game (betting → flying → crashed), provably fair
   keno.js     Keno shared draws (betting → drawing → results), provably fair
   ludo.js     Ludo tables, matchmaking, turns/timers, forfeits, payouts
   pool.js     8-ball pool tables, server-simulated shots, shot clock, payouts

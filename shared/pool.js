@@ -294,3 +294,58 @@ export function aimGuide(balls, dx, dy) {
   }
   return { end: { x: cue.x + ux * railDist, y: cue.y + uy * railDist } };
 }
+
+// ======================= Cutthroat (3–6 players) =======================
+// Each player owns a set of balls. Pot your OPPONENTS' balls; the last player with
+// any of their own balls left on the table wins.
+//  • Keep shooting as long as you legally pot any ball.
+//  • Foul (cue ball potted, no ball hit, no cushion after contact): the next player gets
+//    ball in hand, and every opponent still in the game gets one of their potted balls back.
+//  • A player whose balls are all potted is out.
+
+/** Ball sets for n players: 3 → 1–5, 6–10, 11–15; 4 → 1–3, 4–6, 7–9, 10–12; … */
+export function cutthroatSets(n) {
+  const per = Math.floor(15 / n);
+  return Array.from({ length: n }, (_, i) => Array.from({ length: per }, (_, k) => i * per + k + 1));
+}
+
+/** Rack for cutthroat: only the balls in play, shuffled, apex first. */
+export function rackCutthroat(n, rand = Math.random) {
+  const count = Math.floor(15 / n) * n;
+  const dx = 2 * R + 0.02;
+  const dy = Math.sqrt(3) * R + 0.02;
+  const spots = [];
+  for (let k = 0; k < 5; k++) for (let j = 0; j <= k; j++) spots.push({ x: W / 2 + (j - k / 2) * dx, y: FOOT_SPOT.y - k * dy });
+  const nums = Array.from({ length: count }, (_, i) => i + 1);
+  for (let i = nums.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [nums[i], nums[j]] = [nums[j], nums[i]]; }
+  const balls = [{ n: 0, x: W / 2, y: H * 0.8, vx: 0, vy: 0, in: false }];
+  nums.forEach((num, i) => balls.push({ n: num, x: spots[i].x, y: spots[i].y, vx: 0, vy: 0, in: false }));
+  return balls.sort((a, b) => a.n - b.n);
+}
+
+/**
+ * game = { turn, breakShot, sets: [[...], ...], alive: [bool, ...] }
+ * Returns { foul, reason, keepTurn, returnBalls: [n...] }
+ */
+export function judgeCutthroat(game, ballsBefore, res) {
+  const out = { foul: false, reason: null, keepTurn: false, returnBalls: [] };
+  if (res.potted.includes(0)) { out.foul = true; out.reason = 'Cue ball potted'; }
+  else if (res.firstHit === null) { out.foul = true; out.reason = 'No ball hit'; }
+  else if (!game.breakShot && !res.railAfterHit && res.potted.length === 0) { out.foul = true; out.reason = 'No ball touched a cushion after contact'; }
+
+  if (out.foul) {
+    // penalty: each opponent still in the game gets one potted ball back (lowest number first)
+    const after = new Map(res.balls.map((b) => [b.n, b]));
+    game.sets.forEach((set, i) => {
+      if (i === game.turn || !game.alive[i]) return;
+      const back = set.find((n) => after.get(n)?.in);
+      if (back !== undefined) out.returnBalls.push(back);
+    });
+  } else {
+    out.keepTurn = res.potted.some((n) => n !== 0);
+  }
+  return out;
+}
+
+/** Which players still have balls on the table. */
+export const aliveFromBalls = (sets, balls) => sets.map((set) => set.some((n) => !balls.find((b) => b.n === n)?.in));

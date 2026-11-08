@@ -137,6 +137,31 @@ try {
   assert.equal(rec.pot, 2000); assert.equal(rec.house, 200); ok('match recorded (pot 20, house 2)');
   assert.equal(db.db.prepare("SELECT COUNT(*) n FROM rounds WHERE game='pool' AND status='open'").get().n, 0); ok('money rounds closed');
 
+  console.log('Pool: several matches at the same time');
+  {
+    const extra = ['Eyob', 'Feven', 'Gelila', 'Hagos', 'Iman', 'Jemal'].map((n, i) => ({ id: 6101 + i, first_name: n }));
+    for (const u of extra) { db.upsertUser(u); db.credit(u.id, 100000, 'deposit', 'seed'); }
+    const socks = [];
+    for (const u of extra) {
+      const s = io(URL, { auth: { initData: initDataFor(u) }, transports: ['websocket'] });
+      await new Promise((r) => s.on('connect', r));
+      await emit(s, 'pool:enter');
+      socks.push(s);
+    }
+    const bots = socks.map((s) => bot(s));
+    // 6 players join the same 10 ETB table → 3 separate matches run at once
+    await Promise.all(socks.map((s) => emit(s, 'pool:join', { stake: 1000 })));
+    const ids = new Set();
+    await sleep(100);
+    const results = await Promise.race([Promise.all(bots.map((b) => b.done)), sleep(240000).then(() => null)]);
+    assert.ok(results, 'all concurrent matches finished');
+    results.forEach((r) => ids.add(r.st.id));
+    assert.equal(ids.size, 3); ok('6 players at one table → 3 separate matches ran at the same time');
+    const total = extra.reduce((sum, u) => sum + db.getUser(String(u.id)).balance, 0);
+    assert.equal(total, 6 * 100000 - 3 * 200); ok('every match paid out correctly (3 × 2 ETB house cut, nothing lost)');
+    socks.forEach((s) => s.close());
+  }
+
   console.log('Pool: shot validation');
   for (const s of S) { s.removeAllListeners('pool:state'); s.removeAllListeners('pool:shot'); }
   let st2 = null; S[2].on('pool:state', (st) => { st2 = st; });
@@ -176,7 +201,7 @@ try {
   assert.equal(bal(db, 0), f0); assert.equal(bal(db, 1), f1); ok('server crash mid-match → both refunded on restart');
 
   const stats = await (await fetch(URL + '/api/admin/stats', { headers: { 'x-admin-key': 'admin-password-1' } })).json();
-  assert.equal(stats.allTime.poolGames, 5); ok('admin stats count pool matches');
+  assert.equal(stats.allTime.poolGames, 8); ok('admin stats count pool matches');
 
   console.log(`\nAll ${passed} pool checks passed ✅`);
 } catch (e) {
