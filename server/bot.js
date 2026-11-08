@@ -10,7 +10,10 @@ let onReferral = null;
 /** Set by the referral module: called when someone opens the bot from a friend's referral link. */
 export const setReferralHandler = (fn) => { onReferral = fn; };
 /** The bot's @username (for invite links). */
-export const botUsername = () => bot?.botInfo?.username || process.env.BOT_USERNAME || null;
+export const botUsername = () => {
+  // grammY's botInfo getter throws until bot.init() succeeds (e.g. Telegram slow or unreachable at boot).
+  try { return bot?.botInfo?.username || process.env.BOT_USERNAME || null; } catch { return process.env.BOT_USERNAME || null; }
+};
 const who = (t) => (t.username ? `@${t.username}` : t.first_name || t.user_id || t.id);
 const money = (n) => fmtMoney(n, config.currency);
 const adminWho = (ctx) => ({ id: `tg:${ctx.from.id}`, name: ctx.from.first_name || String(ctx.from.id) });
@@ -96,7 +99,7 @@ export async function startBot({ actions, app }) {
   bot.command('start', async (ctx) => {
     const payload = String(ctx.match || '').trim();
     // Invite link from a friend: t.me/<bot>?start=pool_ABC123 → button straight into that table
-    const inv = payload.match(/^(pool|kb|ludo)_([A-Z0-9]{6})$/);
+    const inv = payload.match(/^(pool|kb|ludo|hunt)_([A-Z0-9]{6})$/);
     if (inv) {
       upsertUser(ctx.from);
       return ctx.reply(tr(ctx.from.id, 'inviteOpen'), {
@@ -128,8 +131,8 @@ export async function startBot({ actions, app }) {
   bot.command('stats', adminOnly((ctx) => {
     const s = actions.stats();
     const b = (x) =>
-      `Bingo games: ${x.games}  ·  ${config.crash.name} rounds: ${x.crashRounds}  ·  Keno draws: ${x.kenoRounds}  ·  Ludo games: ${x.ludoGames}  ·  Pool matches: ${x.poolGames}  ·  Kerenbula matches: ${x.kerenbulaGames}  ·  Bets: ${money(x.totalBets)}\n` +
-      `🏦 House earned: ${money(x.houseEarnings)} (Bingo ${money(x.bingoEarnings)}, ${config.crash.name} ${money(x.crashEarnings)}, Keno ${money(x.kenoEarnings)}, Ludo ${money(x.ludoEarnings)}, Pool ${money(x.poolEarnings)}, Kerenbula ${money(x.kerenbulaEarnings)})\n` +
+      `Bingo games: ${x.games}  ·  ${config.crash.name} rounds: ${x.crashRounds}  ·  Keno draws: ${x.kenoRounds}  ·  Ludo games: ${x.ludoGames}  ·  Pool matches: ${x.poolGames}  ·  Kerenbula matches: ${x.kerenbulaGames}  ·  Dibibkosh games: ${x.huntGames}  ·  Bets: ${money(x.totalBets)}\n` +
+      `🏦 House earned: ${money(x.houseEarnings)} (Bingo ${money(x.bingoEarnings)}, ${config.crash.name} ${money(x.crashEarnings)}, Keno ${money(x.kenoEarnings)}, Ludo ${money(x.ludoEarnings)}, Pool ${money(x.poolEarnings)}, Kerenbula ${money(x.kerenbulaEarnings)}, Dibibkosh ${money(x.huntEarnings)})\n` +
       `💰 Deposits: ${money(x.deposits)}  ·  🏧 Withdrawals: ${money(x.withdrawals)}\n` +
       `👥 Active players: ${x.activePlayers}  ·  New users: ${x.newUsers}`;
     const rooms = s.rooms.map((r) => `${fmt(r.stake)}: ${r.state}, ${r.players} players`).join('\n');

@@ -437,7 +437,7 @@ export const refundRound = db.transaction((roundId, label, reason, status = 'ref
 });
 
 const roundLabel = (r) => (r.game === 'crash' ? config.crash.name : r.game === 'keno' ? 'Keno'
-  : r.game === 'ludo' ? `Ludo ${fmt(r.stake)}` : r.game === 'pool' ? `8-Ball Pool ${fmt(r.stake)}` : r.game === 'kerenbula' ? `Kerenbula ${fmt(r.stake)}` : `Bingo ${fmt(r.stake)}`);
+  : r.game === 'ludo' ? `Ludo ${fmt(r.stake)}` : r.game === 'pool' ? `8-Ball Pool ${fmt(r.stake)}` : r.game === 'kerenbula' ? `Kerenbula ${fmt(r.stake)}` : r.game === 'hunt' ? `Dibibkosh ${fmt(r.stake)}` : `Bingo ${fmt(r.stake)}`);
 
 /** Called on startup and shutdown: refund every round that never finished. */
 export function refundOpenRounds(reason = 'interrupted (server restart)') {
@@ -466,6 +466,10 @@ export function getStats() {
   return statsCache.value;
 }
 
+// hunt_games is created by server/hunt.js (may not exist yet in scripts that only load the database)
+const hunt = (expr, since) => {
+  try { return scalar(`SELECT COALESCE(${expr},0) FROM hunt_games WHERE created_at >= ?`, since); } catch { return 0; }
+};
 function computeStats() {
   const today = startOfToday();
   const block = (since) => ({
@@ -476,14 +480,16 @@ function computeStats() {
       + scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM keno_rounds WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(house),0) FROM ludo_games WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(house),0) FROM pool_games WHERE created_at >= ?', since)
-      + scalar('SELECT COALESCE(SUM(house),0) FROM kerenbula_games WHERE created_at >= ?', since),
+      + scalar('SELECT COALESCE(SUM(house),0) FROM kerenbula_games WHERE created_at >= ?', since)
+      + hunt('SUM(house)', since),
     games: scalar('SELECT COUNT(*) FROM games WHERE created_at >= ?', since),
     totalBets: scalar('SELECT COALESCE(SUM(pot),0) FROM games WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(bets_total),0) FROM crash_rounds WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(bets_total),0) FROM keno_rounds WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(pot),0) FROM ludo_games WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(pot),0) FROM pool_games WHERE created_at >= ?', since)
-      + scalar('SELECT COALESCE(SUM(pot),0) FROM kerenbula_games WHERE created_at >= ?', since),
+      + scalar('SELECT COALESCE(SUM(pot),0) FROM kerenbula_games WHERE created_at >= ?', since)
+      + hunt('SUM(pot)', since),
     bingoEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM games WHERE created_at >= ?', since),
     crashEarnings: scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM crash_rounds WHERE created_at >= ?', since),
     crashRounds: scalar('SELECT COUNT(*) FROM crash_rounds WHERE players > 0 AND created_at >= ?', since),
@@ -495,6 +501,8 @@ function computeStats() {
     poolGames: scalar('SELECT COUNT(*) FROM pool_games WHERE created_at >= ?', since),
     kerenbulaEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM kerenbula_games WHERE created_at >= ?', since),
     kerenbulaGames: scalar('SELECT COUNT(*) FROM kerenbula_games WHERE created_at >= ?', since),
+    huntEarnings: hunt('SUM(house)', since),
+    huntGames: hunt('COUNT(*)', since),
     bonusesPaid: scalar("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='bonus' AND created_at >= ?", since),
     activePlayers: scalar("SELECT COUNT(DISTINCT user_id) FROM transactions WHERE type='bet' AND created_at >= ?", since),
     newUsers: scalar('SELECT COUNT(*) FROM users WHERE created_at >= ?', since),

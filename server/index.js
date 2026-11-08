@@ -23,6 +23,7 @@ import { KenoGame } from './keno.js';
 import { LudoManager } from './ludo.js';
 import { PoolManager } from './pool.js';
 import { KerenbulaManager } from './kerenbula.js';
+import { HuntManager } from './hunt.js';
 import { startBot, stopBot, notifyAdmins, notifyUser, botUsername } from './bot.js';
 import { createAdmin, isAdminId } from './admin.js';
 import { limit, allow } from './ratelimit.js';
@@ -67,6 +68,7 @@ games.keno = new KenoGame(io, onBalanceChange, games);
 games.ludo = new LudoManager(io, onBalanceChange, games);
 games.pool = new PoolManager(io, onBalanceChange, games);
 games.kerenbula = new KerenbulaManager(io, onBalanceChange, games);
+games.hunt = new HuntManager(io, onBalanceChange, games);
 /** Throws when the admin has switched this game off (games already in progress may still finish). */
 const isOn = (game) => { if (!config[game].enabled) throw new Error('This game is switched off right now'); };
 
@@ -77,10 +79,11 @@ onSettingsChanged((keys) => {
   if (has(/^ludo\.stakes$/)) games.ludo.syncTables();
   if (has(/^pool\.stakes$/)) games.pool.syncTables();
   if (has(/^kerenbula\.stakes$/)) games.kerenbula.syncTables();
-  for (const g of ['ludo', 'pool', 'kerenbula']) if (keys.includes(`${g}.enabled`) && !config[g].enabled) games[g].pauseNow(); // refund anyone waiting
+  if (has(/^hunt\.stakes$/)) games.hunt.syncTables();
+  for (const g of ['ludo', 'pool', 'kerenbula', 'hunt']) if (keys.includes(`${g}.enabled`) && !config[g].enabled) games[g].pauseNow(); // refund anyone waiting
   for (const g of ['crash', 'keno']) if (keys.includes(`${g}.enabled`) && config[g].enabled) games[g].start();
   if (has(/^(houseCut|minPlayers|stakes)$/)) io.emit('lobby:all', games.lobby());
-  for (const g of ['ludo', 'pool', 'kerenbula']) games[g].emitLobby();
+  for (const g of ['ludo', 'pool', 'kerenbula', 'hunt']) games[g].emitLobby();
   io.emit('config:changed'); // phones reload the settings (prices, names, games on/off…)
   console.log(`[settings] changed: ${keys.join(', ')}`);
 });
@@ -129,6 +132,7 @@ app.get('/api/config', (_req, res) =>
     pool: config.pool.enabled
       ? { stakes: config.pool.stakes, sizes: config.pool.sizes, houseCut: config.pool.houseCut, shotSec: config.pool.shotSec, maxMisses: config.pool.maxMisses }
       : null,
+    hunt: config.hunt.enabled ? { stakes: config.hunt.stakes, houseCut: config.hunt.houseCut, moveSec: config.hunt.moveSec, size: 4 } : null,
     kerenbula: config.kerenbula.enabled
       ? (({ stakes, houseCut, target, maxFrames, pinPoints, rollSec, maxMisses }) => ({ stakes, houseCut, target, maxFrames, pinPoints, rollSec, maxMisses }))(config.kerenbula)
       : null,
@@ -296,6 +300,11 @@ io.on('connection', (socket) => {
     const loc = games.pool.userLoc.get(String(user.id));
     if (loc?.game) socket.join(`pool:${loc.game}`);
   }
+  {
+    socket.emit('hunt:home', games.hunt.lobby());
+    const loc = games.hunt.userLoc.get(String(user.id));
+    if (loc?.game) socket.join(`hunt:${loc.game}`);
+  }
   if (games.kerenbula) {
     socket.emit('kb:home', games.kerenbula.lobby());
     const loc = games.kerenbula.userLoc.get(String(user.id));
@@ -425,6 +434,21 @@ io.on('connection', (socket) => {
   handle('kb:practice', () => isOn('kerenbula') || ({ me: kb().practice(getUser(user.id)) }));
   handle('kb:leave', () => ({ me: kb().leave(user) }));
   handle('kb:roll', (r) => kb().game(user.id).roll(user.id, r));
+
+  // ---- ድብብቆሽ Dibibkosh ----
+  const hunt = games.hunt;
+  handle('hunt:enter', () => {
+    socket.join('hunt-lobby');
+    const me = hunt.locationOf(user.id);
+    let game = null;
+    if (me?.game) { const g = hunt.games.get(me.game); if (g) { socket.join(g.channel); game = g.stateFor(user.id); } }
+    return { lobby: hunt.lobby(), me, game };
+  });
+  handle('hunt:exit', () => { socket.leave('hunt-lobby'); });
+  handle('hunt:join', ({ stake, invite, code }) => isOn('hunt') || ({ me: hunt.join(getUser(user.id), stake, { private: !!invite, code }) }));
+  handle('hunt:practice', () => isOn('hunt') || ({ me: hunt.practice(getUser(user.id)) }));
+  handle('hunt:leave', () => ({ me: hunt.leave(user) }));
+  handle('hunt:choose', ({ box }) => hunt.game(user.id).choose(user.id, box));
 
   // ---- Keno ----
   const keno = () => {

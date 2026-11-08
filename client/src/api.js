@@ -57,8 +57,8 @@ export const inTelegram = !!initData;
 // Opened from a friend's invite (?join=pool_ABC123, or Telegram's start_param): which game + table code
 let joinParam = (() => {
   const raw = new URLSearchParams(location.search).get('join') || tg?.initDataUnsafe?.start_param || '';
-  const m = raw.match(/^(pool|kb|ludo)_([A-Z0-9]{6})$/);
-  return m ? { prefix: m[1], code: m[2], game: { pool: 'pool', kb: 'kerenbula', ludo: 'ludo' }[m[1]] } : null;
+  const m = raw.match(/^(pool|kb|ludo|hunt)_([A-Z0-9]{6})$/);
+  return m ? { prefix: m[1], code: m[2], game: { pool: 'pool', kb: 'kerenbula', ludo: 'ludo', hunt: 'hunt' }[m[1]] } : null;
 })();
 export const peekJoin = () => joinParam;
 /** The invite code for this game (only once). */

@@ -17,6 +17,7 @@ import { metrics } from './monitor.js';
 import { verifyTotp } from './totp.js';
 import { onDepositApproved } from './growth.js';
 import { listClientErrors } from './clienterrors.js';
+import { listHuntGames } from './hunt.js';
 import { settingsView, saveSettings } from './settings.js';
 import { addBanner, listBanners, updateBanner, deleteBanner } from './banners.js';
 import { sharedDevices, suspiciousPairs, lowPlayCashouts, userFlags, linkedAccounts, setFrozen } from './risk.js';
@@ -31,7 +32,7 @@ export function createAdmin({ games, onBalanceChange }) {
   let broadcastJob = null;
 
   const actions = {
-    stats: () => ({ ...getStats(), paused: games.paused, rooms: games.adminSnapshot(), crash: games.crash?.adminSnapshot() || null, keno: games.keno?.adminSnapshot() || null, ludo: games.ludo?.adminSnapshot() || null, pool: games.pool?.adminSnapshot() || null, kerenbula: games.kerenbula?.adminSnapshot() || null }),
+    stats: () => ({ ...getStats(), paused: games.paused, rooms: games.adminSnapshot(), crash: games.crash?.adminSnapshot() || null, keno: games.keno?.adminSnapshot() || null, ludo: games.ludo?.adminSnapshot() || null, pool: games.pool?.adminSnapshot() || null, kerenbula: games.kerenbula?.adminSnapshot() || null, hunt: games.hunt?.adminSnapshot() || null }),
     poolGames: () => listPoolGames(50),
     kerenbulaGames: () => listKerenbulaGames(50),
     ludoGames: () => listLudoGames(50),
@@ -249,6 +250,7 @@ function adminRouter(actions) {
   r.get('/ludo-games', wrap(() => ({ items: actions.ludoGames() })));
   r.get('/pool-games', wrap(() => ({ items: actions.poolGames() })));
   r.get('/kerenbula-games', wrap(() => ({ items: actions.kerenbulaGames() })));
+  r.get('/hunt-games', wrap(() => ({ items: listHuntGames(50) })));
   r.post('/decide', wrap((req) => actions.decide(String(req.body.kind), Number(req.body.id), !!req.body.approve, req.who)));
   r.post('/adjust', wrap((req) => actions.adjust(req.body.userId, req.body.amount, req.body.note, req.who)));
   r.post('/pause', wrap((req) => actions.pause(req.who)));

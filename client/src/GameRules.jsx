@@ -98,6 +98,28 @@ function content(game, cfg, lang) {
     }
     return base;
   }
+  if (game === 'hunt') {
+    const h = cfg.hunt;
+    return am ? {
+      how: ['4 ተጫዋቾች በ3 × 3 ሳጥን ላይ። ተጫዋቾች በማዕዘኖቹ ይጀምራሉ፤ አዳኙ (👁) በመሃል።',
+        `በየዙሩ ${h.moveSec} ሰከንድ ቆጠራ አለ፤ በቆጠራው ውስጥ ከጎንዎ ያለ ሳጥን ይንኩ (ሰያፍ ጨምሮ)። ባሉበት መቆም አይቻልም።`,
+        'አዳኙም ወደ ሌላ ሳጥን ይዘላል — ቀደም ብለው እንዴት እንደተንቀሳቀሱ አይቶ የት እንደሚሄዱ ይገምታል።',
+        'ሁሉም እንቅስቃሴዎች በአንድ ጊዜ ይገለጣሉ። ተጫዋቾች አንድ ሳጥን ቢጋሩ ችግር የለም።'],
+      win: ['ከአዳኙ ጋር አንድ ሳጥን ውስጥ የገባ ይወጣል። አንድ ሰው ሲወጣ አዳኙ ወደ መሃል ይመለሳል።',
+        'የመጨረሻው የቀረ ተጫዋች ሽልማቱን ይወስዳል። የመጨረሻዎቹ አብረው ከተያዙ ሽልማቱን ይካፈላሉ።', 'ጠቃሚ ምክር፦ ሁልጊዜ በአንድ ዓይነት መንገድ አይንቀሳቀሱ — አዳኙ ይማራል!'],
+      penalties: ['በቆጠራው ውስጥ ካልመረጡ በራስ-ሰር ወደ ጎረቤት ሳጥን ይንቀሳቀሳሉ።', 'በጨዋታ መሃል መውጣት እንደ መያዝ ይቆጠራል፤ መግቢያዎ አይመለስም።'],
+      payouts: [`አሸናፊው ከጠቅላላው ገንዘብ ${100 - pct(h.houseCut)}% ይወስዳል።`, 'የአዳኙ ምርጫ ተጫዋቾች ከመምረጣቸው በፊት ተቆልፎ (🔒) ይታተማል፤ ከዚያ ይገለጣል — ማንም ማጭበርበር አይችልም (✅)።', 'ጨዋታው በቴክኒክ ችግር ከተቋረጠ ሁሉም ገንዘብ ይመለሳል።'],
+    } : {
+      how: ['4 players on a 3 × 3 board. Players start in the corners; the hunter (👁) starts in the middle.',
+        `Every move there's a ${h.moveSec}-second count: tap a box next to yours (diagonals count). You can't stand still.`,
+        'The hunter jumps to another box too — it studies how you moved before and guesses where you\'ll go.',
+        'All moves are revealed at the same moment. Players may share a box with each other.'],
+      win: ['Land in the same box as the hunter and you\'re out. After a catch the hunter goes back to the middle.',
+        'The last player left wins the prize. If the last players are caught together, they split it.', 'Tip: don\'t always move the same way — the hunter learns!'],
+      penalties: ['If you don\'t pick in time, you\'re moved to a random neighbouring box.', 'Leaving mid-game counts as being caught — your entry stays in the pot.'],
+      payouts: [`The winner takes ${100 - pct(h.houseCut)}% of the pot.`, 'The hunter\'s box is sealed (🔒) before anyone picks and revealed after — nobody can cheat, and the app checks it (✅).', 'If a game is interrupted by a technical problem, everyone is refunded.'],
+    };
+  }
   if (game === 'kerenbula') {
     const k = cfg.kerenbula;
     return am ? {

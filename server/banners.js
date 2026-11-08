@@ -22,7 +22,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS banners (
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 )`);
 
-const TARGETS = ['', 'aviator', 'bingo', 'keno', 'ludo', 'pool', 'kerenbula', 'wallet', 'invite'];
+const TARGETS = ['', 'aviator', 'bingo', 'keno', 'ludo', 'pool', 'kerenbula', 'hunt', 'wallet', 'invite'];
 const clip = (v, n) => String(v ?? '').trim().slice(0, n);
 const clean = (m) => ({
   title: clip(m.title, 60), subtitle: clip(m.subtitle, 90), cta: clip(m.cta, 20),

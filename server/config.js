@@ -129,6 +129,15 @@ export const config = {
     delayScale: num(process.env.KERENBULA_DELAY_SCALE, 1), // < 1 only for automated tests
   },
 
+  // ድብብቆሽ Dibibkosh (4 players hide from the hunter on a 3×3 board)
+  hunt: {
+    enabled: process.env.HUNT_ENABLED !== 'false',
+    stakes: list(process.env.HUNT_STAKES || '10,20,50,100').map(toCents),
+    houseCut: num(process.env.HUNT_HOUSE_CUT, 0.1),
+    moveSec: num(process.env.HUNT_MOVE_SEC, 3),            // the 3-2-1 count for each move
+    delayScale: num(process.env.HUNT_DELAY_SCALE, 1),      // < 1 only for automated tests
+  },
+
   // Growth: referrals, daily reward. Amounts in ETB in .env (0 = off).
   growth: {
     signupBonus: cents(process.env.SIGNUP_BONUS, 0),                // to every new player (once per phone)

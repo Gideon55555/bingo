@@ -11,7 +11,7 @@ import { lowData } from './prefs.js';
 const load = {
   bingo: () => import('./BingoRooms.jsx'), room: () => import('./Room.jsx'), admin: () => import('./Admin.jsx'),
   aviator: () => import('./Crash.jsx'), keno: () => import('./Keno.jsx'), ludo: () => import('./Ludo.jsx'),
-  pool: () => import('./Pool.jsx'), kerenbula: () => import('./Kerenbula.jsx'),
+  pool: () => import('./Pool.jsx'), kerenbula: () => import('./Kerenbula.jsx'), hunt: () => import('./Hunt.jsx'),
 };
 const BingoRooms = lazy(load.bingo);
 const Room = lazy(load.room);
@@ -21,10 +21,11 @@ const Keno = lazy(load.keno);
 const Ludo = lazy(load.ludo);
 const Pool = lazy(load.pool);
 const Kerenbula = lazy(load.kerenbula);
+const Hunt = lazy(load.hunt);
 const prefetchGames = () => {
   if (lowData()) return; // low-data mode: load each game only when opened
   const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1200));
-  idle(() => { for (const k of ['aviator', 'bingo', 'room', 'keno', 'ludo', 'pool', 'kerenbula']) load[k]().catch(() => {}); });
+  idle(() => { for (const k of ['aviator', 'bingo', 'room', 'keno', 'ludo', 'pool', 'kerenbula', 'hunt']) load[k]().catch(() => {}); });
 };
 import GameRules, { rulesSeen, markRulesSeen } from './GameRules.jsx';
 import { fmt } from '../../shared/money.js';
@@ -88,6 +89,8 @@ export default function App() {
     const onLudoMe = (m) => { if (m?.game) { setStake(null); setGame('ludo'); } };
     const onPoolMe = (m) => { if (m?.game) { setStake(null); setGame('pool'); } };
     const onKbMe = (m) => { if (m?.game) { setStake(null); setGame('kerenbula'); } };
+    const onHuntMe = (m) => { if (m?.game) { setStake(null); setGame('hunt'); } };
+    const onHunt = put('hunt');
     socket.on('lobby:all', onAll);
     socket.on('lobby', onOne);
     socket.on('balance', onBal);
@@ -101,6 +104,8 @@ export default function App() {
     const onOnline = ({ n }) => setLive((p) => ({ ...p, online: n }));
     socket.on('online', onOnline);
     socket.on('kb:me', onKbMe);
+    socket.on('hunt:me', onHuntMe);
+    socket.on('hunt:home', onHunt);
     socket.on('connect_error', onErr);
     socket.on('connect', () => setError(''));
     socket.on('server:restart', () => setError('restarting'));
@@ -123,6 +128,8 @@ export default function App() {
       socket.off('kb:home', onKb);
       socket.off('online', onOnline);
       socket.off('kb:me', onKbMe);
+      socket.off('hunt:me', onHuntMe);
+      socket.off('hunt:home', onHunt);
       socket.off('connect_error', onErr);
     };
   }, []);
@@ -141,7 +148,7 @@ export default function App() {
   if (!cfg || !user) return <div className="center muted">{t('loading')}</div>;
 
   const gameName = game === 'aviator' ? crashName(cfg) : game ? t(`g_${game}`) : null;
-  const icons = { aviator: '✈️', bingo: '🔢', keno: '🎯', ludo: '🎲', pool: '🎱', kerenbula: '🔴' };
+  const icons = { aviator: '✈️', bingo: '🔢', keno: '🎯', ludo: '🎲', pool: '🎱', kerenbula: '🔴', hunt: '👁' };
 
   return (
     <div className="app">
@@ -165,7 +172,8 @@ export default function App() {
 
       <main>
         <Suspense fallback={<div className="center muted">{t('loading')}</div>}>
-        {game === 'kerenbula' ? <Kerenbula cfg={cfg} balance={balance} />
+        {game === 'hunt' ? <Hunt cfg={cfg} balance={balance} />
+          : game === 'kerenbula' ? <Kerenbula cfg={cfg} balance={balance} />
           : game === 'pool' ? <Pool cfg={cfg} balance={balance} />
           : game === 'ludo' ? <Ludo cfg={cfg} balance={balance} />
           : game === 'keno' ? <Keno cfg={cfg} balance={balance} />

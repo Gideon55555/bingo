@@ -906,7 +906,7 @@ function Settings({ cfg }) {
 }
 
 const BANNER_TARGETS = [['', 'Nothing (picture only)'], ['aviator', 'Aviator'], ['bingo', 'Bingo'], ['keno', 'Keno'], ['ludo', 'Ludo'],
-  ['pool', '8-Ball Pool'], ['kerenbula', 'Kerenbula'], ['wallet', 'Deposit screen'], ['invite', 'Invite friends (share link)']];
+  ['pool', '8-Ball Pool'], ['kerenbula', 'Kerenbula'], ['hunt', 'Dibibkosh'], ['wallet', 'Deposit screen'], ['invite', 'Invite friends (share link)']];
 
 /** Home-screen promo banners: upload your own pictures, add a headline and a button. */
 function Banners() {

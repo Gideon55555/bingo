@@ -1,4 +1,4 @@
-# 🎱 Telegram Bingo + ✈️ Aviator + 🎯 Keno + 🎲 Ludo + 🎱 8-Ball Pool + 🔴 ከረንቡላ Kerenbula Mini App
+# 🎱 Telegram Bingo + ✈️ Aviator + 🎯 Keno + 🎲 Ludo + 🎱 8-Ball Pool + 🔴 ከረንቡላ Kerenbula + 👁 ድብብቆሽ Dibibkosh Mini App
 
 A multiplayer 75-ball bingo game that runs inside Telegram, with a player wallet.
 Players send you money (Telebirr, bank and so on), submit the transaction ID in the app,
@@ -103,12 +103,24 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
    shows roughly where the ball would stop. Every roll is simulated on the server with deterministic shared physics.
 7. 25-second roll clock (`KERENBULA_ROLL_SEC`): running out loses that ball; 3 in a row forfeits. Restart = refund.
 
+**👁 ድብብቆሽ Dibibkosh (4 players, hide from the hunter)**
+1. Tables per stake (`HUNT_STAKES`). Last player standing takes the pot minus 10% (`HUNT_HOUSE_CUT`).
+2. 3 × 3 board. Players start in the corners, the hunter in the middle. Every move has a 3-second count
+   (`HUNT_MOVE_SEC`): each player taps a neighbouring box (diagonals count). Standing still is not allowed;
+   no pick in time = a random neighbouring box.
+3. The hunter jumps to any other box. It learns each player's habits (flee / corner / centre / repeat / back /
+   crowd tendencies) and goes where it expects the most players; 15% of the time it picks at random.
+4. Players in the hunter's box are out; players sharing a box with each other are fine. After a catch the hunter
+   returns to the middle. If the last players are caught together, they split the prize.
+5. Fairness: before anyone picks, the server publishes `sha256(gameId:move:box:salt)`; after the reveal the app
+   recomputes it and shows ✅. Free practice against 3 bots and private invite tables (`hunt_CODE`) included.
+
 **🔊 Bingo voice caller (Amharic)** — every called number is spoken: the letter, then the number in Amharic words
 (54 → "ጂ ሃምሳ አራት"), and shown as text under the ball. Clips are in `client/public/voice/am/` (generated offline with
 eSpeak NG). For a natural voice run `scripts/voice/make-azure.js` (Azure's Amharic neural voices, free tier is enough),
 or drop in real recordings named `1.mp3`…`75.mp3`. Players can switch the voice off in Settings.
 
-**🤖 Practice & 👥 invite a friend** (pool, Kerenbula, Ludo) — free practice against a bot (no money, not recorded);
+**🤖 Practice & 👥 invite a friend** (pool, Kerenbula, Ludo, Dibibkosh) — free practice against a bot (no money, not recorded);
 "Invite a friend" opens a private table with a code and a Telegram link (`t.me/<bot>?start=pool_CODE`), refunded if
 nobody joins within 30 minutes. The home screen shows how many players are online.
 

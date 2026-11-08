@@ -5,7 +5,7 @@ import GrowthCards from './Growth.jsx';
 import { api, tg } from './api.js';
 import { fmt } from '../../shared/money.js';
 
-const GAME_ICON = { aviator: '✈️', bingo: '🔢', keno: '🎯', ludo: '🎲', pool: '🎱', kerenbula: '🔴', crash: '✈️' };
+const GAME_ICON = { hunt: '👁', aviator: '✈️', bingo: '🔢', keno: '🎯', ludo: '🎲', pool: '🎱', kerenbula: '🔴', crash: '✈️' };
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 /** Promo carousel: the admin's uploaded banners, or built-in slides for the games that are on. */
@@ -21,6 +21,7 @@ function Promo({ cfg, user, onOpen, onWallet }) {
     cfg.crash && { id: 'b-aviator', target: 'aviator', art: 'aviator', title: t('promoAviator', { x: Math.round(cfg.crash.maxMultiplier / 100) }), subtitle: t('promoAviatorSub'), cta: t('playNow') },
     { id: 'b-bingo', target: 'bingo', art: 'bingo', title: t('promoBingo', { n: cfg.maxCards || 1 }), subtitle: t('promoBingoSub'), cta: t('playNow') },
     cfg.growth?.signupBonus > 0 && { id: 'b-signup', target: 'wallet', art: 'keno', title: t('promoSignup', { amount: `${fmt(cfg.growth.signupBonus)} ${cfg.currency}` }), subtitle: t('promoSignupSub'), cta: t('deposit') },
+    cfg.hunt && { id: 'b-hunt', target: 'hunt', art: 'hunt', title: t('promoHunt'), subtitle: t('promoHuntSub'), cta: t('playNow') },
     cfg.kerenbula && { id: 'b-kb', target: 'kerenbula', art: 'kerenbula', title: t('promoKb'), subtitle: t('promoKbSub'), cta: t('playNow') },
     cfg.growth?.referralBonus > 0 && cfg.botUsername && { id: 'b-ref', target: 'invite', art: 'ludo', title: t('promoRef', { amount: `${fmt(cfg.growth.referralBonus)} ${cfg.currency}` }), subtitle: t('promoRefSub'), cta: t('share') },
   ].filter(Boolean), [cfg, useLang()]);
@@ -49,6 +50,7 @@ function Promo({ cfg, user, onOpen, onWallet }) {
   }, [i, slides.length]);
   const onScroll = () => {
     const el = track.current;
+    if (!el) return;
     const w = el.firstChild?.offsetWidth + 10 || el.clientWidth;
     setI(Math.round(el.scrollLeft / w));
   };
@@ -124,6 +126,7 @@ export default function Home({ cfg, live, rooms, onOpen, onWallet, user }) {
     },
     cfg.ludo && { id: 'ludo', cat: 'skill', name: t('g_ludo'), tag: t('tag_ludo'), status: live.ludo?.playing ? { text: t('playingNow', { n: live.ludo.playing }), cls: 'hot' } : { text: t('st_pvp'), cls: 'open' } },
     cfg.pool && { id: 'pool', cat: 'skill', name: t('g_pool'), tag: t('tag_pool'), status: live.pool?.playing ? { text: t('playingNow', { n: live.pool.playing }), cls: 'hot' } : { text: t('st_skill'), cls: 'open' } },
+    cfg.hunt && { id: 'hunt', cat: 'skill', name: t('g_hunt'), tag: t('tag_hunt'), status: live.hunt?.playing ? { text: t('playingNow', { n: live.hunt.playing }), cls: 'hot' } : { text: t('st_new'), cls: 'new' } },
     cfg.kerenbula && { id: 'kerenbula', cat: 'skill', name: t('g_kerenbula'), tag: t('tag_kerenbula'), status: live.kerenbula?.playing ? { text: t('playingNow', { n: live.kerenbula.playing }), cls: 'hot' } : { text: t('st_new'), cls: 'new' } },
   ].filter(Boolean);
   const shown = tiles.filter((g) => cat === 'all' || g.cat === cat);
