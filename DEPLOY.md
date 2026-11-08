@@ -1,24 +1,98 @@
 # 🚀 Going live
 
-There are two ways to host. Both use your own domain, for example `bingo.yourdomain.com`.
+Three ways to host. All of them use your own domain from DirectAdmin, for example `bingo.yourdomain.com`.
 
-| | **A. VPS** (recommended) | **B. Your DirectAdmin hosting** |
-|---|---|---|
-| Cost | about $5/month extra | already paid |
-| Reliability | ✅ App always running, real-time WebSockets | ⚠️ Host may sleep or restart the app; slower updates |
-| Control | Full | Limited by your host |
-| Gambling allowed? | Check the provider's terms | **Many shared hosts forbid it**, so check your terms |
-| Needs | DNS record in DirectAdmin | "Setup Node.js App" in DirectAdmin |
+| | **0. Oracle Cloud — free** | **A. Paid VPS** | **B. Your DirectAdmin hosting** |
+|---|---|---|---|
+| Cost | **$0** (Always Free: 2 ARM cores, 12 GB RAM, 10 TB traffic) | about $5/month | already paid |
+| Reliability | ✅ Always on, real-time WebSockets | ✅ Always on | ⚠️ Host may sleep or restart the app |
+| Catch | Needs a Visa/Mastercard to sign up; no support or uptime promise | Costs money | **Many shared hosts forbid gambling** |
+| Gambling allowed? | Oracle's rules ban illegal use; you need your Ethiopian licence | Check the provider's terms | Check your terms |
 
-Your players' money is never lost on a crash or restart either way. Unfinished games are refunded
-automatically and players are notified. On shared hosting that happens more often, which annoys players.
+Free app platforms (Render, Koyeb, Railway trial, Vercel…) **don't work for this app**. They sleep when idle,
+have no permanent disk (the database would be wiped) or time out live connections.
+
+Your players' money is never lost on a crash or restart. Unfinished games are refunded automatically and players are notified.
 
 ---
 
-## A. VPS (recommended)
+## 0. Oracle Cloud Always Free (recommended while you have no budget)
+
+Everything below happens in your web browser, including the server's terminal (Oracle's **Cloud Shell**).
+Plan about an hour.
+
+### 1. Create the account
+1. Go to **oracle.com/cloud/free** → *Start for free*.
+2. **Home region:** pick one close to Ethiopia, such as **Saudi Arabia West (Jeddah)** or **UAE East (Dubai)**.
+   ⚠️ You can never change it later, and the free server can only be created there.
+3. A **Visa/Mastercard** is needed to verify you're a real person. A small amount is held for a moment and returned.
+   If an Ethiopian bank card is refused, use a card that works for online payments abroad.
+4. **Strongly recommended — upgrade to "Pay As You Go"** (Billing → Upgrade and Manage Payment). It's still **$0** as long as
+   you stay inside the Always Free limits, but: Oracle doesn't stop "idle" servers on paid accounts (a quiet week with few
+   players could otherwise get the server stopped), and it's easier to get a free ARM server.
+   Then add a **budget alert** (Billing → Budgets → $1) so you're emailed if anything would ever cost money.
+
+### 2. Make an SSH key in Cloud Shell
+Click the **>_ Cloud Shell** icon (top right of the console) and run:
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519 && cat ~/.ssh/id_ed25519.pub
+```
+Copy the line it prints (starts with `ssh-ed25519`). Also download `~/.ssh/id_ed25519` (Cloud Shell menu → Download)
+and keep it safe, because it's the key to your server.
+
+### 3. Create the server
+Menu → **Compute → Instances → Create instance**:
+- **Image:** Canonical **Ubuntu 24.04** (not "Minimal").
+- **Shape:** *Ampere* → **VM.Standard.A1.Flex**, **2 OCPU, 12 GB** (1 OCPU / 6 GB is also plenty). Make sure it says *Always Free-eligible*.
+- **Networking:** create a new virtual cloud network with a **public subnet**, and keep **Assign a public IPv4 address** on.
+- **SSH keys:** *Paste public keys* → paste the line from step 2.
+- Create. If you see **"Out of capacity"**, try another *availability domain* in the same screen, or try again later.
+
+Write down the **Public IP address** shown on the instance page.
+
+### 4. Open the web ports in Oracle's network firewall
+Instance page → click the **subnet** → **Security** (or *Security Lists*) → *Default Security List* → **Add Ingress Rules**:
+- Source CIDR `0.0.0.0/0`, IP protocol **TCP**, Destination port range **`80,443`** → Add.
+
+### 5. Point your subdomain at it (in DirectAdmin)
+DirectAdmin → **DNS Management** → **Add Record**: Type `A`, Name `bingo`, Value *your Oracle public IP*.
+
+### 6. Install the app (in Cloud Shell)
+```bash
+ssh ubuntu@YOUR_PUBLIC_IP
+git clone https://github.com/Gideon55555/bingo.git /tmp/bingo
+sudo bash /tmp/bingo/deploy/setup-vps.sh bingo.yourdomain.com
+```
+The script installs everything (Node.js, HTTPS certificate, firewall, auto-restart, automatic security updates),
+opens ports 80/443 in Oracle's own server firewall, creates strong random admin and backup passwords, and checks your DNS.
+It takes about 5–10 minutes.
+
+### 7. Your settings, then start
+```bash
+sudo cat /root/bingo-secrets.txt          # your generated passwords: save them in a password manager
+sudo rm /root/bingo-secrets.txt
+sudo -u bingo nano /opt/bingo/.env        # BOT_TOKEN, ADMIN_IDS, PAYMENT_INFO, SUPPORT_CONTACT
+sudo -u bingo bash /opt/bingo/deploy/start.sh
+```
+`start.sh` refuses to start if a required setting is missing or still the example value, and tells you which.
+In nano: edit, then **Ctrl+O, Enter** to save and **Ctrl+X** to exit.
+
+Open `https://bingo.yourdomain.com/healthz` in your browser. It should show `{"ok":true,…}`. Then send `/start` to your bot.
+
+### Day-to-day (Cloud Shell → `ssh ubuntu@YOUR_PUBLIC_IP`)
+```bash
+sudo -u bingo pm2 logs bingo                     # live logs
+sudo -u bingo bash /opt/bingo/deploy/update.sh   # install the latest code from GitHub
+sudo -u bingo pm2 restart bingo                  # restart (players in unfinished games are refunded)
+```
+`update.sh` backs up the database first, and if the new version doesn't start healthy it **rolls back automatically**.
+
+---
+
+## A. Paid VPS
 
 ### 1. Get a server
-Any Ubuntu 22.04 or 24.04 VPS with 2 GB RAM works (1 GB is fine for a start): Hetzner, DigitalOcean, Vultr, Contabo and so on. Load test: one 2-core server handled 2,000 players online at once (~400 MB RAM).
+Any Ubuntu 22.04 or 24.04 VPS (x86 or ARM) with 2 GB RAM works (1 GB is fine for a start): Hetzner, DigitalOcean, Vultr, Contabo and so on. Load test: one 2-core server handled 2,000 players online at once (~400 MB RAM).
 Note its **IP address**.
 
 ### 2. Point your subdomain at it (in DirectAdmin)
@@ -32,20 +106,19 @@ Wait 5–30 minutes. You can check with `ping bingo.yourdomain.com`.
 ### 3. Run the setup script on the VPS
 ```bash
 ssh root@YOUR_VPS_IP
-curl -fsSL https://raw.githubusercontent.com/Gideon55555/bingo/main/deploy/setup-vps.sh -o setup.sh
-bash setup.sh bingo.yourdomain.com
+git clone https://github.com/Gideon55555/bingo.git /tmp/bingo
+sudo bash /tmp/bingo/deploy/setup-vps.sh bingo.yourdomain.com
 ```
-If the repo is private, the curl command above won't work. Copy the script over instead, or run
-`git clone https://github.com/Gideon55555/bingo.git /opt/bingo` with a
-[GitHub token](https://github.com/settings/tokens) as the password, then `bash /opt/bingo/deploy/setup-vps.sh bingo.yourdomain.com`.
+If you make the GitHub repo private, `git clone` asks for your GitHub username and a
+[token](https://github.com/settings/tokens) (read-only "Contents" permission) as the password. Updates ask for it again.
 
 The script installs Node.js, HTTPS (Caddy, with automatic certificates), a firewall and auto-restart (pm2).
 
 ### 4. Fill in your settings and start
 ```bash
-nano /opt/bingo/.env        # BOT_TOKEN, ADMIN_IDS, ADMIN_PASSWORD, PAYMENT_INFO, SUPPORT_CONTACT
-sudo -u bingo bash -c "cd /opt/bingo && pm2 start ecosystem.config.cjs && pm2 save"
-curl https://bingo.yourdomain.com/healthz    # should print {"ok":true,...}
+sudo cat /root/bingo-secrets.txt && sudo rm /root/bingo-secrets.txt   # generated passwords: save them first
+sudo -u bingo nano /opt/bingo/.env        # BOT_TOKEN, ADMIN_IDS, PAYMENT_INFO, SUPPORT_CONTACT
+sudo -u bingo bash /opt/bingo/deploy/start.sh
 ```
 Keep `BOT_MODE=polling` on a VPS.
 
@@ -105,7 +178,7 @@ Only works if your host has **Setup Node.js App** in DirectAdmin, with Node.js 1
 - [ ] **License** confirmed for real-money games (National Lottery Administration).
 - [ ] **New bot token:** `/revoke` in @BotFather, because the old one was shared. Put the new one only in `.env`.
 - [ ] `NODE_ENV=production` and `DEV_MODE=false`. The server refuses to start otherwise.
-- [ ] `ADMIN_IDS` set to your real Telegram id(s). Send `/id` to the bot.
+- [ ] `ADMIN_IDS` set to your real Telegram id(s) (@userinfobot shows yours).
 - [ ] `ADMIN_PASSWORD`: long and unique (16+ characters).
 - [ ] `PAYMENT_INFO`: your real Telebirr / bank details.
 - [ ] `SUPPORT_CONTACT`: where players can reach you.
