@@ -1,16 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { api, socket, tg, withEndsAt } from './api.js';
 import { t, useLang, getLang, setLang, crashName } from './i18n.js';
 import Home from './Home.jsx';
-import BingoRooms from './BingoRooms.jsx';
-import Room from './Room.jsx';
 import Wallet from './Wallet.jsx';
-import Admin from './Admin.jsx';
-import Crash from './Crash.jsx';
-import Keno from './Keno.jsx';
-import Ludo from './Ludo.jsx';
-import Pool from './Pool.jsx';
-import Kerenbula from './Kerenbula.jsx';
+
+// Each game is its own download: the home screen appears fast, then the games load quietly in the
+// background (see prefetch below) so opening one is still instant.
+const load = {
+  bingo: () => import('./BingoRooms.jsx'), room: () => import('./Room.jsx'), admin: () => import('./Admin.jsx'),
+  aviator: () => import('./Crash.jsx'), keno: () => import('./Keno.jsx'), ludo: () => import('./Ludo.jsx'),
+  pool: () => import('./Pool.jsx'), kerenbula: () => import('./Kerenbula.jsx'),
+};
+const BingoRooms = lazy(load.bingo);
+const Room = lazy(load.room);
+const Admin = lazy(load.admin);
+const Crash = lazy(load.aviator);
+const Keno = lazy(load.keno);
+const Ludo = lazy(load.ludo);
+const Pool = lazy(load.pool);
+const Kerenbula = lazy(load.kerenbula);
+const prefetchGames = () => {
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1200));
+  idle(() => { for (const k of ['aviator', 'bingo', 'room', 'keno', 'ludo', 'pool', 'kerenbula']) load[k]().catch(() => {}); });
+};
 import GameRules, { rulesSeen, markRulesSeen } from './GameRules.jsx';
 import { fmt } from '../../shared/money.js';
 
@@ -57,6 +69,7 @@ export default function App() {
         setUser(m.user);
         setBalance(m.user.balance);
         api.setLang(getLang()).catch(() => {});
+        prefetchGames();
       })
       .catch((e) => setError(e.message));
 
@@ -84,6 +97,7 @@ export default function App() {
     socket.on('connect_error', onErr);
     socket.on('connect', () => setError(''));
     socket.on('server:restart', () => setError('restarting'));
+    socket.on('server:replaced', () => setError('replaced'));
     return () => {
       socket.off('lobby:all', onAll);
       socket.off('lobby', onOne);
@@ -109,7 +123,7 @@ export default function App() {
     return () => back.offClick(goBack);
   }, [inGame, stake]);
 
-  const errText = error === 'openFromBot' ? t('openFromBot') : error === 'restarting' ? t('restarting') : error;
+  const errText = error === 'openFromBot' ? t('openFromBot') : error === 'restarting' ? t('restarting') : error === 'replaced' ? t('replacedConn') : error;
   if (error && !cfg) return <div className="center muted">{errText}</div>;
   if (!cfg || !user) return <div className="center muted">{t('loading')}</div>;
 
@@ -129,6 +143,7 @@ export default function App() {
       {error && <div className="banner">{errText}</div>}
 
       <main>
+        <Suspense fallback={<div className="center muted">{t('loading')}</div>}>
         {game === 'kerenbula' ? <Kerenbula cfg={cfg} balance={balance} />
           : game === 'pool' ? <Pool cfg={cfg} balance={balance} />
           : game === 'ludo' ? <Ludo cfg={cfg} balance={balance} />
@@ -140,6 +155,7 @@ export default function App() {
           : tab === 'play' ? <Home cfg={cfg} live={live} rooms={rooms} onOpen={openGame} />
           : tab === 'admin' && user.isAdmin ? <Admin cfg={cfg} />
           : <Wallet cfg={cfg} balance={balance} />}
+        </Suspense>
       </main>
 
       {game && showRules && <GameRules game={game} cfg={cfg} onClose={() => { markRulesSeen(game); setShowRules(false); }} />}

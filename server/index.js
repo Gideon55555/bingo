@@ -1,10 +1,14 @@
+import './log.js';
 import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import { Server } from 'socket.io';
 import { config, checkConfig, ROOT } from './config.js';
-import { authenticate, requireAuth } from './auth.js';
+import { authenticate, requireAuth, failedTooOften, recordAuthFailure } from './auth.js';
+import { securityHeaders, errorHandler, publicMessage, socketIp } from './security.js';
+import { serveStatic } from './static.js';
+import { startMonitor, health } from './monitor.js';
 import { db, setUserLang, getUser, history, createDeposit, createWithdrawal, countPending, refundOpenRounds } from './db.js';
 import { GameManager } from './game.js';
 import { CrashGame } from './crash.js';
@@ -23,9 +27,19 @@ checkConfig();
 
 const app = express();
 app.disable('x-powered-by');
-app.set('trust proxy', 1); // behind Nginx / Caddy / Cloudflare / Passenger
+app.set('trust proxy', config.trustProxy); // number of proxies in front (Caddy / Nginx / Passenger / Cloudflare)
+app.use(securityHeaders());
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: config.production ? config.webAppUrl : '*' }, maxHttpBufferSize: 1e4 });
+// Drop slow / stuck HTTP clients (slowloris) instead of letting them hold connections open
+server.headersTimeout = 20000;
+server.requestTimeout = 30000;
+server.keepAliveTimeout = 65000; // longer than typical proxy idle timeouts
+const io = new Server(server, {
+  cors: { origin: config.production ? config.webAppUrl : '*' },
+  maxHttpBufferSize: 1e4,        // game messages are tiny; refuse anything bigger
+  connectTimeout: 20000,
+  pingInterval: 20000, pingTimeout: 20000,
+});
 
 // Push fresh balance to every open socket of this user.
 function onBalanceChange(userId) {
@@ -44,14 +58,18 @@ games.keno = config.keno.enabled ? new KenoGame(io, onBalanceChange, games) : nu
 games.ludo = config.ludo.enabled ? new LudoManager(io, onBalanceChange, games) : null;
 games.pool = config.pool.enabled ? new PoolManager(io, onBalanceChange, games) : null;
 games.kerenbula = config.kerenbula.enabled ? new KerenbulaManager(io, onBalanceChange, games) : null;
-const admin = createAdmin({ games, onBalanceChange });
+const admin = createAdmin({ games, onBalanceChange, io });
+startMonitor({ io, games });
 
 // ---------------- REST API ----------------
 app.use(express.json({ limit: '20kb' }));
-app.use('/api', limit('api', 300, 60 * 1000)); // 300 req/min per IP overall
+app.use('/api', limit('api', config.apiRateIp, 60 * 1000)); // per IP (generous: many phones share one carrier IP)
 
-app.get('/healthz', (_req, res) =>
-  res.json({ ok: true, uptime: Math.round(process.uptime()), rooms: games.lobby().map((r) => `${r.stake}:${r.state}`) }));
+// Health check for uptime monitors / load balancers: 200 when healthy, 503 when not
+app.get('/healthz', (_req, res) => {
+  const h = health(shuttingDown);
+  res.status(h.ok ? 200 : 503).set('Cache-Control', 'no-store').json(h);
+});
 
 app.use('/api/admin', admin.router);
 
@@ -141,15 +159,27 @@ app.post('/api/withdraw', requireAuth, walletLimit, (req, res) => {
 
 // ---------------- Realtime ----------------
 io.use((socket, next) => {
+  const ip = socketIp(socket.handshake);
+  socket.data.ip = ip;
+  if (shuttingDown) return next(new Error('Server restarting'));
+  if (!allow(`conn:${ip}`, config.connRateIp, 60 * 1000)) return next(new Error('Too many connections'));
+  if (failedTooOften(ip)) return next(new Error('Unauthorized'));
   const { initData, devUser } = socket.handshake.auth || {};
   const user = authenticate(initData, devUser);
-  if (!user) return next(new Error('Unauthorized'));
+  if (!user) { recordAuthFailure(ip); return next(new Error('Unauthorized')); }
   socket.data.user = user;
   next();
 });
 
 io.on('connection', (socket) => {
   const user = socket.data.user;
+  // One player may have a few tabs/devices open; past the limit, the oldest connection is closed.
+  const mine = io.sockets.adapter.rooms.get(`user:${user.id}`);
+  if (mine && mine.size >= config.maxSocketsPerUser) {
+    const oldest = io.sockets.sockets.get(mine.values().next().value);
+    oldest?.emit('server:replaced');
+    oldest?.disconnect(true);
+  }
   socket.join(`user:${user.id}`);
   socket.join('lobby');
   socket.emit('lobby:all', games.lobby());
@@ -182,7 +212,7 @@ io.on('connection', (socket) => {
       try {
         ack({ ok: true, ...(fn(payload) || {}) });
       } catch (e) {
-        ack({ ok: false, error: e.message });
+        ack({ ok: false, error: publicMessage(e, `socket ${event}`) });
       }
     });
 
@@ -311,18 +341,9 @@ async function main() {
   // Telegram in the background — the website starts even if Telegram is slow to answer.
   startBot({ actions: admin.actions, app });
 
-  // Serve the built frontend
-  const dist = path.join(ROOT, 'dist');
-  if (fs.existsSync(dist)) {
-    app.use(express.static(dist, { maxAge: '1h', index: false }));
-    app.use('/assets', (_req, res) => res.status(404).end());
-    app.get(/^\/(?!api|socket\.io|tg-webhook).*/, (_req, res) => {
-      res.set('Cache-Control', 'no-cache');
-      res.sendFile(path.join(dist, 'index.html'));
-    });
-  } else {
-    console.warn('⚠️  dist/ not found — run "npm run build" to build the frontend.');
-  }
+  // Serve the built frontend (pre-compressed, cached forever for hashed files)
+  serveStatic(app, path.join(ROOT, 'dist'));
+  app.use(errorHandler);
 
   server.listen(config.port, () => {
     console.log(`Bingo server on port ${config.port} (${config.production ? 'production' : 'development'}, TZ ${config.timezone})`);

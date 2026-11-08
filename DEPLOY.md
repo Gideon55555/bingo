@@ -18,7 +18,7 @@ automatically and players are notified. On shared hosting that happens more ofte
 ## A. VPS (recommended)
 
 ### 1. Get a server
-Any Ubuntu 22.04 or 24.04 VPS with 1 GB RAM works: Hetzner, DigitalOcean, Vultr, Contabo and so on.
+Any Ubuntu 22.04 or 24.04 VPS with 2 GB RAM works (1 GB is fine for a start): Hetzner, DigitalOcean, Vultr, Contabo and so on. Load test: one 2-core server handled 2,000 players online at once (~400 MB RAM).
 Note its **IP address**.
 
 ### 2. Point your subdomain at it (in DirectAdmin)
@@ -112,11 +112,33 @@ Only works if your host has **Setup Node.js App** in DirectAdmin, with Node.js 1
 - [ ] `https://bingo.yourdomain.com/healthz` responds.
 - [ ] In Telegram: `/start` opens the game, and `/stats` and `/admin` work for you.
 - [ ] `/backup`: you receive the database file in Telegram.
+- [ ] **Uptime monitor:** add `https://bingo.yourdomain.com/healthz` to a free monitor (UptimeRobot, Better Stack).
+      It returns 200 when healthy and 503 when the database or server isn't — you get an SMS/email if the site goes down.
+- [ ] **`TRUST_PROXY`** matches your setup: `1` behind Caddy/Nginx/Passenger (default), `2` if Cloudflare is also in front.
+      Wrong values make rate limits see the wrong visitor IP.
+- [ ] **Firewall (VPS):** only ports 22, 80 and 443 open (`sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw enable`).
+      Port 3000 must not be reachable from outside — Caddy talks to it locally.
+- [ ] **SSH:** log in with a key, not a password (`PasswordAuthentication no` in `/etc/ssh/sshd_config`).
 - [ ] **Private trial:** 5–10 friends, small amounts. Do a full deposit → play → win → withdraw cycle.
 - [ ] Daily habit: check `/pending`. Only approve deposits after the money shows in your account.
 
+## 🔒 Security & performance built in
+- **Headers:** strict Content-Security-Policy (only this site and Telegram's script may run; only Telegram may embed the app),
+  HSTS, no-sniff, referrer and permissions policies.
+- **Logins:** every request and socket is checked against Telegram's signature (HMAC) and its age (`INITDATA_MAX_AGE_HOURS`).
+  Repeated failures from one IP are blocked for a minute (`AUTH_FAIL_RATE_IP`).
+- **Rate limits** per player (`API_RATE_USER`, `SOCKET_RATE`) and generous per-IP limits (`API_RATE_IP`, `CONN_RATE_IP`),
+  because Ethio telecom / Safaricom put many phones behind one IP. At most `MAX_SOCKETS_PER_USER` open connections per player.
+- **Errors** never show internals to players — they get a plain message, the details go to the log.
+- **Files:** the database and backups are readable only by the app's user; every backup is integrity-checked before it's kept.
+  The server refuses to start on a damaged database.
+- **Speed:** each game loads separately (the home screen downloads ~84 KB), files are pre-compressed (brotli/gzip) and
+  cached by phones until the next update; the Amharic font is self-hosted. The database is tuned (WAL, indexes, cached stats).
+- **Admin → Overview** shows server health: response time, players online, memory, database size.
+- **Load-tested:** `N=1000 npm run load` simulates 1,000 players betting at once.
+
 ## If something goes wrong
-- **Restore a backup:** stop the app, copy a backup file over `data/bingo.db`, then start the app.
+- **Restore a backup:** stop the app, copy a backup file over `data/bingo.db` (and delete `data/bingo.db-wal` / `-shm` if present), then start the app.
   Backups are in `backups/` on the server and in your Telegram chat with the bot.
 - **The bot doesn't answer:** check the logs. On shared hosting, check that `BOT_MODE=webhook` is set and the app is running.
 - **Players see "Server is restarting":** this is normal during updates. Unfinished games are refunded automatically.

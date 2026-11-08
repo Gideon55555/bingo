@@ -28,8 +28,9 @@ export const api = {
   setLang: (lang) => request('POST', '/api/lang', { lang }),
 };
 
-// Default transports: starts with HTTP long-polling and upgrades to WebSocket when the host allows it
-export const socket = io({ auth: { initData, devUser }, autoConnect: false });
+// WebSocket first (one round-trip faster to connect); if the host or network blocks WebSockets,
+// it falls back to HTTP long-polling automatically.
+export const socket = io({ auth: { initData, devUser }, autoConnect: false, transports: ['websocket', 'polling'], tryAllTransports: true });
 export const inTelegram = !!initData;
 
 // ---------- Admin API ----------
@@ -59,6 +60,7 @@ export const adminApi = {
   kenoRounds: () => adminRequest('GET', '/keno-rounds'),
   ludoGames: () => adminRequest('GET', '/ludo-games'),
   poolGames: () => adminRequest('GET', '/pool-games'),
+  metrics: () => adminRequest('GET', '/metrics'),
   kerenbulaGames: () => adminRequest('GET', '/kerenbula-games'),
   decide: (kind, id, approve) => adminRequest('POST', '/decide', { kind, id, approve }),
   adjust: (userId, amount, note) => adminRequest('POST', '/adjust', { userId, amount, note }),

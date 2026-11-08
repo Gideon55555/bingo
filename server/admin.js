@@ -6,11 +6,13 @@ import { fmtMoney, fmt, toCents } from '../shared/money.js';
 import { authenticate } from './auth.js';
 import {
   getStats, listCrashRounds, listKenoRounds, listLudoGames, listPoolGames, listKerenbulaGames, findUser, listUsers, listTransactions, listGames, adjustBalance, allUserIds, history,
-  approveDeposit, rejectDeposit, markWithdrawalPaid, rejectWithdrawal, pendingTx,
+  approveDeposit, rejectDeposit, invalidateStats, markWithdrawalPaid, rejectWithdrawal, pendingTx,
 } from './db.js';
 import { notifyUser, sendMessage } from './bot.js';
 import { runBackup } from './backup.js';
 import { tr } from './i18n.js';
+import { publicMessage } from './security.js';
+import { metrics } from './monitor.js';
 
 export const isAdminId = (id) => config.adminIds.includes(String(id));
 const money = (n) => fmtMoney(n, config.currency);
@@ -53,6 +55,7 @@ export function createAdmin({ games, onBalanceChange }) {
           : tr(t.user_id, 'withdrawRejected', { amount: money(-t.amount) }));
       }
       if (!t) throw new Error('Already handled (or not found)');
+      invalidateStats();
       onBalanceChange(t.user_id);
       await notifyUser(t.user_id, msg);
       console.log(`[admin] ${adminName} ${approve ? 'approved' : 'rejected'} ${kind} #${id}`);
@@ -63,6 +66,7 @@ export function createAdmin({ games, onBalanceChange }) {
       const u = findUser(userQuery);
       if (!u) throw new Error('User not found');
       const updated = adjustBalance(u.id, amount, note || `Adjusted by ${adminName}`);
+      invalidateStats();
       onBalanceChange(u.id);
       const amt = Math.trunc(Number(amount)); // cents
       await notifyUser(u.id, amt > 0
@@ -126,7 +130,7 @@ function requireAdmin(req, res, next) {
     const b = crypto.createHash('sha256').update(pw).digest();
     if (crypto.timingSafeEqual(a, b)) { req.adminName = 'web-admin'; return next(); }
     recordFailure(req.ip);
-    console.warn(`[admin] wrong admin password from ${req.ip}`);
+    console.warn(`[security] wrong admin password from ${req.ip}`);
     return res.status(401).json({ error: 'Wrong password' });
   }
   const h = req.get('authorization') || '';
@@ -139,10 +143,11 @@ function adminRouter(actions) {
   const r = express.Router();
   r.use(requireAdmin);
   const wrap = (fn) => async (req, res) => {
-    try { res.json(await fn(req)); } catch (e) { res.status(400).json({ error: e.message }); }
+    try { res.json(await fn(req)); } catch (e) { res.status(400).json({ error: publicMessage(e, `admin ${req.path}`) }); }
   };
 
   r.get('/stats', wrap(() => actions.stats()));
+  r.get('/metrics', wrap(() => metrics()));
   r.get('/pending', wrap(() => ({ items: actions.pending() })));
   r.get('/users', wrap((req) => actions.listUsers({
     search: String(req.query.search || ''), limit: Math.min(Number(req.query.limit) || 50, 200), offset: Number(req.query.offset) || 0,

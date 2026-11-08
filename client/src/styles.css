@@ -1,3 +1,14 @@
+/* Amharic font, self-hosted (no Google request; cached forever). Variable weight, Ethiopic letters only —
+   Latin text uses the phone's own system font. */
+@font-face {
+  font-family: 'Noto Sans Ethiopic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/noto-sans-ethiopic/files/noto-sans-ethiopic-ethiopic-wght-normal.woff2') format('woff2-variations'),
+       url('@fontsource-variable/noto-sans-ethiopic/files/noto-sans-ethiopic-ethiopic-wght-normal.woff2') format('woff2');
+  unicode-range: U+030E, U+1200-1399, U+2D80-2DDE, U+AB01-AB2E;
+}
 /* Uses Telegram theme variables when available, with dark fallbacks for browsers. */
 :root {
   --bg: var(--tg-theme-bg-color, #0f1220);
@@ -418,3 +429,9 @@ textarea { width: 100%; resize: vertical; }
 .kb-dot.gone { opacity: .18; }
 .kb-hand { position: absolute; left: 0; right: 0; top: 6%; text-align: center; font-size: 26px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
 .kb .pool-msg { background: color-mix(in srgb, #2563eb 22%, var(--bg2)); }
+
+/* Admin: server health strip */
+.health-strip { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 8px 12px; border-radius: 10px; font-size: 12px; font-weight: 600;
+  background: var(--bg2); margin-bottom: 10px; border-left: 4px solid #22c55e; }
+.health-strip.warn { border-left-color: #f59e0b; }
+.health-strip.bad { border-left-color: #ef4444; }

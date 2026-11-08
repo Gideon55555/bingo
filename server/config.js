@@ -24,6 +24,19 @@ export const config = {
   production: process.env.NODE_ENV === 'production',
   // Max game actions per player per 10 seconds (anti-spam)
   socketRate: num(process.env.SOCKET_RATE, 30),
+
+  // ---- Security & limits ----
+  // How many reverse proxies sit in front of the app (Caddy/Nginx/Passenger = 1, plus Cloudflare = 2).
+  // Used to read the real visitor IP. 0 = the app is exposed directly.
+  trustProxy: num(process.env.TRUST_PROXY, 1),
+  // Ethiopian mobile carriers put many phones behind ONE public IP (carrier-grade NAT), so per-IP
+  // limits are generous and the real per-player limits are per Telegram user.
+  apiRateIp: num(process.env.API_RATE_IP, 3000),        // API requests per minute per IP
+  apiRateUser: num(process.env.API_RATE_USER, 120),     // API requests per minute per player
+  connRateIp: num(process.env.CONN_RATE_IP, 600),       // new socket connections per minute per IP
+  authFailRateIp: num(process.env.AUTH_FAIL_RATE_IP, 60), // failed logins per minute per IP before blocking
+  maxSocketsPerUser: num(process.env.MAX_SOCKETS_PER_USER, 5),
+  initDataMaxAgeSec: num(process.env.INITDATA_MAX_AGE_HOURS, 24) * 3600,
   port: num(process.env.PORT, 3000),
   timezone: process.env.TZ,
   botToken,
@@ -146,6 +159,9 @@ export function checkConfig() {
     if (!config.adminIds.length) warnings.push('ADMIN_IDS is empty — nobody can approve deposits from the bot.');
     if (!config.adminPassword) warnings.push('ADMIN_PASSWORD not set (or < 8 chars) — browser admin panel is disabled.');
     if (/09X|Your Name/.test(config.paymentInfo)) warnings.push('PAYMENT_INFO still has the placeholder text.');
+    if (config.adminPassword && (config.adminPassword.length < 12 || /^(admin|password|123|qwerty)/i.test(config.adminPassword)))
+      warnings.push('ADMIN_PASSWORD is weak — use at least 12 random characters.');
+    if (config.trustProxy === 0) warnings.push('TRUST_PROXY=0: make sure nothing sits in front of the app, or rate limits will see one IP for everyone.');
   } else if (config.devMode) {
     warnings.push('DEV_MODE is ON — anyone can log in as any user. Never use this in production.');
   }

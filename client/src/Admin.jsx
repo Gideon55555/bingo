@@ -83,6 +83,8 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
         </button>
       )}
 
+      <ServerHealth />
+
       <div className="seg small-seg">
         <button className={range === 'today' ? 'active' : ''} onClick={() => setRange('today')}>Today</button>
         <button className={range === 'allTime' ? 'active' : ''} onClick={() => setRange('allTime')}>All time</button>
@@ -183,6 +185,25 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/** Live server health: how busy and how responsive the server is right now. */
+function ServerHealth() {
+  const [m] = usePoll(adminApi.metrics, 10000);
+  if (!m) return null;
+  const lag = m.eventLoopMs.p99;
+  const state = lag > 200 ? 'bad' : lag > 50 ? 'warn' : 'good';
+  const up = m.uptimeSec > 86400 ? `${Math.floor(m.uptimeSec / 86400)} d` : m.uptimeSec > 3600 ? `${Math.floor(m.uptimeSec / 3600)} h` : `${Math.floor(m.uptimeSec / 60)} min`;
+  return (
+    <div className={`health-strip ${state}`}>
+      <span title="How quickly the server reacts (99% of the time)">⚡ {state === 'good' ? 'Fast' : state === 'warn' ? 'Busy' : 'Overloaded'} · {lag} ms</span>
+      <span>👥 {m.playersOnline} online</span>
+      <span>🎮 {m.matches.ludo + m.matches.pool + m.matches.kerenbula} matches</span>
+      <span>🧠 {m.memoryMb.rss} MB</span>
+      <span>🗄 {m.dbMb} MB</span>
+      <span>⏱ up {up}</span>
     </div>
   );
 }

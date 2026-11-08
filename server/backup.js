@@ -1,6 +1,8 @@
 // Daily database backups: kept on disk, and (optionally) sent to admins on Telegram
 // so you always have an off-server copy.
 import fs from 'node:fs';
+import crypto from 'node:crypto';
+import Database from 'better-sqlite3';
 import path from 'node:path';
 import { config } from './config.js';
 import { db } from './db.js';
@@ -12,10 +14,18 @@ const today = () => {
 };
 
 export async function runBackup({ sendToTelegram = config.backupToTelegram, label = 'daily' } = {}) {
-  fs.mkdirSync(config.backupDir, { recursive: true });
+  fs.mkdirSync(config.backupDir, { recursive: true, mode: 0o700 });
   const time = new Date().toTimeString().slice(0, 8).replace(/:/g, '');
   const file = path.join(config.backupDir, `bingo-${today()}-${time}.db`);
   await db.backup(file);
+  fs.chmodSync(file, 0o600);
+  // Prove the copy is usable before trusting it
+  const copy = new Database(file, { readonly: true });
+  const check = copy.pragma('integrity_check', { simple: true });
+  const users = copy.prepare('SELECT COUNT(*) n FROM users').get().n;
+  copy.close();
+  if (check !== 'ok') throw new Error(`backup integrity check failed: ${check}`);
+  const sha = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 16);
 
   // Keep only the newest N backups
   const files = fs.readdirSync(config.backupDir).filter((f) => /^bingo-.*\.db$/.test(f)).sort();
@@ -24,8 +34,8 @@ export async function runBackup({ sendToTelegram = config.backupToTelegram, labe
   }
 
   const sizeKb = Math.round(fs.statSync(file).size / 1024);
-  console.log(`[backup] ${label} backup saved: ${path.basename(file)} (${sizeKb} KB)`);
-  if (sendToTelegram) await sendDocumentToAdmins(file, `🗄 ${label} backup ${today()} (${sizeKb} KB). Keep this file safe.`);
+  console.log(`[backup] ${label} backup saved: ${path.basename(file)} (${sizeKb} KB, ${users} users, verified, sha256 ${sha})`);
+  if (sendToTelegram) await sendDocumentToAdmins(file, `🗄 ${label} backup ${today()} (${sizeKb} KB, ${users} users, verified ✅, sha256 ${sha}). Keep this file safe — it contains balances and phone numbers.`);
   return file;
 }
 

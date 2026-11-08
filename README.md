@@ -180,7 +180,10 @@ Keno end-to-end (24 checks), Keno math (exact paytable returns + draw fairness o
 Ludo rules (17 checks), Ludo end-to-end (21 checks: bots play full 2- and 4-player games, timeouts, forfeits, refunds),
 pool physics + rules (22 checks) pool end-to-end (16 checks: bots play complete matches with real aiming, several matches at once),
 a 3-player Cutthroat match, Kerenbula physics + scoring (13 checks) and Kerenbula end-to-end
-(16 checks: bots play complete matches, pin points and fouls, cheating attempts, two matches at once, idle forfeits).
+(16 checks: bots play complete matches, pin points and fouls, cheating attempts, two matches at once, idle forfeits),
+and security (35 checks: forged/expired/tampered logins, brute force, rate limits, oversized input, path tricks,
+headers, compression/caching, socket limits). `N=1000 npm run load` runs a load test (1,000 players betting at once).
+GitHub Actions runs the audit, build and all tests on every push (`.github/workflows/ci.yml`).
 
 ## Deploying
 
@@ -215,6 +218,10 @@ server/
   admin.js    admin actions (shared by bot + web panel) and /api/admin routes
   backup.js   daily backups
   ratelimit.js
+  security.js   security headers, safe error messages, real client IP
+  static.js     serves the pre-compressed app with long-term caching
+  monitor.js    health check + live metrics (event-loop lag, memory, players)
+  log.js        timestamps on log lines
 app.cjs           startup file for shared hosting (Passenger)
 ecosystem.config.cjs  pm2 config for a VPS
 deploy/           VPS setup + update scripts, Caddy config

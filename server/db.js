@@ -7,7 +7,21 @@ import { fmt } from '../shared/money.js';
 fs.mkdirSync(path.dirname(config.dbPath), { recursive: true });
 export const db = new Database(config.dbPath);
 db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');   // safe with WAL; far fewer disk flushes
+db.pragma('busy_timeout = 5000');    // wait instead of failing if a backup holds a lock
 db.pragma('foreign_keys = ON');
+db.pragma('temp_store = MEMORY');
+db.pragma('cache_size = -20000');    // ~20 MB page cache
+// The database holds balances and phone numbers: only this server's user may read it
+for (const f of [config.dbPath, `${config.dbPath}-wal`, `${config.dbPath}-shm`]) { try { fs.chmodSync(f, 0o600); } catch { /* ignore */ } }
+// Refuse to run on a damaged database (restore the latest backup instead)
+{
+  const check = db.pragma('quick_check', { simple: true });
+  if (check !== 'ok') {
+    console.error(`❌ Database check failed: ${check}. Restore the latest backup (see DEPLOY.md).`);
+    process.exit(1);
+  }
+}
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -134,6 +148,19 @@ if (!cols('games').includes('round_id')) db.exec('ALTER TABLE games ADD COLUMN r
 if (!cols('users').includes('lang')) db.exec("ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'am'");
 if (!cols('rounds').includes('game')) db.exec("ALTER TABLE rounds ADD COLUMN game TEXT NOT NULL DEFAULT 'bingo'");
 db.exec('CREATE INDEX IF NOT EXISTS tx_round ON transactions(round_id)');
+// Indexes for the admin dashboard (stats by date) and lists
+db.exec(`
+CREATE INDEX IF NOT EXISTS tx_type_status_time ON transactions(type, status, created_at);
+CREATE INDEX IF NOT EXISTS tx_time ON transactions(created_at);
+CREATE INDEX IF NOT EXISTS users_time ON users(created_at);
+CREATE INDEX IF NOT EXISTS games_time ON games(created_at);
+CREATE INDEX IF NOT EXISTS crash_time ON crash_rounds(created_at);
+CREATE INDEX IF NOT EXISTS keno_time ON keno_rounds(created_at);
+CREATE INDEX IF NOT EXISTS ludo_time ON ludo_games(created_at);
+CREATE INDEX IF NOT EXISTS pool_time ON pool_games(created_at);
+CREATE INDEX IF NOT EXISTS kb_time ON kerenbula_games(created_at);
+CREATE INDEX IF NOT EXISTS rounds_status ON rounds(status);
+`);
 
 // --- v1 → v2: money moved from whole ETB to cents. Multiply every stored amount by 100 once. ---
 if (db.pragma('user_version', { simple: true }) < 1) {
@@ -414,7 +441,16 @@ const startOfToday = () => {
 
 const scalar = (sql, ...args) => Object.values(db.prepare(sql).get(...args))[0] ?? 0;
 
+// The admin panel polls stats every few seconds; recompute at most every 5 s.
+let statsCache = { at: 0, value: null };
+export const invalidateStats = () => { statsCache = { at: 0, value: null }; };
 export function getStats() {
+  if (statsCache.value && Date.now() - statsCache.at < 5000) return statsCache.value;
+  statsCache = { at: Date.now(), value: computeStats() };
+  return statsCache.value;
+}
+
+function computeStats() {
   const today = startOfToday();
   const block = (since) => ({
     deposits: scalar("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='deposit' AND status='approved' AND created_at >= ?", since),

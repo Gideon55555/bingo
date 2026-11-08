@@ -14,6 +14,12 @@ export function allow(key, max, windowMs) {
   return b.count <= max;
 }
 
+/** How many hits `key` has in the current window (without counting a new one). */
+export function hits(key, windowMs) {
+  const b = buckets.get(key);
+  return b && Date.now() - b.start < windowMs ? b.count : 0;
+}
+
 // Forget old buckets so memory doesn't grow forever
 setInterval(() => {
   const cutoff = Date.now() - 60 * 60 * 1000;
