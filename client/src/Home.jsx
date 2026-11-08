@@ -25,6 +25,7 @@ export default function Home({ cfg, live, rooms, onOpen }) {
   return (
     <div className="home">
       {paused && <div className="banner">⏸ {t('paused')}</div>}
+      {live.online > 1 && <div className="online-pill">{t('online', { n: live.online })}</div>}
       <div className="game-grid">
         {tiles.map((g) => {
           const Art = GAME_ART[g.id];

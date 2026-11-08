@@ -15,6 +15,7 @@ import { debit, credit, openRound, refundRound, settleLudo } from './db.js';
 import { notifyUser } from './bot.js';
 import { assertNotFrozen, assertNotSamePerson } from './risk.js';
 import { tr } from './i18n.js';
+import { BOT_UID, startPractice, createPrivateTable, privateTable, dropPrivateIfDone } from './social.js';
 import { fmt } from '../shared/money.js';
 import { COLORS, SEATS_FOR, legalMoves, applyMove, hasWon, bestMove } from '../shared/ludo.js';
 
@@ -34,8 +35,9 @@ function makeDice(seed) {
 }
 
 class LudoGame {
-  constructor(mgr, { stake, size, roundId, members }) {
+  constructor(mgr, { stake, size, roundId, members, practice = false }) {
     this.mgr = mgr;
+    this.practice = practice;
     this.id = nextGameId++;
     this.stake = stake;
     this.size = size;
@@ -76,6 +78,7 @@ class LudoGame {
     this.deadline = Date.now() + config.ludo.turnSec * 1000;
     this.timer = setTimeout(() => this.onTimeout(), config.ludo.turnSec * 1000);
     this.broadcast();
+    if (this.players[i].uid === BOT_UID) this.botTimer = setTimeout(() => { if (this.phase === 'roll' && this.turn === i) this.doRoll(false); }, d(900));
   }
 
   nextTurn() {
@@ -118,6 +121,10 @@ class LudoGame {
       this.deadline = Date.now() + config.ludo.turnSec * 1000;
       this.broadcast();
       this.timer = setTimeout(() => this.onTimeout(), config.ludo.turnSec * 1000);
+      if (p.uid === BOT_UID) {
+        const turn = this.turn;
+        this.botTimer = setTimeout(() => { if (this.phase === 'move' && this.turn === turn) this.doMove(bestMove(this.players, this.turn, this.roll)); }, d(800));
+      }
     }
   }
 
@@ -166,6 +173,14 @@ class LudoGame {
     this.phase = 'over';
     const w = this.players[winnerIndex];
     const payout = this.prize;
+    if (this.practice) {
+      this.result = { winnerSeat: w.seat, winnerName: w.name, prize: 0, how, practice: true };
+      this.broadcast();
+      for (const p of this.players) this.mgr.userLoc.delete(p.uid);
+      this.mgr.emitLobby();
+      setTimeout(() => this.mgr.games.delete(this.id), 60 * 1000);
+      return;
+    }
     settleLudo(this.roundId, w.uid, payout, {
       stake: this.stake, size: this.size, pot: this.pot, payout, house: this.pot - payout,
       players: this.players.map((p) => ({ userId: p.uid, name: p.name, color: p.color, out: p.out })),
@@ -205,7 +220,7 @@ class LudoGame {
     if (i >= 0) this.forfeit(i, 'resigned');
   }
 
-  stop() { clearTimeout(this.timer); }
+  stop() { clearTimeout(this.timer); clearTimeout(this.botTimer); }
 
   // ---------------- state ----------------
   io() { return this.mgr.io; }
@@ -213,7 +228,7 @@ class LudoGame {
   stateFor(uid) {
     const me = this.indexOf(uid);
     return {
-      id: this.id, stake: this.stake, size: this.size, pot: this.pot, prize: this.prize,
+      id: this.id, stake: this.stake, size: this.size, pot: this.pot, prize: this.prize, practice: this.practice,
       phase: this.phase, turnSeat: this.players[this.turn]?.seat, roll: this.roll,
       legal: me === this.turn ? this.legal : [],
       deadlineLeftMs: ['roll', 'move'].includes(this.phase) ? Math.max(0, this.deadline - Date.now()) : null,
@@ -261,11 +276,14 @@ export class LudoManager {
     return t;
   }
 
-  join(user, stake, size) {
+  practice(user) { return startPractice(this, user, { size: 2 }); }
+
+  join(user, stake, size, opts = {}) {
     const uid = String(user.id);
     if (this.manager?.paused) throw new Error('Games are paused for maintenance. Please try again later.');
     if (this.userLoc.has(uid)) throw new Error('You are already at a Ludo table');
-    const t = this.table(stake, size);
+    let t = opts.code ? privateTable(this, opts.code) : this.table(stake, size);
+    if (opts.private && !opts.code) t = createPrivateTable(this, t.stake, t.size);
     assertNotFrozen(uid);
     assertNotSamePerson(uid, t.waiting.map((w) => w.uid)); // no playing yourself from a second account
     if (!t.roundId) t.roundId = openRound(t.stake, 'ludo');
@@ -274,7 +292,7 @@ export class LudoManager {
     }
     this.onBalanceChange(uid);
     t.waiting.push({ uid, name: user.first_name || user.username || 'Player' });
-    this.userLoc.set(uid, { queue: `${t.stake}:${t.size}` });
+    this.userLoc.set(uid, { queue: t.key || `${t.stake}:${t.size}` });
     if (t.waiting.length >= t.size) this.startGame(t);
     else this.emitLobby();
     return this.locationOf(uid);
@@ -293,22 +311,26 @@ export class LudoManager {
     credit(uid, t.stake, 'refund', `Ludo ${fmt(t.stake)} left the table`, t.roundId);
     this.onBalanceChange(uid);
     this.userLoc.delete(uid);
+    dropPrivateIfDone(this, t);
     this.emitLobby();
     return null;
   }
 
   startGame(t) {
     const members = t.waiting.slice(0, t.size);
-    const game = new LudoGame(this, { stake: t.stake, size: t.size, roundId: t.roundId, members });
+    const game = new LudoGame(this, { stake: t.stake, size: t.size, roundId: t.roundId, members, practice: !!t.practice });
     t.waiting = t.waiting.slice(t.size);
     t.roundId = null;
+    t.started = true;
+    dropPrivateIfDone(this, t);
     this.games.set(game.id, game);
     for (const m of members) {
+      if (m.bot) continue;
       this.userLoc.set(m.uid, { game: game.id });
       this.io.in(`user:${m.uid}`).socketsJoin(game.channel);
       this.io.to(`user:${m.uid}`).emit('ludo:me', { game: game.id });
       const others = members.filter((x) => x !== m).map((x) => x.name).join(', ');
-      notifyUser(m.uid, tr(m.uid, 'ludoStarted', { names: others }));
+      if (!t.practice) notifyUser(m.uid, tr(m.uid, 'ludoStarted', { names: others }));
     }
     game.start();
     this.emitLobby();
@@ -325,14 +347,14 @@ export class LudoManager {
     if (!loc) return null;
     if (loc.game) return { game: loc.game };
     const t = this.tables.get(loc.queue);
-    return { queue: { stake: t.stake, size: t.size, waiting: t.waiting.length } };
+    return { queue: { stake: t.stake, size: t.size, waiting: t.waiting.length, code: t.private || null } };
   }
 
   lobby() {
     return {
-      tables: [...this.tables.values()].map((t) => ({ stake: t.stake, size: t.size, waiting: t.waiting.length,
+      tables: [...this.tables.values()].filter((t) => !t.private).map((t) => ({ stake: t.stake, size: t.size, waiting: t.waiting.length,
         prize: Math.floor(t.stake * t.size * (1 - config.ludo.houseCut)) })),
-      playing: this.games.size ? [...this.games.values()].filter((g) => g.phase !== 'over').reduce((s, g) => s + g.size, 0) : 0,
+      playing: this.games.size ? [...this.games.values()].filter((g) => g.phase !== 'over' && !g.practice).reduce((s, g) => s + g.size, 0) : 0,
       paused: !!this.manager?.paused,
     };
   }

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { socket, emit, haptic, toast, confirmBox } from './api.js';
+import { takeJoin, socket, emit, haptic, toast, confirmBox } from './api.js';
 import { fmt } from '../../shared/money.js';
 import { COLORS, COLOR_HEX, HOME_POS } from '../../shared/ludo.js';
 import LudoBoard from './LudoBoard.jsx';
+import { SocialBar, InviteBox } from './Social.jsx';
 import { t, useLang, trServer } from './i18n.js';
 
 const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
@@ -35,8 +36,11 @@ export default function Ludo({ cfg, balance }) {
     try { await fn(); } catch (e) { haptic('error'); toast(e.message); } finally { setBusy(false); }
   };
 
+  const [inviteMode, setInviteMode] = useState(false);
   const enter = useCallback(() => emit('ludo:enter').then((r) => {
     setLobby(r.lobby); setMe(r.me); setGame(r.game);
+    const code = !r.me && takeJoin('ludo'); // opened from a friend's invite
+    if (code) emit('ludo:join', { code }).then((j) => { setMe(j.me); haptic('success'); }).catch((e) => toast(e.message));
   }).catch((e) => toast(e.message)), []);
 
   useEffect(() => {
@@ -150,7 +154,8 @@ export default function Ludo({ cfg, balance }) {
     return (
       <div className="ludo">
         <div className="row-between ludo-top">
-          <span className="small">{t('pot')} <b>{fmt(game.pot)}</b> · {t('prize')} <b className="accent">{fmt(game.prize)} {cfg.currency}</b></span>
+          {game.practice ? <span className="practice-badge">{t('practiceBadge')}</span>
+            : <span className="small">{t('pot')} <b>{fmt(game.pot)}</b> · {t('prize')} <b className="accent">{fmt(game.prize)} {cfg.currency}</b></span>}
           <button className="ghost sm" onClick={leave}>{game.phase === 'over' ? t('tables') : t('leave')}</button>
         </div>
         <div className="ludo-chips">{chip(0)}{chip(1)}</div>
@@ -165,7 +170,8 @@ export default function Ludo({ cfg, balance }) {
         {game.phase === 'over' && game.result && (
           <div className="overlay">
             <div className="result">
-              <h2>{game.result.winnerSeat === game.mySeat ? t('youWonPrize', { amount: `${fmt(game.result.prize)} ${cfg.currency}` }) : t('nameWon', { name: game.result.winnerName })}</h2>
+              <h2>{game.practice ? (game.result.winnerSeat === game.mySeat ? t('practiceWon') : t('practiceLost'))
+                : game.result.winnerSeat === game.mySeat ? t('youWonPrize', { amount: `${fmt(game.result.prize)} ${cfg.currency}` }) : t('nameWon', { name: game.result.winnerName })}</h2>
               <p className="muted small">{game.result.how === 'all tokens home' ? t('allHome') : t('wonBecause', { how: trServer(game.result.how) })}</p>
               <button className="primary" onClick={() => { setGame(null); enter(); }}>{t('backToTables')}</button>
               <p className="mono small muted break">{t('diceSeed', { seed: game.seed })}</p>
@@ -183,8 +189,9 @@ export default function Ludo({ cfg, balance }) {
       <div className="ludo">
         <div className="ludo-wait">
           <div className="spinner" />
-          <h2>{t('waitingPlayers')}</h2>
+          <h2>{q.code ? t('privateTable') : t('waitingPlayers')}</h2>
           <div className="big">{q.waiting}/{q.size}</div>
+          <InviteBox prefix="ludo" code={q.code} cfg={cfg} />
           <p className="muted">{t('tableInfo', { kind: q.size === 2 ? t('oneVone') : t('fourPlayers'), stake: `${fmt(q.stake)} ${cfg.currency}`, prize: `${fmt(Math.floor(q.stake * q.size * (1 - cfg.ludo.houseCut)))} ${cfg.currency}` })}</p>
           <p className="small muted">{t('startsWhenFull')}</p>
           <button className="ghost" disabled={busy} onClick={() => run(async () => { await emit('ludo:leave'); setMe(null); })}>{t('leaveTable')}</button>
@@ -202,6 +209,8 @@ export default function Ludo({ cfg, balance }) {
         {t('ludoIntro', { tokens: cfg.ludo.tokens, pct: Math.round((1 - cfg.ludo.houseCut) * 100), sec: cfg.ludo.turnSec })}
         {lobby.playing ? ` · ${t('playingNow', { n: lobby.playing })}` : ''}
       </p>
+      <SocialBar busy={busy} inviteMode={inviteMode} setInviteMode={setInviteMode}
+        onPractice={() => run(async () => { const r = await emit('ludo:practice'); setMe(r.me); haptic('medium'); })} />
       <div className="ludo-tables">
         {stakes.map((stake) => (
           <div key={stake} className="ludo-stake">
@@ -212,7 +221,7 @@ export default function Ludo({ cfg, balance }) {
                 <button key={size} className="ludo-table" disabled={busy || lobby.paused}
                   onClick={() => run(async () => {
                     if (balance < stake) throw new Error(t('balanceLow'));
-                    const r = await emit('ludo:join', { stake, size }); setMe(r.me); haptic('medium');
+                    const r = await emit('ludo:join', { stake, size, invite: inviteMode }); setMe(r.me); setInviteMode(false); haptic('medium');
                   })}>
                   <div className="lt-size">{size === 2 ? t('oneVone') : t('fourPlayers')}</div>
                   <div className="lt-prize">🏆 {fmt(tb.prize)}</div>

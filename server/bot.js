@@ -1,11 +1,16 @@
 import { Bot, InlineKeyboard, InputFile, webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { fmtMoney, fmt, toCents } from '../shared/money.js';
-import { getUser, getTx } from './db.js';
+import { getUser, getTx, upsertUser } from './db.js';
 import { tr } from './i18n.js';
 
 export let bot = null;
 const isAdmin = (id) => config.adminIds.includes(String(id));
+let onReferral = null;
+/** Set by the referral module: called when someone opens the bot from a friend's referral link. */
+export const setReferralHandler = (fn) => { onReferral = fn; };
+/** The bot's @username (for invite links). */
+export const botUsername = () => bot?.botInfo?.username || process.env.BOT_USERNAME || null;
 const who = (t) => (t.username ? `@${t.username}` : t.first_name || t.user_id || t.id);
 const money = (n) => fmtMoney(n, config.currency);
 const adminWho = (ctx) => ({ id: `tg:${ctx.from.id}`, name: ctx.from.first_name || String(ctx.from.id) });
@@ -88,8 +93,21 @@ export async function startBot({ actions, app }) {
   const args = (ctx) => (ctx.match || '').trim();
 
   // ---------- Player commands ----------
-  bot.command('start', (ctx) =>
-    ctx.reply(tr(ctx.from.id, 'welcome'), { reply_markup: playKeyboard(ctx.from.id) }));
+  bot.command('start', async (ctx) => {
+    const payload = String(ctx.match || '').trim();
+    // Invite link from a friend: t.me/<bot>?start=pool_ABC123 → button straight into that table
+    const inv = payload.match(/^(pool|kb|ludo)_([A-Z0-9]{6})$/);
+    if (inv) {
+      upsertUser(ctx.from);
+      return ctx.reply(tr(ctx.from.id, 'inviteOpen'), {
+        reply_markup: new InlineKeyboard().webApp(tr(ctx.from.id, 'inviteButton'), `${config.webAppUrl}/?join=${inv[1]}_${inv[2]}`),
+      });
+    }
+    // Referral link: t.me/<bot>?start=ref_<inviter id>
+    const ref = payload.match(/^ref_(\d{1,20})$/);
+    if (ref) onReferral?.(ctx.from, ref[1]);
+    return ctx.reply(tr(ctx.from.id, 'welcome'), { reply_markup: playKeyboard(ctx.from.id) });
+  });
 
   bot.command('balance', (ctx) => {
     const u = getUser(ctx.from.id);

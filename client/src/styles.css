@@ -468,3 +468,11 @@ textarea { width: 100%; resize: vertical; }
 .playsafe-body { padding: 0 14px 14px; }
 .playsafe-body h4 { margin: 14px 0 4px; }
 .limit-row { display: grid; gap: 4px; margin: 8px 0; }
+
+/* Practice / invites / online */
+.social-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+.invite-box { background: var(--bg2); border-radius: 12px; padding: 12px; margin: 10px 0; text-align: center; display: grid; gap: 6px; }
+.invite-code { font-size: 30px; font-weight: 900; letter-spacing: 4px; }
+.practice-badge { background: color-mix(in srgb, #6366f1 25%, var(--bg2)); border-radius: 8px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
+.online-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--hint); margin-bottom: 8px; }
+.online-pill::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px #22c55e; }

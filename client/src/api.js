@@ -49,6 +49,21 @@ export const api = {
 export const socket = io({ auth: { initData, devUser, device: deviceId }, autoConnect: false, transports: ['websocket', 'polling'], tryAllTransports: true });
 export const inTelegram = !!initData;
 
+// Opened from a friend's invite (?join=pool_ABC123, or Telegram's start_param): which game + table code
+let joinParam = (() => {
+  const raw = new URLSearchParams(location.search).get('join') || tg?.initDataUnsafe?.start_param || '';
+  const m = raw.match(/^(pool|kb|ludo)_([A-Z0-9]{6})$/);
+  return m ? { prefix: m[1], code: m[2], game: { pool: 'pool', kb: 'kerenbula', ludo: 'ludo' }[m[1]] } : null;
+})();
+export const peekJoin = () => joinParam;
+/** The invite code for this game (only once). */
+export function takeJoin(prefix) {
+  if (!joinParam || joinParam.prefix !== prefix) return null;
+  const c = joinParam.code;
+  joinParam = null;
+  return c;
+}
+
 // ---------- Admin API ----------
 // In Telegram, admins are recognised by their Telegram id. In a normal browser, by ADMIN_PASSWORD.
 const KEY = 'bingo_admin_session';

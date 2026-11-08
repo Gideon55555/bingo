@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { api, socket, tg, withEndsAt } from './api.js';
+import { api, socket, tg, withEndsAt, peekJoin } from './api.js';
 import { t, useLang, getLang, setLang, crashName } from './i18n.js';
 import Home from './Home.jsx';
 import Wallet from './Wallet.jsx';
@@ -71,6 +71,8 @@ export default function App() {
         setBalance(m.user.balance);
         api.setLang(getLang()).catch(() => {});
         prefetchGames();
+        const j = peekJoin(); // opened from a friend's invite → go straight to that game
+        if (j) setGame(j.game);
       })
       .catch((e) => setError(e.message));
 
@@ -94,6 +96,8 @@ export default function App() {
     socket.on('ludo:me', onLudoMe);
     socket.on('pool:me', onPoolMe);
     socket.on('kb:home', onKb);
+    const onOnline = ({ n }) => setLive((p) => ({ ...p, online: n }));
+    socket.on('online', onOnline);
     socket.on('kb:me', onKbMe);
     socket.on('connect_error', onErr);
     socket.on('connect', () => setError(''));
@@ -110,6 +114,7 @@ export default function App() {
       socket.off('ludo:me', onLudoMe);
       socket.off('pool:me', onPoolMe);
       socket.off('kb:home', onKb);
+      socket.off('online', onOnline);
       socket.off('kb:me', onKbMe);
       socket.off('connect_error', onErr);
     };

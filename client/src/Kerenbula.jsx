@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { socket, emit, haptic, toast, confirmBox } from './api.js';
+import { socket, emit, haptic, toast, confirmBox, takeJoin } from './api.js';
+import { SocialBar, InviteBox } from './Social.jsx';
 import { fmt } from '../../shared/money.js';
 import { W, R, RELEASE_Y, BALL_HEX, canRelease } from '../../shared/kerenbula.js';
 import { startKbRender, toTable, Sim } from './kbRender.js';
@@ -27,7 +28,12 @@ export default function Kerenbula({ cfg, balance }) {
     try { await fn(); } catch (e) { haptic('error'); toast(e.message); } finally { setBusy(false); }
   };
 
-  const enter = useCallback(() => emit('kb:enter').then((r) => { setLobby(r.lobby); setMe(r.me); applyState(r.game); }).catch((e) => toast(e.message)), []);
+  const [inviteMode, setInviteMode] = useState(false);
+  const enter = useCallback(() => emit('kb:enter').then((r) => {
+    setLobby(r.lobby); setMe(r.me); applyState(r.game);
+    const code = !r.me && takeJoin('kb');
+    if (code) emit('kb:join', { code }).then((j) => { setMe(j.me); haptic('success'); }).catch((e) => toast(e.message));
+  }).catch((e) => toast(e.message)), []);
 
   function applyState(st) {
     setGame(st);
@@ -210,7 +216,8 @@ export default function Kerenbula({ cfg, balance }) {
     return (
       <div className="pool kb">
         <div className="row-between ludo-top">
-          <span className="small">{t('prize')} <b className="accent">{fmt(game.prize)} {cfg.currency}</b></span>
+          {game.practice ? <span className="practice-badge">{t('practiceBadge')}</span>
+            : <span className="small">{t('prize')} <b className="accent">{fmt(game.prize)} {cfg.currency}</b></span>}
           <span className="small muted">{t('kbFrameOf', { n: Math.max(1, game.frame), max: game.maxFrames, target: game.target })}</span>
           <button className="ghost sm" onClick={leave}>{game.phase === 'over' ? t('tables') : t('leave')}</button>
         </div>
@@ -235,7 +242,8 @@ export default function Kerenbula({ cfg, balance }) {
         {game.phase === 'over' && game.result && (
           <div className="overlay">
             <div className="result">
-              <h2>{game.result.winner === game.me ? t('youWonPrize', { amount: `${fmt(game.result.prize)} ${cfg.currency}` }) : t('nameWon', { name: game.result.winnerName })}</h2>
+              <h2>{game.practice ? (game.result.winner === game.me ? t('practiceWon') : t('practiceLost'))
+                : game.result.winner === game.me ? t('youWonPrize', { amount: `${fmt(game.result.prize)} ${cfg.currency}` }) : t('nameWon', { name: game.result.winnerName })}</h2>
               <p className="big">{game.players.map((p) => p.score).join(' – ')}</p>
               <p className="muted small">{trServer(game.result.how)}</p>
               <button className="primary" onClick={() => { setGame(null); enter(); }}>{t('backToTables')}</button>
@@ -253,7 +261,8 @@ export default function Kerenbula({ cfg, balance }) {
       <div className="ludo">
         <div className="ludo-wait">
           <div className="spinner" />
-          <h2>{t('findingOpp')}</h2>
+          <h2>{q.code ? t('privateTable') : t('findingOpp')}</h2>
+          <InviteBox prefix="kb" code={q.code} cfg={cfg} />
           <p className="muted">{t('poolEntryInfo', { stake: `${fmt(q.stake)} ${cfg.currency}`, prize: `${fmt(Math.floor(q.stake * 2 * (1 - cfg.kerenbula.houseCut)))} ${cfg.currency}` })}</p>
           <p className="small muted">{t('matchStartsWhen')}</p>
           <button className="ghost" disabled={busy} onClick={() => run(async () => { await emit('kb:leave'); setMe(null); })}>{t('leaveTable')}</button>
@@ -266,7 +275,7 @@ export default function Kerenbula({ cfg, balance }) {
   const k = cfg.kerenbula;
   const joinTable = (tb) => run(async () => {
     if (balance < tb.stake) throw new Error(t('balanceLow'));
-    const r = await emit('kb:join', { stake: tb.stake }); setMe(r.me); haptic('medium');
+    const r = await emit('kb:join', { stake: tb.stake, invite: inviteMode }); setMe(r.me); setInviteMode(false); haptic('medium');
   });
   return (
     <div className="ludo">
@@ -275,6 +284,8 @@ export default function Kerenbula({ cfg, balance }) {
         {t('kbIntro', { target: k.target, pin: k.pinPoints, sec: k.rollSec, pct: Math.round((1 - k.houseCut) * 100) })}
         {lobby.playing ? ` · ${t('playingNow', { n: lobby.playing })}` : ''}
       </p>
+      <SocialBar busy={busy} inviteMode={inviteMode} setInviteMode={setInviteMode}
+        onPractice={() => run(async () => { const r = await emit('kb:practice'); setMe(r.me); haptic('medium'); })} />
       <div className="pool-tables">
         {lobby.tables.map((tb) => (
           <button key={tb.stake} className="ludo-table pool-table kb-table" disabled={busy || lobby.paused} onClick={() => joinTable(tb)}>

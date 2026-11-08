@@ -4,7 +4,8 @@ import { getUser } from './db.js';
 
 const M = {
   am: {
-    welcome: 'እንኳን ደህና መጡ! 🎮 ቢንጎ፣ አቪዬተር፣ ኬኖ፣ ሉዶ እና ፑል ይጫወቱ። ለመጀመር ከታች ያለውን ቁልፍ ይጫኑ።',
+    welcome: 'እንኳን ደህና መጡ! 🎮 ቢንጎ፣ አቪዬተር፣ ኬኖ፣ ሉዶ፣ ፑል እና ከረንቡላ ይጫወቱ። ለመጀመር ከታች ያለውን ቁልፍ ይጫኑ።',
+    inviteOpen: '🎮 ጓደኛዎ ለጨዋታ ጋብዞዎታል! ለመቀላቀል ከታች ያለውን ቁልፍ ይጫኑ።', inviteButton: '🎮 ጨዋታውን ተቀላቀል',
     playButton: '🎮 ይጫወቱ',
     balance: 'ቀሪ ሂሳብዎ፦ {amount}',
     help: '/start — መጫወት\n/balance — ቀሪ ሂሳብ\n/id — የቴሌግራም መለያ ቁጥርዎ',
@@ -29,7 +30,8 @@ const M = {
     kbLost: 'የከረንቡላ ጨዋታው አልቋል — {name} አሸንፏል። በሚቀጥለው መልካም ዕድል!',
   },
   en: {
-    welcome: 'Welcome! 🎮 Play Bingo, Aviator, Keno, Ludo and Pool. Tap the button below to start.',
+    welcome: 'Welcome! 🎮 Play Bingo, Aviator, Keno, Ludo, Pool and Kerenbula. Tap the button below to start.',
+    inviteOpen: '🎮 A friend invited you to a match! Tap the button below to join.', inviteButton: '🎮 Join the match',
     playButton: '🎮 Play',
     balance: 'Your balance: {amount}',
     help: '/start — play\n/balance — your balance\n/id — your Telegram id',

@@ -18,7 +18,7 @@ import { KenoGame } from './keno.js';
 import { LudoManager } from './ludo.js';
 import { PoolManager } from './pool.js';
 import { KerenbulaManager } from './kerenbula.js';
-import { startBot, stopBot, notifyAdmins, notifyUser } from './bot.js';
+import { startBot, stopBot, notifyAdmins, notifyUser, botUsername } from './bot.js';
 import { createAdmin, isAdminId } from './admin.js';
 import { limit, allow } from './ratelimit.js';
 import { scheduleBackups } from './backup.js';
@@ -110,6 +110,7 @@ app.get('/api/config', (_req, res) =>
       ? { minBet: config.keno.minBet, maxBet: config.keno.maxBet, maxWin: config.keno.maxWin, betSec: config.keno.betSec }
       : null,
     devMode: config.devMode,
+    botUsername: botUsername(),
   }));
 
 app.get('/api/me', requireAuth, (req, res) => {
@@ -293,7 +294,8 @@ io.on('connection', (socket) => {
     return { lobby: ludo().lobby(), me, game };
   });
   handle('ludo:exit', () => { socket.leave('ludo-lobby'); });
-  handle('ludo:join', ({ stake, size }) => ({ me: ludo().join(getUser(user.id), stake, size) }));
+  handle('ludo:join', ({ stake, size, invite, code }) => ({ me: ludo().join(getUser(user.id), stake, size, { private: !!invite, code }) }));
+  handle('ludo:practice', () => ({ me: ludo().practice(getUser(user.id)) }));
   handle('ludo:leave', () => ({ me: ludo().leave(user) }));
   handle('ludo:roll', () => { ludo().game(user.id).actRoll(user.id); });
   handle('ludo:move', ({ token }) => { ludo().game(user.id).actMove(user.id, token); });
@@ -320,7 +322,8 @@ io.on('connection', (socket) => {
     return { lobby: pool().lobby(), me, game };
   });
   handle('pool:exit', () => { socket.leave('pool-lobby'); });
-  handle('pool:join', ({ stake, size }) => ({ me: pool().join(getUser(user.id), stake, size || 2) }));
+  handle('pool:join', ({ stake, size, invite, code }) => ({ me: pool().join(getUser(user.id), stake, size || 2, { private: !!invite, code }) }));
+  handle('pool:practice', () => ({ me: pool().practice(getUser(user.id)) }));
   handle('pool:leave', () => ({ me: pool().leave(user) }));
   handle('pool:shoot', (shot) => pool().game(user.id).shoot(user.id, shot));
 
@@ -340,7 +343,8 @@ io.on('connection', (socket) => {
     return { lobby: kb().lobby(), me, game };
   });
   handle('kb:exit', () => { socket.leave('kb-lobby'); });
-  handle('kb:join', ({ stake }) => ({ me: kb().join(getUser(user.id), stake) }));
+  handle('kb:join', ({ stake, invite, code }) => ({ me: kb().join(getUser(user.id), stake, { private: !!invite, code }) }));
+  handle('kb:practice', () => ({ me: kb().practice(getUser(user.id)) }));
   handle('kb:leave', () => ({ me: kb().leave(user) }));
   handle('kb:roll', (r) => kb().game(user.id).roll(user.id, r));
 
@@ -377,6 +381,12 @@ async function main() {
     console.log(`Bingo server on port ${config.port} (${config.production ? 'production' : 'development'}, TZ ${config.timezone})`);
   });
 
+  // "N online" on the home screen
+  setInterval(() => {
+    let n = 0;
+    for (const k of io.sockets.adapter.rooms.keys()) if (k.startsWith('user:')) n++;
+    io.to('lobby').emit('online', { n });
+  }, 15000).unref();
   games.crash?.start();
   games.keno?.start();
   scheduleBackups();

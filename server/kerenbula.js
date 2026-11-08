@@ -21,6 +21,8 @@ import {
 } from '../shared/kerenbula.js';
 import { assertNotFrozen, assertNotSamePerson } from './risk.js';
 import { tr } from './i18n.js';
+import { BOT_UID, startPractice, createPrivateTable, privateTable, dropPrivateIfDone } from './social.js';
+import { kerenbulaRoll } from '../shared/bots.js';
 
 const cfg = () => config.kerenbula;
 const money = (c) => `${fmt(c)} ${config.currency}`;
@@ -28,8 +30,9 @@ const d = (ms) => Math.round(ms * cfg().delayScale);
 let nextId = 1;
 
 class KerenbulaGame {
-  constructor(mgr, { stake, roundId, members }) {
+  constructor(mgr, { stake, roundId, members, practice = false }) {
     this.mgr = mgr;
+    this.practice = practice;
     this.id = nextId++;
     this.stake = stake;
     this.roundId = roundId;
@@ -76,6 +79,14 @@ class KerenbulaGame {
     this.deadline = Date.now() + cfg().rollSec * 1000;
     this.timer = setTimeout(() => this.onTimeout(), cfg().rollSec * 1000);
     this.broadcast();
+    if (this.players[i].uid === BOT_UID) this.botTimer = setTimeout(() => this.botRoll(), d(1500));
+  }
+
+  botRoll() {
+    if ((this.phase !== 'jack' && this.phase !== 'roll') || this.players[this.turn].uid !== BOT_UID) return;
+    try { this.roll(BOT_UID, kerenbulaRoll(this.stateFor(BOT_UID))); } catch {
+      try { this.roll(BOT_UID, { x: 20 + Math.random() * 60, dx: 0, dy: -1, power: 0.42 }); } catch { /* clock handles it */ }
+    }
   }
 
   roll(uid, r) {
@@ -180,6 +191,14 @@ class KerenbulaGame {
     clearTimeout(this.timer);
     this.phase = 'over';
     const winner = this.players[w];
+    if (this.practice) {
+      this.result = { winner: w, winnerName: winner.name, prize: 0, how, practice: true };
+      this.broadcast();
+      for (const p of this.players) this.mgr.userLoc.delete(p.uid);
+      this.mgr.emitLobby();
+      setTimeout(() => this.mgr.games.delete(this.id), 60 * 1000);
+      return;
+    }
     settleKerenbula(this.roundId, winner.uid, this.prize, {
       stake: this.stake, pot: this.pot, payout: this.prize, house: this.pot - this.prize,
       players: this.players.map((p) => ({ userId: p.uid, name: p.name, color: p.color, score: p.score, out: p.out })),
@@ -204,11 +223,11 @@ class KerenbulaGame {
     if (i >= 0) this.forfeit(i, 'resigned');
   }
 
-  stop() { clearTimeout(this.timer); }
+  stop() { clearTimeout(this.timer); clearTimeout(this.botTimer); }
 
   stateFor(uid) {
     return {
-      id: this.id, stake: this.stake, pot: this.pot, prize: this.prize, phase: this.phase,
+      id: this.id, stake: this.stake, pot: this.pot, prize: this.prize, phase: this.phase, practice: this.practice,
       turn: this.turn, me: this.indexOf(uid), frame: this.frame, jackBy: this.jackBy,
       target: cfg().target, maxFrames: cfg().maxFrames, pinPoints: cfg().pinPoints,
       balls: (this.balls || freshBalls()).map(({ n, x, y, on }) => ({ n, x, y, on })),
@@ -248,19 +267,22 @@ export class KerenbulaManager {
     this.userLoc = new Map(); // uid -> { queue: stake } | { game: id }
   }
 
-  join(user, stake) {
+  practice(user) { return startPractice(this, user, { size: 2 }); }
+
+  join(user, stake, opts = {}) {
     const uid = String(user.id);
     if (this.manager?.paused) throw new Error('Games are paused for maintenance. Please try again later.');
     if (this.userLoc.has(uid)) throw new Error('You are already at a Kerenbula table');
-    const t = this.tables.get(Number(stake));
+    let t = opts.code ? privateTable(this, opts.code) : this.tables.get(Number(stake));
     if (!t) throw new Error('No such table');
+    if (opts.private && !opts.code) t = createPrivateTable(this, t.stake, 2);
     assertNotFrozen(uid);
     assertNotSamePerson(uid, t.waiting.map((w) => w.uid)); // no playing yourself from a second account
     if (!t.roundId) t.roundId = openRound(t.stake, 'kerenbula');
     if (!debit(uid, t.stake, 'bet', `Kerenbula ${fmt(t.stake)} entry`, t.roundId)) throw new Error('Insufficient balance. Please deposit first.');
     this.onBalanceChange(uid);
     t.waiting.push({ uid, name: user.first_name || user.username || 'Player' });
-    this.userLoc.set(uid, { queue: t.stake });
+    this.userLoc.set(uid, { queue: t.key || t.stake });
     if (t.waiting.length >= 2) this.startGame(t);
     else this.emitLobby();
     return this.locationOf(uid);
@@ -276,22 +298,26 @@ export class KerenbulaManager {
     credit(uid, t.stake, 'refund', `Kerenbula ${fmt(t.stake)} left the table`, t.roundId);
     this.onBalanceChange(uid);
     this.userLoc.delete(uid);
+    dropPrivateIfDone(this, t);
     this.emitLobby();
     return null;
   }
 
   startGame(t) {
     const members = t.waiting.slice(0, 2);
-    const game = new KerenbulaGame(this, { stake: t.stake, roundId: t.roundId, members });
+    const game = new KerenbulaGame(this, { stake: t.stake, roundId: t.roundId, members, practice: !!t.practice });
     t.waiting = t.waiting.slice(2);
     t.roundId = null;
+    t.started = true;
+    dropPrivateIfDone(this, t);
     this.games.set(game.id, game);
     for (const m of members) {
+      if (m.bot) continue;
       this.userLoc.set(m.uid, { game: game.id });
       this.io.in(`user:${m.uid}`).socketsJoin(game.channel);
       this.io.to(`user:${m.uid}`).emit('kb:me', { game: game.id });
       const other = members.find((x) => x !== m).name;
-      notifyUser(m.uid, tr(m.uid, 'kbStarted', { name: other }));
+      if (!t.practice) notifyUser(m.uid, tr(m.uid, 'kbStarted', { name: other }));
     }
     game.start();
     this.emitLobby();
@@ -308,13 +334,13 @@ export class KerenbulaManager {
     if (!loc) return null;
     if (loc.game) return { game: loc.game };
     const t = this.tables.get(loc.queue);
-    return { queue: { stake: t.stake, waiting: t.waiting.length } };
+    return { queue: { stake: t.stake, waiting: t.waiting.length, code: t.private || null } };
   }
 
   lobby() {
     return {
-      tables: [...this.tables.values()].map((t) => ({ stake: t.stake, waiting: t.waiting.length, prize: Math.floor(t.stake * 2 * (1 - cfg().houseCut)) })),
-      playing: [...this.games.values()].filter((g) => g.phase !== 'over').length * 2,
+      tables: [...this.tables.values()].filter((t) => !t.private).map((t) => ({ stake: t.stake, waiting: t.waiting.length, prize: Math.floor(t.stake * 2 * (1 - cfg().houseCut)) })),
+      playing: [...this.games.values()].filter((g) => g.phase !== 'over' && !g.practice).length * 2,
       paused: !!this.manager?.paused,
     };
   }

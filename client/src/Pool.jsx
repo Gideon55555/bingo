@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { socket, emit, haptic, toast, confirmBox } from './api.js';
+import { socket, emit, haptic, toast, confirmBox, takeJoin } from './api.js';
+import { SocialBar, InviteBox } from './Social.jsx';
 import { fmt } from '../../shared/money.js';
 import { SOLIDS, STRIPES, BALL_COLORS, R, W, H, HEAD_LINE } from '../../shared/pool.js';
 import { startPoolRender, toTable, Sim, canPlaceCue } from './poolRender.js';
@@ -34,7 +35,12 @@ export default function Pool({ cfg, balance }) {
     try { await fn(); } catch (e) { haptic('error'); toast(e.message); } finally { setBusy(false); }
   };
 
-  const enter = useCallback(() => emit('pool:enter').then((r) => { setLobby(r.lobby); setMe(r.me); applyState(r.game); }).catch((e) => toast(e.message)), []);
+  const [inviteMode, setInviteMode] = useState(false);
+  const enter = useCallback(() => emit('pool:enter').then((r) => {
+    setLobby(r.lobby); setMe(r.me); applyState(r.game);
+    const code = !r.me && takeJoin('pool');
+    if (code) emit('pool:join', { code }).then((j) => { setMe(j.me); haptic('success'); }).catch((e) => toast(e.message));
+  }).catch((e) => toast(e.message)), []);
 
   function applyState(st) {
     setGame(st);
@@ -212,7 +218,8 @@ export default function Pool({ cfg, balance }) {
     return (
       <div className="pool">
         <div className="row-between ludo-top">
-          <span className="small">{t('prize')} <b className="accent">{fmt(game.prize)} {cfg.currency}</b></span>
+          {game.practice ? <span className="practice-badge">{t('practiceBadge')}</span>
+            : <span className="small">{t('prize')} <b className="accent">{fmt(game.prize)} {cfg.currency}</b></span>}
           <button className="ghost sm" onClick={leave}>{game.phase === 'over' ? t('tables') : t('leave')}</button>
         </div>
         <div className="pool-chips">{game.players.map((_, i) => chip(i))}</div>
@@ -236,7 +243,8 @@ export default function Pool({ cfg, balance }) {
         {game.phase === 'over' && game.result && (
           <div className="overlay">
             <div className="result">
-              <h2>{game.result.winner === game.me ? t('youWonPrize', { amount: `${fmt(game.result.prize)} ${cfg.currency}` }) : t('nameWon', { name: game.result.winnerName })}</h2>
+              <h2>{game.practice ? (game.result.winner === game.me ? t('practiceWon') : t('practiceLost'))
+                : game.result.winner === game.me ? t('youWonPrize', { amount: `${fmt(game.result.prize)} ${cfg.currency}` }) : t('nameWon', { name: game.result.winnerName })}</h2>
               <p className="muted small">{game.result.how === 'potted the 8 ball' ? t('pottedEight') : trServer(game.result.how)}</p>
               <button className="primary" onClick={() => { setGame(null); enter(); }}>{t('backToTables')}</button>
             </div>
@@ -253,7 +261,8 @@ export default function Pool({ cfg, balance }) {
       <div className="ludo">
         <div className="ludo-wait">
           <div className="spinner" />
-          <h2>{q.size > 2 ? t('waitingPlayers') : t('findingOpp')}</h2>
+          <h2>{q.code ? t('privateTable') : q.size > 2 ? t('waitingPlayers') : t('findingOpp')}</h2>
+          <InviteBox prefix="pool" code={q.code} cfg={cfg} />
           {q.size > 2 && <div className="big">{q.waiting}/{q.size}</div>}
           <p className="muted">{t('poolEntryInfo', { stake: `${fmt(q.stake)} ${cfg.currency}`, prize: `${fmt(Math.floor(q.stake * (q.size || 2) * (1 - cfg.pool.houseCut)))} ${cfg.currency}` })}</p>
           <p className="small muted">{q.size > 2 ? t('startsWhenFull') : t('matchStartsWhen')}</p>
@@ -268,7 +277,7 @@ export default function Pool({ cfg, balance }) {
   const stakes = [...new Set(lobby.tables.map((x) => x.stake))];
   const joinTable = (tb) => run(async () => {
     if (balance < tb.stake) throw new Error(t('balanceLow'));
-    const r = await emit('pool:join', { stake: tb.stake, size: tb.size }); setMe(r.me); haptic('medium');
+    const r = await emit('pool:join', { stake: tb.stake, size: tb.size, invite: inviteMode }); setMe(r.me); setInviteMode(false); haptic('medium');
   });
   return (
     <div className="ludo">
@@ -277,6 +286,8 @@ export default function Pool({ cfg, balance }) {
         {t('poolIntro', { sec: cfg.pool.shotSec, pct: Math.round((1 - cfg.pool.houseCut) * 100) })}
         {lobby.playing ? ` · ${t('playingNow', { n: lobby.playing })}` : ''}
       </p>
+      <SocialBar busy={busy} inviteMode={inviteMode} setInviteMode={setInviteMode}
+        onPractice={() => run(async () => { const r = await emit('pool:practice'); setMe(r.me); haptic('medium'); })} />
       {sizes.length === 1 ? (
         <div className="pool-tables">
           {lobby.tables.map((tb) => (

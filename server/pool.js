@@ -14,6 +14,8 @@ import {
 } from '../shared/pool.js';
 import { assertNotFrozen, assertNotSamePerson } from './risk.js';
 import { tr } from './i18n.js';
+import { BOT_UID, startPractice, createPrivateTable, privateTable, dropPrivateIfDone } from './social.js';
+import { poolShot } from '../shared/bots.js';
 
 const money = (c) => `${fmt(c)} ${config.currency}`;
 const d = (ms) => Math.round(ms * config.pool.delayScale);
@@ -21,8 +23,9 @@ const cryptoRand = () => crypto.randomInt(1e9) / 1e9;
 let nextId = 1;
 
 class PoolGame {
-  constructor(mgr, { stake, size, roundId, members }) {
+  constructor(mgr, { stake, size, roundId, members, practice = false }) {
     this.mgr = mgr;
+    this.practice = practice; // free game vs the bot: no money, not recorded
     this.id = nextId++;
     this.stake = stake;
     this.size = size;
@@ -59,6 +62,14 @@ class PoolGame {
     this.deadline = Date.now() + config.pool.shotSec * 1000;
     this.timer = setTimeout(() => this.onTimeout(), config.pool.shotSec * 1000);
     this.broadcast();
+    if (this.players[i].uid === BOT_UID) this.botTimer = setTimeout(() => this.botShoot(), d(1500));
+  }
+
+  botShoot() {
+    if (this.phase !== 'aim' || this.players[this.turn].uid !== BOT_UID) return;
+    try { this.shoot(BOT_UID, poolShot(this.stateFor(BOT_UID))); } catch {
+      try { this.shoot(BOT_UID, { dx: Math.random() - 0.5, dy: -1, power: 0.6, cue: this.ballInHand ? { x: 50, y: this.breakShot ? 170 : 150 } : undefined }); } catch { /* the shot clock will handle it */ }
+    }
   }
 
   shoot(uid, shot) {
@@ -164,6 +175,7 @@ class PoolGame {
     clearTimeout(this.timer);
     this.phase = 'over';
     const winner = this.players[w];
+    if (this.practice) return this.finishPractice(w, how);
     settlePool(this.roundId, winner.uid, this.prize, {
       stake: this.stake, pot: this.pot, payout: this.prize, house: this.pot - this.prize,
       players: this.players.map((p) => ({ userId: p.uid, name: p.name, group: p.group || (p.set ? `${p.set[0]}–${p.set[p.set.length - 1]}` : null), out: p.out })),
@@ -183,18 +195,26 @@ class PoolGame {
     setTimeout(() => this.mgr.games.delete(this.id), 60 * 1000);
   }
 
+  finishPractice(w, how) {
+    this.result = { winner: w, winnerName: this.players[w].name, prize: 0, how, practice: true };
+    this.broadcast();
+    for (const p of this.players) this.mgr.userLoc.delete(p.uid);
+    this.mgr.emitLobby();
+    setTimeout(() => this.mgr.games.delete(this.id), 60 * 1000);
+  }
+
   resign(uid) {
     const i = this.indexOf(uid);
     if (i >= 0) this.forfeit(i, 'resigned');
   }
 
-  stop() { clearTimeout(this.timer); }
+  stop() { clearTimeout(this.timer); clearTimeout(this.botTimer); }
 
   stateFor(uid) {
     const me = this.indexOf(uid);
     const left = (g) => (g ? (g === 'solids' ? SOLIDS : STRIPES).filter((n) => !this.balls.find((b) => b.n === n).in).length : null);
     return {
-      id: this.id, stake: this.stake, size: this.size, mode: this.mode, pot: this.pot, prize: this.prize, phase: this.phase,
+      id: this.id, stake: this.stake, size: this.size, mode: this.mode, pot: this.pot, prize: this.prize, phase: this.phase, practice: this.practice,
       turn: this.turn, me, balls: this.balls.map(({ n, x, y, in: inn }) => ({ n, x, y, in: inn })),
       ballInHand: this.ballInHand, breakShot: this.breakShot, lastFoul: this.lastFoul,
       deadlineLeftMs: this.phase === 'aim' ? Math.max(0, this.deadline - Date.now()) : null,
@@ -236,19 +256,23 @@ export class PoolManager {
     this.userLoc = new Map(); // uid -> { queue: stake } | { game: id }
   }
 
-  join(user, stake, size = 2) {
+  practice(user) { return startPractice(this, user, { size: 2 }); }
+
+  /** opts.private: create a private table to invite a friend; opts.code: join a friend's private table. */
+  join(user, stake, size = 2, opts = {}) {
     const uid = String(user.id);
     if (this.manager?.paused) throw new Error('Games are paused for maintenance. Please try again later.');
     if (this.userLoc.has(uid)) throw new Error('You are already at a pool table');
-    const t = this.tables.get(`${Number(stake)}:${Number(size)}`);
+    let t = opts.code ? privateTable(this, opts.code) : this.tables.get(`${Number(stake)}:${Number(size)}`);
     if (!t) throw new Error('No such table');
+    if (opts.private && !opts.code) t = createPrivateTable(this, t.stake, t.size);
     assertNotFrozen(uid);
     assertNotSamePerson(uid, t.waiting.map((w) => w.uid)); // no playing yourself from a second account
     if (!t.roundId) t.roundId = openRound(t.stake, 'pool');
     if (!debit(uid, t.stake, 'bet', `Pool ${fmt(t.stake)} entry (${t.size} players)`, t.roundId)) throw new Error('Insufficient balance. Please deposit first.');
     this.onBalanceChange(uid);
     t.waiting.push({ uid, name: user.first_name || user.username || 'Player' });
-    this.userLoc.set(uid, { queue: `${t.stake}:${t.size}` });
+    this.userLoc.set(uid, { queue: t.key || `${t.stake}:${t.size}` });
     if (t.waiting.length >= t.size) this.startGame(t);
     else this.emitLobby();
     return this.locationOf(uid);
@@ -264,22 +288,26 @@ export class PoolManager {
     credit(uid, t.stake, 'refund', `8-Ball Pool ${fmt(t.stake)} left the table`, t.roundId);
     this.onBalanceChange(uid);
     this.userLoc.delete(uid);
+    dropPrivateIfDone(this, t);
     this.emitLobby();
     return null;
   }
 
   startGame(t) {
     const members = t.waiting.slice(0, t.size);
-    const game = new PoolGame(this, { stake: t.stake, size: t.size, roundId: t.roundId, members });
+    const game = new PoolGame(this, { stake: t.stake, size: t.size, roundId: t.roundId, members, practice: !!t.practice });
     t.waiting = t.waiting.slice(t.size);
     t.roundId = null;
+    t.started = true;
+    dropPrivateIfDone(this, t);
     this.games.set(game.id, game);
     for (const m of members) {
+      if (m.bot) continue;
       this.userLoc.set(m.uid, { game: game.id });
       this.io.in(`user:${m.uid}`).socketsJoin(game.channel);
       this.io.to(`user:${m.uid}`).emit('pool:me', { game: game.id });
       const others = members.filter((x) => x !== m).map((x) => x.name).join(', ');
-      notifyUser(m.uid, tr(m.uid, 'poolStarted', { names: others }));
+      if (!t.practice) notifyUser(m.uid, tr(m.uid, 'poolStarted', { names: others }));
     }
     game.start();
     this.emitLobby();
@@ -296,13 +324,13 @@ export class PoolManager {
     if (!loc) return null;
     if (loc.game) return { game: loc.game };
     const t = this.tables.get(loc.queue);
-    return { queue: { stake: t.stake, size: t.size, waiting: t.waiting.length } };
+    return { queue: { stake: t.stake, size: t.size, waiting: t.waiting.length, code: t.private || null } };
   }
 
   lobby() {
     return {
-      tables: [...this.tables.values()].map((t) => ({ stake: t.stake, size: t.size, waiting: t.waiting.length, prize: Math.floor(t.stake * t.size * (1 - config.pool.houseCut)) })),
-      playing: [...this.games.values()].filter((g) => g.phase !== 'over').reduce((s, g) => s + g.size, 0),
+      tables: [...this.tables.values()].filter((t) => !t.private).map((t) => ({ stake: t.stake, size: t.size, waiting: t.waiting.length, prize: Math.floor(t.stake * t.size * (1 - config.pool.houseCut)) })),
+      playing: [...this.games.values()].filter((g) => g.phase !== 'over' && !g.practice).reduce((s, g) => s + g.size, 0),
       paused: !!this.manager?.paused,
     };
   }
