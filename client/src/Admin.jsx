@@ -92,11 +92,13 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
         <Tile label="House earnings" value={c(r.houseEarnings)} accent />
         <Tile label="· from Bingo" value={c(r.bingoEarnings)} />
         <Tile label={`· from ${cfg.crash?.name || 'Sky High'}`} value={c(r.crashEarnings)} />
+        <Tile label="· from Keno" value={c(r.kenoEarnings)} />
         <Tile label="Deposits" value={c(r.deposits)} />
         <Tile label="Withdrawals" value={c(r.withdrawals)} />
         <Tile label="Net cash in" value={c(r.deposits - r.withdrawals)} />
         <Tile label="Bingo games" value={r.games} />
         <Tile label={`${cfg.crash?.name || 'Sky High'} rounds (with bets)`} value={r.crashRounds} />
+        <Tile label="Keno draws (with tickets)" value={r.kenoRounds} />
         <Tile label="Total bets" value={c(r.totalBets)} />
         <Tile label="Active players" value={r.activePlayers} />
         <Tile label="New users" value={r.newUsers} />
@@ -119,6 +121,14 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
             <span className="small">{s.crash.players} bettor(s) · bets {c(s.crash.betsTotal)} · paid {c(s.crash.paidOut)}</span>
           </div>
           <div className="rc-chips">{s.crash.last.map((p, i) => <span key={i} className={`x-chip ${p < 200 ? 'x-low' : p < 1000 ? 'x-mid' : 'x-high'}`}>{fmtX(p)}</span>)}</div>
+        </div>
+      )}
+      {s.keno && (
+        <div className="tile rk-admin">
+          <div className="row-between">
+            <b>🎯 Keno — draw #{s.keno.round} · <span className={`pill ${s.keno.phase === 'drawing' ? 'playing' : s.keno.phase}`}>{s.keno.phase}</span></b>
+            <span className="small">{s.keno.players} ticket(s) · {c(s.keno.betsTotal)} in play{s.keno.paidOut ? ` · paid ${c(s.keno.paidOut)}` : ''}</span>
+          </div>
         </div>
       )}
       <div className="table-wrap">
@@ -355,8 +365,9 @@ function Games({ cfg }) {
       <div className="seg small-seg">
         <button className={which === 'bingo' ? 'active' : ''} onClick={() => setWhich('bingo')}>🎱 Bingo</button>
         <button className={which === 'rocket' ? 'active' : ''} onClick={() => setWhich('rocket')}>✈️ {cfg.crash?.name || 'Sky High'}</button>
+        <button className={which === 'keno' ? 'active' : ''} onClick={() => setWhich('keno')}>🎯 Keno</button>
       </div>
-      {which === 'bingo' ? <BingoGames cfg={cfg} /> : <RocketRounds cfg={cfg} />}
+      {which === 'bingo' ? <BingoGames cfg={cfg} /> : which === 'rocket' ? <RocketRounds cfg={cfg} /> : <KenoRounds cfg={cfg} />}
     </div>
   );
 }
@@ -385,6 +396,33 @@ function RocketRounds({ cfg }) {
         </tbody>
       </table>
       <p className="muted small" style={{ padding: '0 10px' }}>Amounts in {cfg.currency}. Rounds where nobody bet show 0.</p>
+    </div>
+  );
+}
+
+function KenoRounds({ cfg }) {
+  const [data] = usePoll(adminApi.kenoRounds, 5000);
+  if (!data) return <div className="muted">Loading…</div>;
+  if (!data.items.length) return <div className="empty">No draws yet.</div>;
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Time</th><th>Tickets</th><th>Bets</th><th>Paid out</th><th>House</th><th>Numbers drawn</th></tr></thead>
+        <tbody>
+          {data.items.map((r) => (
+            <tr key={r.id}>
+              <td className="muted">{r.id}</td>
+              <td className="nowrap">{fmtDate(r.created_at)}</td>
+              <td>{r.players}</td>
+              <td>{fmt(r.bets_total)}</td>
+              <td>{fmt(r.payout_total)}</td>
+              <td className={r.bets_total - r.payout_total >= 0 ? 'pos' : 'neg'}>{fmt(r.bets_total - r.payout_total)}</td>
+              <td className="small muted">{[...r.drawn].sort((a, b) => a - b).join(' ')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted small" style={{ padding: '0 10px' }}>Amounts in {cfg.currency}.</p>
     </div>
   );
 }

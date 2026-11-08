@@ -141,7 +141,7 @@ main { flex: 1; padding: 12px 14px 90px; }
 .admin-section { display: grid; gap: 10px; }
 .admin-section h3 { margin: 10px 0 0; }
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
-.small-seg { margin: 0; max-width: 260px; }
+.small-seg { margin: 0; max-width: 380px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .tiles.two { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .tile { background: var(--bg2); border-radius: 12px; padding: 12px; }
@@ -253,3 +253,44 @@ textarea { width: 100%; resize: vertical; }
 .floating-back { position: fixed; bottom: 14px; left: 14px; z-index: 6; background: var(--bg2); padding: 8px 14px; border-radius: 999px; font-weight: 600; }
 
 .rk-admin { display: grid; gap: 8px; }
+
+/* ---------------- Keno ---------------- */
+.keno-card { background: radial-gradient(circle at 85% 20%, rgba(34,197,94,.45), transparent 55%), linear-gradient(135deg, #0f3b3a, #12233f); }
+.keno-card .join { color: #7cf0a8; }
+.kn-chip { font-size: 11px; font-weight: 800; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(255,255,255,.15); }
+.keno { display: grid; gap: 10px; }
+.kn-status { text-align: center; padding: 10px; border-radius: 12px; background: var(--bg2); font-size: 15px; }
+.kn-status.betting { background: color-mix(in srgb, var(--accent) 20%, var(--bg2)); }
+.kn-status.drawing { background: color-mix(in srgb, var(--B) 22%, var(--bg2)); }
+.kn-status.results { background: color-mix(in srgb, var(--ok) 20%, var(--bg2)); }
+.kn-hitcount { color: #ffd34d; }
+.kn-tray { display: flex; gap: 12px; align-items: center; background: linear-gradient(135deg, #12233f, #0f3b3a); padding: 12px; border-radius: 16px; }
+.kn-bigball { width: 64px; height: 64px; flex-shrink: 0; border-radius: 50%; display: grid; place-items: center; font-size: 26px; font-weight: 900;
+  color: #10203f; background: radial-gradient(circle at 35% 30%, #fff, #cfe0ff 60%, #8fb0ff); box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  animation: ballin .45s cubic-bezier(.2,1.5,.4,1); }
+.kn-bigball.hit { background: radial-gradient(circle at 35% 30%, #fff8d6, #ffd34d 60%, #ff9f1a); }
+@keyframes ballin { from { transform: translateY(-30px) scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+.kn-drawn { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; flex: 1; }
+.kn-ball { aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 800;
+  background: rgba(255,255,255,.08); color: #fff; }
+.kn-ball.on { background: #cfe0ff; color: #10203f; animation: pop .3s; }
+.kn-ball.hit { background: #ffd34d; color: #3a2500; }
+.kn-board { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.kn-cell { aspect-ratio: 1; border-radius: 8px; background: var(--bg2); font-size: 13px; font-weight: 700; padding: 0;
+  transition: background .2s, transform .2s, color .2s; touch-action: manipulation; }
+.kn-board.locked .kn-cell { cursor: default; }
+.kn-cell.picked { background: var(--btn); color: var(--btn-text); }
+.kn-cell.drawn { background: color-mix(in srgb, #cfe0ff 22%, var(--bg2)); color: #cfe0ff; }
+.kn-cell.hit { background: #ffd34d; color: #3a2500; transform: scale(1.08); box-shadow: 0 0 12px rgba(255,211,77,.6); animation: pop .35s; }
+.kn-cell.miss { background: color-mix(in srgb, var(--btn) 35%, var(--bg2)); color: var(--hint); }
+.kn-tools { display: flex; gap: 6px; }
+.kn-tools button { background: var(--bg); padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+.kn-pay { background: var(--bg2); border-radius: 14px; padding: 10px 12px; }
+.kn-pay h3 { margin: 0 0 6px; }
+.kn-paygrid { display: grid; gap: 2px; }
+.kn-payrow { display: grid; grid-template-columns: 1fr 70px 110px; gap: 6px; font-size: 13px; padding: 5px 8px; border-radius: 8px; }
+.kn-payrow span:nth-child(n+2) { text-align: right; }
+.kn-payrow.active { background: #ffd34d; color: #3a2500; font-weight: 800; }
+
+.rc-right .pill { white-space: nowrap; }

@@ -57,6 +57,17 @@ export const config = {
     maxMultiplier: Math.round(num(process.env.CRASH_MAX_MULTIPLIER, 1000) * 100), // x100
   },
 
+  // Keno. Amounts in ETB in .env, cents internally.
+  keno: {
+    enabled: process.env.KENO_ENABLED !== 'false',
+    minBet: cents(process.env.KENO_MIN_BET, 5),
+    maxBet: cents(process.env.KENO_MAX_BET, 2000),
+    maxWin: cents(process.env.KENO_MAX_WIN, 100000),
+    betSec: num(process.env.KENO_BET_SEC, 40),
+    ballMs: num(process.env.KENO_BALL_MS, 600),
+    resultSec: num(process.env.KENO_RESULT_SEC, 7),
+  },
+
   // Wallet
   currency: process.env.CURRENCY || 'ETB',
   paymentInfo: process.env.PAYMENT_INFO || 'Telebirr: 09XXXXXXXX (Your Name)',
@@ -101,6 +112,7 @@ export function checkConfig() {
   }
   if (config.houseCut < 0 || config.houseCut >= 1) errors.push('HOUSE_CUT must be between 0 and 0.99.');
   if (config.crash.houseEdge < 0 || config.crash.houseEdge >= 0.5) errors.push('CRASH_HOUSE_EDGE must be between 0 and 0.5.');
+  if (config.keno.minBet <= 0 || config.keno.maxBet < config.keno.minBet) errors.push('KENO_MIN_BET / KENO_MAX_BET are invalid.');
   if (config.crash.minBet <= 0 || config.crash.maxBet < config.crash.minBet) errors.push('CRASH_MIN_BET / CRASH_MAX_BET are invalid.');
   if (!config.stakes.length || config.stakes.some((s) => !Number.isInteger(s) || s <= 0)) errors.push('STAKES must be positive amounts.');
   for (const w of warnings) console.warn(`⚠️  ${w}`);

@@ -54,6 +54,18 @@ CREATE TABLE IF NOT EXISTS crash_rounds (
   created_at   INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
+CREATE TABLE IF NOT EXISTS keno_rounds (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  round_id     INTEGER,               -- rounds.id (only when someone bought a ticket)
+  drawn        TEXT NOT NULL,         -- JSON array of the 20 drawn numbers, in draw order
+  seed         TEXT NOT NULL,
+  hash         TEXT NOT NULL,
+  bets_total   INTEGER NOT NULL DEFAULT 0,
+  payout_total INTEGER NOT NULL DEFAULT 0,
+  players      INTEGER NOT NULL DEFAULT 0,
+  created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
 CREATE TABLE IF NOT EXISTS games (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   stake       INTEGER NOT NULL,
@@ -219,6 +231,28 @@ export const settleCrashRound = db.transaction((roundId, record) => {
   if (roundId) stmts.closeRound.run('finished', roundId);
 });
 
+/** Keno: pay all winning tickets, record the draw and close the money round — all or nothing. */
+export const settleKenoRound = db.transaction((roundId, payouts, record) => {
+  for (const { userId, amount, note } of payouts) {
+    if (amount > 0) {
+      stmts.credit.run(amount, String(userId));
+      tx({ user_id: userId, type: 'win', amount, status: 'done', note, round_id: roundId });
+    }
+  }
+  db.prepare(`INSERT INTO keno_rounds (round_id, drawn, seed, hash, bets_total, payout_total, players)
+    VALUES (@round_id, @drawn, @seed, @hash, @bets_total, @payout_total, @players)`)
+    .run({ round_id: roundId, ...record, drawn: JSON.stringify(record.drawn) });
+  if (roundId) stmts.closeRound.run('finished', roundId);
+});
+
+export const recentKeno = (n = 10) =>
+  db.prepare('SELECT id, drawn FROM keno_rounds ORDER BY id DESC LIMIT ?').all(n)
+    .map((r) => ({ id: r.id, drawn: JSON.parse(r.drawn) }));
+
+export const listKenoRounds = (limit = 50) =>
+  db.prepare('SELECT * FROM keno_rounds ORDER BY id DESC LIMIT ?').all(limit)
+    .map((r) => ({ ...r, drawn: JSON.parse(r.drawn) }));
+
 export const recentCrashes = (n = 20) =>
   db.prepare('SELECT id, crash_point, hash, seed FROM crash_rounds ORDER BY id DESC LIMIT ?').all(n);
 
@@ -251,7 +285,7 @@ export const refundRound = db.transaction((roundId, label, reason, status = 'ref
   return refunds;
 });
 
-const roundLabel = (r) => (r.game === 'crash' ? config.crash.name : `Bingo ${fmt(r.stake)}`);
+const roundLabel = (r) => (r.game === 'crash' ? config.crash.name : r.game === 'keno' ? 'Keno' : `Bingo ${fmt(r.stake)}`);
 
 /** Called on startup and shutdown: refund every round that never finished. */
 export function refundOpenRounds(reason = 'interrupted (server restart)') {
@@ -277,13 +311,17 @@ export function getStats() {
     deposits: scalar("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='deposit' AND status='approved' AND created_at >= ?", since),
     withdrawals: -scalar("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='withdraw' AND status='approved' AND created_at >= ?", since),
     houseEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM games WHERE created_at >= ?', since)
-      + scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM crash_rounds WHERE created_at >= ?', since),
+      + scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM crash_rounds WHERE created_at >= ?', since)
+      + scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM keno_rounds WHERE created_at >= ?', since),
     games: scalar('SELECT COUNT(*) FROM games WHERE created_at >= ?', since),
     totalBets: scalar('SELECT COALESCE(SUM(pot),0) FROM games WHERE created_at >= ?', since)
-      + scalar('SELECT COALESCE(SUM(bets_total),0) FROM crash_rounds WHERE created_at >= ?', since),
+      + scalar('SELECT COALESCE(SUM(bets_total),0) FROM crash_rounds WHERE created_at >= ?', since)
+      + scalar('SELECT COALESCE(SUM(bets_total),0) FROM keno_rounds WHERE created_at >= ?', since),
     bingoEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM games WHERE created_at >= ?', since),
     crashEarnings: scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM crash_rounds WHERE created_at >= ?', since),
     crashRounds: scalar('SELECT COUNT(*) FROM crash_rounds WHERE players > 0 AND created_at >= ?', since),
+    kenoEarnings: scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM keno_rounds WHERE created_at >= ?', since),
+    kenoRounds: scalar('SELECT COUNT(*) FROM keno_rounds WHERE players > 0 AND created_at >= ?', since),
     activePlayers: scalar("SELECT COUNT(DISTINCT user_id) FROM transactions WHERE type='bet' AND created_at >= ?", since),
     newUsers: scalar('SELECT COUNT(*) FROM users WHERE created_at >= ?', since),
   });

@@ -1,4 +1,4 @@
-# 🎱 Telegram Bingo + ✈️ Sky High Mini App
+# 🎱 Telegram Bingo + ✈️ Sky High + 🎯 Keno Mini App
 
 A multiplayer 75-ball bingo game that runs inside Telegram, with a player wallet.
 Players send you money (Telebirr, bank and so on), submit the transaction ID in the app,
@@ -39,6 +39,15 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
    up front, and the seed is revealed after the crash so anyone can check it.
 6. Limits: min/max bet and a **max win per bet** (`CRASH_MAX_WIN`) protect you from huge payouts.
 7. Server restart mid-flight: anyone who already cashed out keeps the win, and everyone else is refunded.
+
+**🎯 Keno**
+1. One shared draw about every minute. Tickets are open for 40 seconds (`KENO_BET_SEC`).
+2. Players pick 1–10 numbers from 1–80 (or tap Quick pick) and a stake.
+3. 20 numbers are drawn one by one, live. The payout depends on how many of the player's numbers hit
+   (see `shared/keno.js` for the full paytable, also shown in the app).
+4. **Return to players ≈ 94%** for every ticket size, so the house edge is ≈ 6%. Checked exactly in `test/keno-rtp.js`.
+5. Provably fair: the draw's hash is shown before tickets close, and the seed is revealed after.
+6. Max win per ticket (`KENO_MAX_WIN`). If a draw is interrupted, all tickets are refunded.
 
 **Wallet flow**
 - **Deposit:** the player sends money to your account, then enters the amount and transaction ID.
@@ -113,7 +122,8 @@ npm test
 This runs, with real signed Telegram auth: a full Bingo game (41 checks): auth forgery,
 deposits, duplicate references, entry fees, refunds, false BINGO, payouts, house cut,
 withdrawals and every admin feature. crash recovery (10 checks), Sky High end-to-end (26 checks: bets, cash-outs, fairness, pause, restart),
-and a statistical check of the crash game's house edge over 200,000 simulated rounds.
+a statistical check of the crash game's house edge over 200,000 simulated rounds,
+Keno end-to-end (24 checks) and Keno math (exact paytable returns + draw fairness over 100,000 draws).
 
 ## Deploying
 
@@ -137,6 +147,7 @@ server/
   index.js    Express API + Socket.IO + static hosting
   game.js     Bingo room state machine (picking → countdown → playing → finished)
   crash.js    Sky High crash game (betting → flying → crashed), provably fair
+  keno.js     Keno shared draws (betting → drawing → results), provably fair
   bingo.js    secure number shuffle
   db.js       SQLite schema + atomic wallet operations
   auth.js     Telegram initData HMAC validation
@@ -150,6 +161,7 @@ deploy/           VPS setup + update scripts, Caddy config
 shared/cards.js   deterministic card generation + win check (used by server and client)
 shared/crash.js   multiplier curve + crash-point formula (server and client)
 client/src/flight.js  60fps canvas animation (plane, curve, stars, fly-away)
+shared/keno.js    Keno paytable + ticket rules (server and client)
 shared/money.js   all money is stored in cents; helpers to convert/format
 client/src/       React mini app (Lobby, Room, Card, Wallet, Admin)
 test/simulate.js  end-to-end test

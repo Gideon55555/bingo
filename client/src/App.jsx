@@ -5,6 +5,7 @@ import Room from './Room.jsx';
 import Wallet from './Wallet.jsx';
 import Admin from './Admin.jsx';
 import Crash from './Crash.jsx';
+import Keno from './Keno.jsx';
 import { fmt } from '../../shared/money.js';
 
 export default function App() {
@@ -16,8 +17,10 @@ export default function App() {
   const [stake, setStake] = useState(null);
   const [rocket, setRocket] = useState(false);
   const [crashLobby, setCrashLobby] = useState(null);
-  const inGame = stake !== null || rocket;
-  const goHome = () => { setStake(null); setRocket(false); };
+  const [keno, setKeno] = useState(false);
+  const [kenoLobby, setKenoLobby] = useState(null);
+  const inGame = stake !== null || rocket || keno;
+  const goHome = () => { setStake(null); setRocket(false); setKeno(false); };
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -38,6 +41,7 @@ export default function App() {
     socket.on('lobby', onOne);
     socket.on('balance', onBal);
     socket.on('crash:lobby', setCrashLobby);
+    socket.on('keno:lobby', setKenoLobby);
     socket.on('connect_error', onErr);
     socket.on('connect', () => setError(''));
     socket.on('server:restart', () => setError('Server is restarting for maintenance — reconnecting… Any unfinished game entry is refunded.'));
@@ -46,6 +50,7 @@ export default function App() {
       socket.off('lobby', onOne);
       socket.off('balance', onBal);
       socket.off('crash:lobby', setCrashLobby);
+      socket.off('keno:lobby', setKenoLobby);
       socket.off('connect_error', onErr);
     };
   }, []);
@@ -68,7 +73,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">{rocket ? `✈️ ${cfg.crash?.name || 'Sky High'}` : stake !== null ? '🎱 Bingo' : `🎮 ${cfg.appName || 'Games'}`}</div>
+        <div className="brand">{rocket ? `✈️ ${cfg.crash?.name || 'Sky High'}` : keno ? '🎯 Keno' : stake !== null ? '🎱 Bingo' : `🎮 ${cfg.appName || 'Games'}`}</div>
         <button className="balance" onClick={() => { goHome(); setTab('wallet'); }}>
           {fmt(balance)} {cfg.currency}
         </button>
@@ -76,12 +81,15 @@ export default function App() {
       {error && <div className="banner">{error}</div>}
 
       <main>
-        {rocket ? (
+        {keno ? (
+          <Keno cfg={cfg} balance={balance} />
+        ) : rocket ? (
           <Crash cfg={cfg} balance={balance} />
         ) : stake !== null ? (
           <Room stake={stake} cfg={cfg} user={user} balance={balance} onExit={goHome} />
         ) : tab === 'play' ? (
-          <Lobby rooms={rooms} cfg={cfg} onEnter={setStake} crash={cfg.crash ? crashLobby : null} onRocket={() => setRocket(true)} />
+          <Lobby rooms={rooms} cfg={cfg} onEnter={setStake} crash={cfg.crash ? crashLobby : null} onRocket={() => setRocket(true)}
+            keno={cfg.keno ? kenoLobby : null} onKeno={() => setKeno(true)} />
         ) : tab === 'admin' && user.isAdmin ? (
           <Admin cfg={cfg} />
         ) : (

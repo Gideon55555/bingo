@@ -30,7 +30,7 @@ function RoomCard({ r, cfg, onEnter }) {
 
 const seenRules = () => { try { return localStorage.getItem('rules_seen') === '1'; } catch { return false; } };
 
-export default function Lobby({ rooms, cfg, onEnter, crash, onRocket }) {
+export default function Lobby({ rooms, cfg, onEnter, crash, onRocket, keno, onKeno }) {
   const [showRules, setShowRules] = useState(() => !seenRules());
   const closeRules = () => {
     try { localStorage.setItem('rules_seen', '1'); } catch { /* ignore */ }
@@ -50,6 +50,23 @@ export default function Lobby({ rooms, cfg, onEnter, crash, onRocket }) {
           </div>
           <div className="rc-right">
             <span className={`pill ${crash.phase === 'flying' ? 'playing' : crash.phase}`}>{crash.phase === 'flying' ? 'LIVE' : crash.phase === 'betting' ? 'Betting' : crash.phase}</span>
+            <div className="join">Play →</div>
+          </div>
+        </button>
+      )}
+      {keno && (
+        <button className="rocket-card keno-card" onClick={onKeno}>
+          <div className="rc-left">
+            <div className="rc-title">🎯 Keno</div>
+            <div className="small">Pick up to 10 numbers · draws every minute</div>
+            <div className="rc-chips">
+              {keno.last.map((n, i) => <span key={i} className="kn-chip">{n}</span>)}
+            </div>
+          </div>
+          <div className="rc-right">
+            <span className={`pill ${keno.phase === 'drawing' ? 'playing' : keno.phase === 'betting' ? 'countdown' : keno.phase}`}>
+              {keno.phase === 'drawing' ? 'DRAWING' : keno.phase === 'betting' ? 'Open' : keno.phase}
+            </span>
             <div className="join">Play →</div>
           </div>
         </button>

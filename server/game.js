@@ -248,6 +248,7 @@ export class GameManager {
     let refunded = 0;
     for (const r of this.rooms.values()) refunded += r.cancelAndRefund('paused by admin');
     if (this.crash) refunded += this.crash.pauseNow() ? 1 : 0;
+    if (this.keno) refunded += this.keno.pauseNow() ? 1 : 0;
     this.io.emit('lobby:all', this.lobby());
     return { refunded };
   }
@@ -264,6 +265,7 @@ export class GameManager {
       clearInterval(r.caller);
     }
     this.crash?.stop();
+    this.keno?.stop();
   }
 
   /** Live snapshot for the admin panel */
