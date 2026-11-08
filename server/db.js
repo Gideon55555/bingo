@@ -66,6 +66,23 @@ CREATE TABLE IF NOT EXISTS keno_rounds (
   created_at   INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
+CREATE TABLE IF NOT EXISTS ludo_games (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  round_id     INTEGER,
+  stake        INTEGER NOT NULL,        -- cents per player
+  size         INTEGER NOT NULL,        -- 2 or 4 players
+  pot          INTEGER NOT NULL,
+  payout       INTEGER NOT NULL,
+  house        INTEGER NOT NULL,
+  winner_id    TEXT,
+  players      TEXT NOT NULL,           -- JSON [{userId, name, color, out}]
+  rolls        INTEGER NOT NULL,
+  duration_sec INTEGER NOT NULL,
+  seed         TEXT NOT NULL,
+  hash         TEXT NOT NULL,
+  created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
 CREATE TABLE IF NOT EXISTS games (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   stake       INTEGER NOT NULL,
@@ -245,6 +262,26 @@ export const settleKenoRound = db.transaction((roundId, payouts, record) => {
   if (roundId) stmts.closeRound.run('finished', roundId);
 });
 
+/** Ludo: pay the winner, record the game and close the money round — all or nothing. */
+export const settleLudo = db.transaction((roundId, winnerId, payout, record) => {
+  if (winnerId && payout > 0) {
+    stmts.credit.run(payout, String(winnerId));
+    tx({ user_id: winnerId, type: 'win', amount: payout, status: 'done', note: record.note, round_id: roundId });
+  }
+  db.prepare(`INSERT INTO ludo_games (round_id, stake, size, pot, payout, house, winner_id, players, rolls, duration_sec, seed, hash)
+    VALUES (@round_id, @stake, @size, @pot, @payout, @house, @winner_id, @players, @rolls, @duration_sec, @seed, @hash)`)
+    .run({
+      round_id: roundId, winner_id: winnerId ? String(winnerId) : null, stake: record.stake, size: record.size, pot: record.pot,
+      payout: record.payout, house: record.house, players: JSON.stringify(record.players), rolls: record.rolls,
+      duration_sec: record.duration_sec, seed: record.seed, hash: record.hash,
+    });
+  if (roundId) stmts.closeRound.run('finished', roundId);
+});
+
+export const listLudoGames = (limit = 50) =>
+  db.prepare('SELECT * FROM ludo_games ORDER BY id DESC LIMIT ?').all(limit)
+    .map((g) => ({ ...g, players: JSON.parse(g.players) }));
+
 export const recentKeno = (n = 10) =>
   db.prepare('SELECT id, drawn FROM keno_rounds ORDER BY id DESC LIMIT ?').all(n)
     .map((r) => ({ id: r.id, drawn: JSON.parse(r.drawn) }));
@@ -285,7 +322,8 @@ export const refundRound = db.transaction((roundId, label, reason, status = 'ref
   return refunds;
 });
 
-const roundLabel = (r) => (r.game === 'crash' ? config.crash.name : r.game === 'keno' ? 'Keno' : `Bingo ${fmt(r.stake)}`);
+const roundLabel = (r) => (r.game === 'crash' ? config.crash.name : r.game === 'keno' ? 'Keno'
+  : r.game === 'ludo' ? `Ludo ${fmt(r.stake)}` : `Bingo ${fmt(r.stake)}`);
 
 /** Called on startup and shutdown: refund every round that never finished. */
 export function refundOpenRounds(reason = 'interrupted (server restart)') {
@@ -312,16 +350,20 @@ export function getStats() {
     withdrawals: -scalar("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='withdraw' AND status='approved' AND created_at >= ?", since),
     houseEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM games WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM crash_rounds WHERE created_at >= ?', since)
-      + scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM keno_rounds WHERE created_at >= ?', since),
+      + scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM keno_rounds WHERE created_at >= ?', since)
+      + scalar('SELECT COALESCE(SUM(house),0) FROM ludo_games WHERE created_at >= ?', since),
     games: scalar('SELECT COUNT(*) FROM games WHERE created_at >= ?', since),
     totalBets: scalar('SELECT COALESCE(SUM(pot),0) FROM games WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(bets_total),0) FROM crash_rounds WHERE created_at >= ?', since)
-      + scalar('SELECT COALESCE(SUM(bets_total),0) FROM keno_rounds WHERE created_at >= ?', since),
+      + scalar('SELECT COALESCE(SUM(bets_total),0) FROM keno_rounds WHERE created_at >= ?', since)
+      + scalar('SELECT COALESCE(SUM(pot),0) FROM ludo_games WHERE created_at >= ?', since),
     bingoEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM games WHERE created_at >= ?', since),
     crashEarnings: scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM crash_rounds WHERE created_at >= ?', since),
     crashRounds: scalar('SELECT COUNT(*) FROM crash_rounds WHERE players > 0 AND created_at >= ?', since),
     kenoEarnings: scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM keno_rounds WHERE created_at >= ?', since),
     kenoRounds: scalar('SELECT COUNT(*) FROM keno_rounds WHERE players > 0 AND created_at >= ?', since),
+    ludoEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM ludo_games WHERE created_at >= ?', since),
+    ludoGames: scalar('SELECT COUNT(*) FROM ludo_games WHERE created_at >= ?', since),
     activePlayers: scalar("SELECT COUNT(DISTINCT user_id) FROM transactions WHERE type='bet' AND created_at >= ?", since),
     newUsers: scalar('SELECT COUNT(*) FROM users WHERE created_at >= ?', since),
   });

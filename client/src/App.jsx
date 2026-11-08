@@ -6,6 +6,7 @@ import Wallet from './Wallet.jsx';
 import Admin from './Admin.jsx';
 import Crash from './Crash.jsx';
 import Keno from './Keno.jsx';
+import Ludo from './Ludo.jsx';
 import { fmt } from '../../shared/money.js';
 
 export default function App() {
@@ -19,8 +20,10 @@ export default function App() {
   const [crashLobby, setCrashLobby] = useState(null);
   const [keno, setKeno] = useState(false);
   const [kenoLobby, setKenoLobby] = useState(null);
-  const inGame = stake !== null || rocket || keno;
-  const goHome = () => { setStake(null); setRocket(false); setKeno(false); };
+  const [ludo, setLudo] = useState(false);
+  const [ludoHome, setLudoHome] = useState(null);
+  const inGame = stake !== null || rocket || keno || ludo;
+  const goHome = () => { setStake(null); setRocket(false); setKeno(false); setLudo(false); };
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -42,6 +45,10 @@ export default function App() {
     socket.on('balance', onBal);
     socket.on('crash:lobby', setCrashLobby);
     socket.on('keno:lobby', setKenoLobby);
+    socket.on('ludo:home', setLudoHome);
+    // If a Ludo game starts while you're elsewhere in the app, jump straight to it
+    const onLudoMe = (m) => { if (m?.game) { setStake(null); setRocket(false); setKeno(false); setLudo(true); } };
+    socket.on('ludo:me', onLudoMe);
     socket.on('connect_error', onErr);
     socket.on('connect', () => setError(''));
     socket.on('server:restart', () => setError('Server is restarting for maintenance — reconnecting… Any unfinished game entry is refunded.'));
@@ -51,6 +58,8 @@ export default function App() {
       socket.off('balance', onBal);
       socket.off('crash:lobby', setCrashLobby);
       socket.off('keno:lobby', setKenoLobby);
+      socket.off('ludo:home', setLudoHome);
+      socket.off('ludo:me', onLudoMe);
       socket.off('connect_error', onErr);
     };
   }, []);
@@ -73,7 +82,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">{rocket ? `✈️ ${cfg.crash?.name || 'Sky High'}` : keno ? '🎯 Keno' : stake !== null ? '🎱 Bingo' : `🎮 ${cfg.appName || 'Games'}`}</div>
+        <div className="brand">{rocket ? `✈️ ${cfg.crash?.name || 'Sky High'}` : keno ? '🎯 Keno' : ludo ? '🎲 Ludo' : stake !== null ? '🎱 Bingo' : `🎮 ${cfg.appName || 'Games'}`}</div>
         <button className="balance" onClick={() => { goHome(); setTab('wallet'); }}>
           {fmt(balance)} {cfg.currency}
         </button>
@@ -81,7 +90,9 @@ export default function App() {
       {error && <div className="banner">{error}</div>}
 
       <main>
-        {keno ? (
+        {ludo ? (
+          <Ludo cfg={cfg} balance={balance} />
+        ) : keno ? (
           <Keno cfg={cfg} balance={balance} />
         ) : rocket ? (
           <Crash cfg={cfg} balance={balance} />
@@ -89,7 +100,8 @@ export default function App() {
           <Room stake={stake} cfg={cfg} user={user} balance={balance} onExit={goHome} />
         ) : tab === 'play' ? (
           <Lobby rooms={rooms} cfg={cfg} onEnter={setStake} crash={cfg.crash ? crashLobby : null} onRocket={() => setRocket(true)}
-            keno={cfg.keno ? kenoLobby : null} onKeno={() => setKeno(true)} />
+            keno={cfg.keno ? kenoLobby : null} onKeno={() => setKeno(true)}
+            ludo={cfg.ludo ? (ludoHome || { playing: 0 }) : null} onLudo={() => setLudo(true)} />
         ) : tab === 'admin' && user.isAdmin ? (
           <Admin cfg={cfg} />
         ) : (

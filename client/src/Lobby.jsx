@@ -30,7 +30,7 @@ function RoomCard({ r, cfg, onEnter }) {
 
 const seenRules = () => { try { return localStorage.getItem('rules_seen') === '1'; } catch { return false; } };
 
-export default function Lobby({ rooms, cfg, onEnter, crash, onRocket, keno, onKeno }) {
+export default function Lobby({ rooms, cfg, onEnter, crash, onRocket, keno, onKeno, ludo, onLudo }) {
   const [showRules, setShowRules] = useState(() => !seenRules());
   const closeRules = () => {
     try { localStorage.setItem('rules_seen', '1'); } catch { /* ignore */ }
@@ -50,6 +50,21 @@ export default function Lobby({ rooms, cfg, onEnter, crash, onRocket, keno, onKe
           </div>
           <div className="rc-right">
             <span className={`pill ${crash.phase === 'flying' ? 'playing' : crash.phase}`}>{crash.phase === 'flying' ? 'LIVE' : crash.phase === 'betting' ? 'Betting' : crash.phase}</span>
+            <div className="join">Play →</div>
+          </div>
+        </button>
+      )}
+      {ludo && (
+        <button className="rocket-card ludo-card" onClick={onLudo}>
+          <div className="rc-left">
+            <div className="rc-title">🎲 Ludo</div>
+            <div className="small">Play 1-vs-1 or 4 players · winner takes the pot</div>
+            <div className="rc-chips">
+              {['#ef4444', '#22c55e', '#facc15', '#3b82f6'].map((c) => <span key={c} className="ludo-dot" style={{ background: c }} />)}
+            </div>
+          </div>
+          <div className="rc-right">
+            <span className="pill playing">{ludo.playing ? `${ludo.playing} playing` : 'PvP'}</span>
             <div className="join">Play →</div>
           </div>
         </button>

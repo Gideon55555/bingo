@@ -1,4 +1,4 @@
-# 🎱 Telegram Bingo + ✈️ Sky High + 🎯 Keno Mini App
+# 🎱 Telegram Bingo + ✈️ Sky High + 🎯 Keno + 🎲 Ludo Mini App
 
 A multiplayer 75-ball bingo game that runs inside Telegram, with a player wallet.
 Players send you money (Telebirr, bank and so on), submit the transaction ID in the app,
@@ -48,6 +48,19 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
 4. **Return to players ≈ 94%** for every ticket size, so the house edge is ≈ 6%. Checked exactly in `test/keno-rtp.js`.
 5. Provably fair: the draw's hash is shown before tickets close, and the seed is revealed after.
 6. Max win per ticket (`KENO_MAX_WIN`). If a draw is interrupted, all tickets are refunded.
+
+**🎲 Ludo (player vs player)**
+1. Tables per stake (`LUDO_STAKES`), each as **1 vs 1** or **4 players**. Players pay the entry fee when joining
+   and can leave for a full refund until the table fills. Everyone gets a Telegram message when the game starts.
+2. Quick mode: **2 tokens each** (`LUDO_TOKENS`). Classic rules: a 6 to leave base, a 6 rolls again (a third 6 ends
+   the turn), landing on an opponent sends it home, star and start squares are safe, exact roll to finish.
+3. **Winner takes the pot minus 10%** (`LUDO_HOUSE_CUT`). No risk to you, because players win each other's money.
+4. **Turn timer** (`LUDO_TURN_SEC`, 15s): if it runs out, the server plays a sensible move for you.
+   After 3 missed turns in a row (`LUDO_MAX_MISSES`) the player forfeits, so nobody can stall a game.
+   Leaving mid-game counts as resigning.
+5. Fair dice: rolled on the server from a per-game seed. Its hash is shown at the start and the seed is revealed
+   at the end, so every roll can be checked.
+6. A server restart mid-game refunds everyone at that table.
 
 **Wallet flow**
 - **Deposit:** the player sends money to your account, then enters the amount and transaction ID.
@@ -123,7 +136,8 @@ This runs, with real signed Telegram auth: a full Bingo game (41 checks): auth f
 deposits, duplicate references, entry fees, refunds, false BINGO, payouts, house cut,
 withdrawals and every admin feature. crash recovery (10 checks), Sky High end-to-end (26 checks: bets, cash-outs, fairness, pause, restart),
 a statistical check of the crash game's house edge over 200,000 simulated rounds,
-Keno end-to-end (24 checks) and Keno math (exact paytable returns + draw fairness over 100,000 draws).
+Keno end-to-end (24 checks), Keno math (exact paytable returns + draw fairness over 100,000 draws),
+Ludo rules (17 checks) and Ludo end-to-end (21 checks: bots play full 2- and 4-player games, timeouts, forfeits, refunds).
 
 ## Deploying
 
@@ -148,6 +162,7 @@ server/
   game.js     Bingo room state machine (picking → countdown → playing → finished)
   crash.js    Sky High crash game (betting → flying → crashed), provably fair
   keno.js     Keno shared draws (betting → drawing → results), provably fair
+  ludo.js     Ludo tables, matchmaking, turns/timers, forfeits, payouts
   bingo.js    secure number shuffle
   db.js       SQLite schema + atomic wallet operations
   auth.js     Telegram initData HMAC validation
@@ -162,6 +177,7 @@ shared/cards.js   deterministic card generation + win check (used by server and 
 shared/crash.js   multiplier curve + crash-point formula (server and client)
 client/src/flight.js  60fps canvas animation (plane, curve, stars, fly-away)
 shared/keno.js    Keno paytable + ticket rules (server and client)
+shared/ludo.js    Ludo board geometry + rules (server and client)
 shared/money.js   all money is stored in cents; helpers to convert/format
 client/src/       React mini app (Lobby, Room, Card, Wallet, Admin)
 test/simulate.js  end-to-end test

@@ -93,12 +93,14 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
         <Tile label="· from Bingo" value={c(r.bingoEarnings)} />
         <Tile label={`· from ${cfg.crash?.name || 'Sky High'}`} value={c(r.crashEarnings)} />
         <Tile label="· from Keno" value={c(r.kenoEarnings)} />
+        <Tile label="· from Ludo" value={c(r.ludoEarnings)} />
         <Tile label="Deposits" value={c(r.deposits)} />
         <Tile label="Withdrawals" value={c(r.withdrawals)} />
         <Tile label="Net cash in" value={c(r.deposits - r.withdrawals)} />
         <Tile label="Bingo games" value={r.games} />
         <Tile label={`${cfg.crash?.name || 'Sky High'} rounds (with bets)`} value={r.crashRounds} />
         <Tile label="Keno draws (with tickets)" value={r.kenoRounds} />
+        <Tile label="Ludo games" value={r.ludoGames} />
         <Tile label="Total bets" value={c(r.totalBets)} />
         <Tile label="Active players" value={r.activePlayers} />
         <Tile label="New users" value={r.newUsers} />
@@ -121,6 +123,17 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
             <span className="small">{s.crash.players} bettor(s) · bets {c(s.crash.betsTotal)} · paid {c(s.crash.paidOut)}</span>
           </div>
           <div className="rc-chips">{s.crash.last.map((p, i) => <span key={i} className={`x-chip ${p < 200 ? 'x-low' : p < 1000 ? 'x-mid' : 'x-high'}`}>{fmtX(p)}</span>)}</div>
+        </div>
+      )}
+      {s.ludo && (
+        <div className="tile rk-admin">
+          <div className="row-between">
+            <b>🎲 Ludo — {s.ludo.games.length} game(s) in progress</b>
+            <span className="small">{s.ludo.waiting.map((w) => `${fmt(w.stake)} ${w.size === 2 ? '1v1' : '4p'}: ${w.waiting} waiting`).join(' · ') || 'no one waiting'}</span>
+          </div>
+          {s.ludo.games.map((g) => (
+            <div key={g.id} className="small muted">#{g.id} · {fmt(g.stake)} × {g.size} · {g.players} · {g.rolls} rolls · {g.minutes} min</div>
+          ))}
         </div>
       )}
       {s.keno && (
@@ -366,8 +379,10 @@ function Games({ cfg }) {
         <button className={which === 'bingo' ? 'active' : ''} onClick={() => setWhich('bingo')}>🎱 Bingo</button>
         <button className={which === 'rocket' ? 'active' : ''} onClick={() => setWhich('rocket')}>✈️ {cfg.crash?.name || 'Sky High'}</button>
         <button className={which === 'keno' ? 'active' : ''} onClick={() => setWhich('keno')}>🎯 Keno</button>
+        <button className={which === 'ludo' ? 'active' : ''} onClick={() => setWhich('ludo')}>🎲 Ludo</button>
       </div>
-      {which === 'bingo' ? <BingoGames cfg={cfg} /> : which === 'rocket' ? <RocketRounds cfg={cfg} /> : <KenoRounds cfg={cfg} />}
+      {which === 'bingo' ? <BingoGames cfg={cfg} /> : which === 'rocket' ? <RocketRounds cfg={cfg} />
+        : which === 'keno' ? <KenoRounds cfg={cfg} /> : <LudoGames cfg={cfg} />}
     </div>
   );
 }
@@ -396,6 +411,38 @@ function RocketRounds({ cfg }) {
         </tbody>
       </table>
       <p className="muted small" style={{ padding: '0 10px' }}>Amounts in {cfg.currency}. Rounds where nobody bet show 0.</p>
+    </div>
+  );
+}
+
+function LudoGames({ cfg }) {
+  const [data] = usePoll(adminApi.ludoGames, 10000);
+  if (!data) return <div className="muted">Loading…</div>;
+  if (!data.items.length) return <div className="empty">No Ludo games yet.</div>;
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Time</th><th>Table</th><th>Players</th><th>Winner</th><th>Pot</th><th>Paid</th><th>House</th><th>Length</th></tr></thead>
+        <tbody>
+          {data.items.map((g) => {
+            const w = g.players.find((p) => p.userId === g.winner_id);
+            return (
+              <tr key={g.id}>
+                <td className="muted">{g.id}</td>
+                <td className="nowrap">{fmtDate(g.created_at)}</td>
+                <td>{fmt(g.stake)} × {g.size}</td>
+                <td className="small">{g.players.map((p) => `${p.name}${p.out ? ' (left)' : ''}`).join(', ')}</td>
+                <td><b>{w?.name || '—'}</b></td>
+                <td>{fmt(g.pot)}</td>
+                <td>{fmt(g.payout)}</td>
+                <td className="pos">{fmt(g.house)}</td>
+                <td className="small">{Math.round(g.duration_sec / 60)} min · {g.rolls} rolls</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="muted small" style={{ padding: '0 10px' }}>Amounts in {cfg.currency}.</p>
     </div>
   );
 }

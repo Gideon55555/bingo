@@ -9,6 +9,7 @@ import { db, getUser, history, createDeposit, createWithdrawal, countPending, re
 import { GameManager } from './game.js';
 import { CrashGame } from './crash.js';
 import { KenoGame } from './keno.js';
+import { LudoManager } from './ludo.js';
 import { startBot, stopBot, notifyAdmins, notifyUser } from './bot.js';
 import { createAdmin, isAdminId } from './admin.js';
 import { limit, allow } from './ratelimit.js';
@@ -37,6 +38,7 @@ if (recovered.length) console.log(`[recovery] refunded ${recovered.length} entr(
 const games = new GameManager(io, onBalanceChange);
 games.crash = config.crash.enabled ? new CrashGame(io, onBalanceChange, games) : null;
 games.keno = config.keno.enabled ? new KenoGame(io, onBalanceChange, games) : null;
+games.ludo = config.ludo.enabled ? new LudoManager(io, onBalanceChange, games) : null;
 const admin = createAdmin({ games, onBalanceChange });
 
 // ---------------- REST API ----------------
@@ -67,6 +69,10 @@ app.get('/api/config', (_req, res) =>
       ? { minBet: config.crash.minBet, maxBet: config.crash.maxBet, maxWin: config.crash.maxWin,
           houseEdge: config.crash.houseEdge, maxMultiplier: config.crash.maxMultiplier, betSec: config.crash.betSec,
           name: config.crash.name }
+      : null,
+    ludo: config.ludo.enabled
+      ? { stakes: config.ludo.stakes, houseCut: config.ludo.houseCut, tokens: config.ludo.tokens, turnSec: config.ludo.turnSec,
+          maxMisses: config.ludo.maxMisses, stepMs: config.ludo.stepMs }
       : null,
     keno: config.keno.enabled
       ? { minBet: config.keno.minBet, maxBet: config.keno.maxBet, maxWin: config.keno.maxWin, betSec: config.keno.betSec }
@@ -136,6 +142,12 @@ io.on('connection', (socket) => {
   socket.emit('lobby:all', games.lobby());
   if (games.crash) socket.emit('crash:lobby', games.crash.lobbySummary());
   if (games.keno) socket.emit('keno:lobby', games.keno.lobbySummary());
+  if (games.ludo) {
+    socket.emit('ludo:home', games.ludo.lobby());
+    // Reconnecting player who is in a game: rejoin the game channel
+    const loc = games.ludo.userLoc.get(String(user.id));
+    if (loc?.game) socket.join(`ludo:${loc.game}`);
+  }
   onBalanceChange(user.id);
 
   // Wrap handlers: rate-limit, and send thrown errors back to the client as ack errors
@@ -143,7 +155,7 @@ io.on('connection', (socket) => {
     socket.on(event, (payload, ack) => {
       if (typeof ack !== 'function') ack = () => {};
       if (!payload || typeof payload !== 'object') payload = {};
-      if (!allow(`sock:${user.id}`, 30, 10 * 1000)) return ack({ ok: false, error: 'Slow down a little 🙂' });
+      if (!allow(`sock:${user.id}`, config.socketRate, 10 * 1000)) return ack({ ok: false, error: 'Slow down a little 🙂' });
       try {
         ack({ ok: true, ...(fn(payload) || {}) });
       } catch (e) {
@@ -184,6 +196,33 @@ io.on('connection', (socket) => {
   handle('crash:exit', () => { socket.leave('crash'); });
   handle('crash:bet', ({ amount, auto }) => ({ me: crash().bet(getUser(user.id), amount, auto) }));
   handle('crash:cancel', () => ({ me: crash().cancel(user) }));
+  // ---- Ludo ----
+  const ludo = () => {
+    if (!games.ludo) throw new Error('This game is not available');
+    return games.ludo;
+  };
+  handle('ludo:enter', () => {
+    socket.join('ludo-lobby');
+    const me = ludo().locationOf(user.id);
+    let game = null;
+    if (me?.game) {
+      const g = ludo().games.get(me.game);
+      if (g) { socket.join(g.channel); game = g.stateFor(user.id); }
+    }
+    return { lobby: ludo().lobby(), me, game };
+  });
+  handle('ludo:exit', () => { socket.leave('ludo-lobby'); });
+  handle('ludo:join', ({ stake, size }) => ({ me: ludo().join(getUser(user.id), stake, size) }));
+  handle('ludo:leave', () => ({ me: ludo().leave(user) }));
+  handle('ludo:roll', () => { ludo().game(user.id).actRoll(user.id); });
+  handle('ludo:move', ({ token }) => { ludo().game(user.id).actMove(user.id, token); });
+  handle('ludo:watch', ({ id }) => {
+    const g = ludo().games.get(Number(id));
+    if (!g) throw new Error('Game not found');
+    socket.join(g.channel);
+    return { game: g.stateFor(user.id) };
+  });
+
   // ---- Keno ----
   const keno = () => {
     if (!games.keno) throw new Error('This game is not available');

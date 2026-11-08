@@ -9,7 +9,7 @@
     "dev:client": "vite --config client/vite.config.js",
     "build": "vite build --config client/vite.config.js",
     "start": "node server/index.js",
-    "test": "node test/simulate.js && node test/recovery.js && node test/crash.js && N=200000 node test/crash-edge.js && node test/keno.js && node test/keno-rtp.js"
+    "test": "node test/simulate.js && node test/recovery.js && node test/crash.js && N=200000 node test/crash-edge.js && node test/keno.js && node test/keno-rtp.js && node test/ludo-rules.js && node test/ludo.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",

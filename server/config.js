@@ -22,6 +22,8 @@ const derived = (label) => crypto.createHash('sha256').update(`${label}:${botTok
 
 export const config = {
   production: process.env.NODE_ENV === 'production',
+  // Max game actions per player per 10 seconds (anti-spam)
+  socketRate: num(process.env.SOCKET_RATE, 30),
   port: num(process.env.PORT, 3000),
   timezone: process.env.TZ,
   botToken,
@@ -66,6 +68,18 @@ export const config = {
     betSec: num(process.env.KENO_BET_SEC, 40),
     ballMs: num(process.env.KENO_BALL_MS, 600),
     resultSec: num(process.env.KENO_RESULT_SEC, 7),
+  },
+
+  // Ludo (player vs player). Stakes in ETB in .env, cents internally.
+  ludo: {
+    enabled: process.env.LUDO_ENABLED !== 'false',
+    stakes: list(process.env.LUDO_STAKES || '10,20,50,100').map(toCents),
+    houseCut: num(process.env.LUDO_HOUSE_CUT, 0.1),
+    tokens: Math.min(4, Math.max(1, num(process.env.LUDO_TOKENS, 2))),
+    turnSec: num(process.env.LUDO_TURN_SEC, 15),
+    maxMisses: num(process.env.LUDO_MAX_MISSES, 3),
+    stepMs: num(process.env.LUDO_STEP_MS, 140),
+    delayScale: num(process.env.LUDO_DELAY_SCALE, 1),
   },
 
   // Wallet
