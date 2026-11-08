@@ -141,7 +141,7 @@ main { flex: 1; padding: 12px 14px 90px; }
 .admin-section { display: grid; gap: 10px; }
 .admin-section h3 { margin: 10px 0 0; }
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
-.small-seg { margin: 0; max-width: 480px; }
+.small-seg { margin: 0; max-width: 560px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .tiles.two { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .tile { background: var(--bg2); border-radius: 12px; padding: 12px; }
@@ -345,3 +345,34 @@ textarea { width: 100%; resize: vertical; }
 .die-face { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); width: 100%; height: 100%; gap: 2px; }
 .die-face span { border-radius: 50%; }
 .die-face span.pip { background: #111827; margin: 2px; }
+
+/* ---------------- 8-ball pool ---------------- */
+.pool-card { background: radial-gradient(circle at 85% 20%, rgba(26,154,85,.55), transparent 55%), linear-gradient(135deg, #0b3b25, #1b2440); }
+.pool-card .join { color: #8ff0b8; }
+.mini-pool { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 9px; font-weight: 800;
+  color: #111; box-shadow: inset -2px -2px 4px rgba(0,0,0,.35); position: relative; }
+.mini-pool::before { content: ''; position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #fff; }
+.mini-pool b { position: relative; font-size: 8px; line-height: 1; }
+.mini-pool.gone { opacity: .18; }
+.pool { display: grid; gap: 8px; }
+.pool-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pool-table { padding: 14px; }
+.pt-amt { font-size: 24px; font-weight: 900; }
+.pt-amt small { font-size: 12px; color: var(--hint); }
+.pool-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pool-chip { background: var(--bg2); border-radius: 12px; padding: 8px 10px; position: relative; overflow: hidden; --c: #ffb020; }
+.pool-chip.active { background: color-mix(in srgb, #1a9a55 25%, var(--bg2)); --c: #22c55e; }
+.pool-group { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 4px; min-height: 20px; align-items: center; }
+.pool-msg { background: color-mix(in srgb, var(--bad) 22%, var(--bg2)); border-radius: 10px; padding: 6px 10px; font-size: 13px; text-align: center; }
+.pool-play { display: flex; gap: 8px; justify-content: center; align-items: stretch; }
+.pool-canvas { height: min(calc(var(--tg-viewport-stable-height, 100vh) - 290px), 640px); aspect-ratio: 114 / 214; max-width: calc(100% - 64px);
+  touch-action: none; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+.pool-power { width: 52px; position: relative; border-radius: 14px; background: linear-gradient(#1f2937, #111827); overflow: hidden; touch-action: none;
+  border: 2px solid rgba(255,255,255,.08); cursor: grab; }
+.pool-power.off { opacity: .35; pointer-events: none; }
+.pp-fill { position: absolute; left: 0; right: 0; top: 0; height: 100%; transform-origin: top; background: linear-gradient(#22c55e, #facc15 55%, #ef4444); opacity: .85; }
+.pp-cue { position: absolute; left: 50%; top: 4%; width: 10px; height: 60%; margin-left: -5px; border-radius: 5px;
+  background: linear-gradient(#f1e3c6 0 6%, #2d6cdf 6% 9%, #d9b37a 9% 30%, #a0652e 30% 85%, #3b200c 85%); }
+.pp-label { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: 800; color: #fff; }
+.pool-under { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+.pool-hint { text-align: center; font-size: 13px; font-weight: 600; color: var(--hint); }

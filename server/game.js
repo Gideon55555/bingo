@@ -250,6 +250,7 @@ export class GameManager {
     if (this.crash) refunded += this.crash.pauseNow() ? 1 : 0;
     if (this.keno) refunded += this.keno.pauseNow() ? 1 : 0;
     if (this.ludo) refunded += this.ludo.pauseNow() ? 1 : 0;
+    if (this.pool) refunded += this.pool.pauseNow() ? 1 : 0;
     this.io.emit('lobby:all', this.lobby());
     return { refunded };
   }
@@ -268,6 +269,7 @@ export class GameManager {
     this.crash?.stop();
     this.keno?.stop();
     this.ludo?.stop();
+    this.pool?.stop();
   }
 
   /** Live snapshot for the admin panel */

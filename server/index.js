@@ -10,6 +10,7 @@ import { GameManager } from './game.js';
 import { CrashGame } from './crash.js';
 import { KenoGame } from './keno.js';
 import { LudoManager } from './ludo.js';
+import { PoolManager } from './pool.js';
 import { startBot, stopBot, notifyAdmins, notifyUser } from './bot.js';
 import { createAdmin, isAdminId } from './admin.js';
 import { limit, allow } from './ratelimit.js';
@@ -39,6 +40,7 @@ const games = new GameManager(io, onBalanceChange);
 games.crash = config.crash.enabled ? new CrashGame(io, onBalanceChange, games) : null;
 games.keno = config.keno.enabled ? new KenoGame(io, onBalanceChange, games) : null;
 games.ludo = config.ludo.enabled ? new LudoManager(io, onBalanceChange, games) : null;
+games.pool = config.pool.enabled ? new PoolManager(io, onBalanceChange, games) : null;
 const admin = createAdmin({ games, onBalanceChange });
 
 // ---------------- REST API ----------------
@@ -69,6 +71,9 @@ app.get('/api/config', (_req, res) =>
       ? { minBet: config.crash.minBet, maxBet: config.crash.maxBet, maxWin: config.crash.maxWin,
           houseEdge: config.crash.houseEdge, maxMultiplier: config.crash.maxMultiplier, betSec: config.crash.betSec,
           name: config.crash.name }
+      : null,
+    pool: config.pool.enabled
+      ? { stakes: config.pool.stakes, houseCut: config.pool.houseCut, shotSec: config.pool.shotSec, maxMisses: config.pool.maxMisses }
       : null,
     ludo: config.ludo.enabled
       ? { stakes: config.ludo.stakes, houseCut: config.ludo.houseCut, tokens: config.ludo.tokens, turnSec: config.ludo.turnSec,
@@ -148,6 +153,11 @@ io.on('connection', (socket) => {
     const loc = games.ludo.userLoc.get(String(user.id));
     if (loc?.game) socket.join(`ludo:${loc.game}`);
   }
+  if (games.pool) {
+    socket.emit('pool:home', games.pool.lobby());
+    const loc = games.pool.userLoc.get(String(user.id));
+    if (loc?.game) socket.join(`pool:${loc.game}`);
+  }
   onBalanceChange(user.id);
 
   // Wrap handlers: rate-limit, and send thrown errors back to the client as ack errors
@@ -222,6 +232,26 @@ io.on('connection', (socket) => {
     socket.join(g.channel);
     return { game: g.stateFor(user.id) };
   });
+
+  // ---- 8-ball pool ----
+  const pool = () => {
+    if (!games.pool) throw new Error('This game is not available');
+    return games.pool;
+  };
+  handle('pool:enter', () => {
+    socket.join('pool-lobby');
+    const me = pool().locationOf(user.id);
+    let game = null;
+    if (me?.game) {
+      const g = pool().games.get(me.game);
+      if (g) { socket.join(g.channel); game = g.stateFor(user.id); }
+    }
+    return { lobby: pool().lobby(), me, game };
+  });
+  handle('pool:exit', () => { socket.leave('pool-lobby'); });
+  handle('pool:join', ({ stake }) => ({ me: pool().join(getUser(user.id), stake) }));
+  handle('pool:leave', () => ({ me: pool().leave(user) }));
+  handle('pool:shoot', (shot) => pool().game(user.id).shoot(user.id, shot));
 
   // ---- Keno ----
   const keno = () => {

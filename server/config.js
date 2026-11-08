@@ -82,6 +82,16 @@ export const config = {
     delayScale: num(process.env.LUDO_DELAY_SCALE, 1),
   },
 
+  // 8-ball pool (1 vs 1). Stakes in ETB in .env, cents internally.
+  pool: {
+    enabled: process.env.POOL_ENABLED !== 'false',
+    stakes: list(process.env.POOL_STAKES || '10,20,50,100').map(toCents),
+    houseCut: num(process.env.POOL_HOUSE_CUT, 0.1),
+    shotSec: num(process.env.POOL_SHOT_SEC, 30),
+    maxMisses: num(process.env.POOL_MAX_MISSES, 3),
+    delayScale: num(process.env.POOL_DELAY_SCALE, 1), // < 1 only for automated tests
+  },
+
   // Wallet
   currency: process.env.CURRENCY || 'ETB',
   paymentInfo: process.env.PAYMENT_INFO || 'Telebirr: 09XXXXXXXX (Your Name)',

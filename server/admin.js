@@ -5,7 +5,7 @@ import { config } from './config.js';
 import { fmtMoney, fmt, toCents } from '../shared/money.js';
 import { authenticate } from './auth.js';
 import {
-  getStats, listCrashRounds, listKenoRounds, listLudoGames, findUser, listUsers, listTransactions, listGames, adjustBalance, allUserIds, history,
+  getStats, listCrashRounds, listKenoRounds, listLudoGames, listPoolGames, findUser, listUsers, listTransactions, listGames, adjustBalance, allUserIds, history,
   approveDeposit, rejectDeposit, markWithdrawalPaid, rejectWithdrawal, pendingTx,
 } from './db.js';
 import { notifyUser, sendMessage } from './bot.js';
@@ -18,7 +18,8 @@ export function createAdmin({ games, onBalanceChange }) {
   let broadcastJob = null;
 
   const actions = {
-    stats: () => ({ ...getStats(), paused: games.paused, rooms: games.adminSnapshot(), crash: games.crash?.adminSnapshot() || null, keno: games.keno?.adminSnapshot() || null, ludo: games.ludo?.adminSnapshot() || null }),
+    stats: () => ({ ...getStats(), paused: games.paused, rooms: games.adminSnapshot(), crash: games.crash?.adminSnapshot() || null, keno: games.keno?.adminSnapshot() || null, ludo: games.ludo?.adminSnapshot() || null, pool: games.pool?.adminSnapshot() || null }),
+    poolGames: () => listPoolGames(50),
     ludoGames: () => listLudoGames(50),
     kenoRounds: () => listKenoRounds(50),
     crashRounds: () => listCrashRounds(50),
@@ -153,6 +154,7 @@ function adminRouter(actions) {
   r.get('/crash-rounds', wrap(() => ({ items: actions.crashRounds() })));
   r.get('/keno-rounds', wrap(() => ({ items: actions.kenoRounds() })));
   r.get('/ludo-games', wrap(() => ({ items: actions.ludoGames() })));
+  r.get('/pool-games', wrap(() => ({ items: actions.poolGames() })));
   r.post('/decide', wrap((req) => actions.decide(req.body.kind, Number(req.body.id), !!req.body.approve, req.adminName)));
   r.post('/adjust', wrap((req) => actions.adjust(req.body.userId, req.body.amount, req.body.note, req.adminName)));
   r.post('/pause', wrap(() => actions.pause()));

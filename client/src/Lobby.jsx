@@ -30,7 +30,7 @@ function RoomCard({ r, cfg, onEnter }) {
 
 const seenRules = () => { try { return localStorage.getItem('rules_seen') === '1'; } catch { return false; } };
 
-export default function Lobby({ rooms, cfg, onEnter, crash, onRocket, keno, onKeno, ludo, onLudo }) {
+export default function Lobby({ rooms, cfg, onEnter, crash, onRocket, keno, onKeno, ludo, onLudo, pool, onPool }) {
   const [showRules, setShowRules] = useState(() => !seenRules());
   const closeRules = () => {
     try { localStorage.setItem('rules_seen', '1'); } catch { /* ignore */ }
@@ -50,6 +50,21 @@ export default function Lobby({ rooms, cfg, onEnter, crash, onRocket, keno, onKe
           </div>
           <div className="rc-right">
             <span className={`pill ${crash.phase === 'flying' ? 'playing' : crash.phase}`}>{crash.phase === 'flying' ? 'LIVE' : crash.phase === 'betting' ? 'Betting' : crash.phase}</span>
+            <div className="join">Play →</div>
+          </div>
+        </button>
+      )}
+      {pool && (
+        <button className="rocket-card pool-card" onClick={onPool}>
+          <div className="rc-left">
+            <div className="rc-title">🎱 8-Ball Pool</div>
+            <div className="small">1 vs 1 skill game · winner takes the pot</div>
+            <div className="rc-chips">
+              {[1, 10, 3, 14, 8].map((n) => <span key={n} className="mini-pool" style={{ background: n >= 9 ? `linear-gradient(#f8f8f2 25%, ${['', '#f5c400', '#1d4ed8', '#dc2626', '#6d28d9', '#ea580c', '#15803d', '#7f1d1d', '#111'][n - 8] || '#111'} 25% 75%, #f8f8f2 75%)` : ['', '#f5c400', '#1d4ed8', '#dc2626', '#6d28d9', '#ea580c', '#15803d', '#7f1d1d', '#111'][n] }}><b>{n}</b></span>)}
+            </div>
+          </div>
+          <div className="rc-right">
+            <span className="pill playing">{pool.playing ? `${pool.playing} playing` : 'Skill'}</span>
             <div className="join">Play →</div>
           </div>
         </button>
