@@ -5,6 +5,8 @@ import { letterFor } from '../../shared/cards.js';
 import Card from './Card.jsx';
 import { fmt } from '../../shared/money.js';
 import { t, useLang } from './i18n.js';
+import { callNumber, preloadCalls, sfx, soundSettings, setSound, onSoundChange } from './sound.js';
+import { callFor } from '../../shared/amharic-calls.js';
 
 const loadAutoMark = () => {
   try { return localStorage.getItem('automark') !== '0'; } catch { return true; }
@@ -17,6 +19,8 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
   const [marked, setMarked] = useState(new Set());
   const [autoMark, setAutoMark] = useState(loadAutoMark);
   const [busy, setBusy] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(soundSettings().voice);
+  useEffect(() => onSoundChange(() => setVoiceOn(soundSettings().voice)), []);
 
   useEffect(() => {
     let alive = true;
@@ -31,6 +35,7 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
     const onCall = ({ stake: s, number }) => {
       if (s !== stake) return;
       haptic('light');
+      callNumber(number); // Amharic caller
       setRoom((prev) => (prev ? { ...prev, called: [...prev.called, number] } : prev));
     };
     socket.on('room', onRoom);
@@ -54,6 +59,12 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
     if (room?.state !== 'finished' || !room.result) return;
     const won = room.result.winners.some((w) => w.userId === String(user.id));
     haptic(won ? 'success' : 'error');
+    sfx(won ? 'win' : 'lose');
+  }, [room?.state]);
+
+  // While waiting for the start, quietly load the first calls so the caller is instant
+  useEffect(() => {
+    if (room?.state === 'countdown') preloadCalls(Array.from({ length: 75 }, (_, i) => i + 1).sort(() => Math.random() - 0.5).slice(0, 12));
   }, [room?.state]);
 
   const called = useMemo(() => new Set(room?.called || []), [room?.called]);
@@ -79,6 +90,7 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
   const pick = (card) => run(async () => {
     await emit('card:pick', { stake, card });
     haptic('medium');
+    sfx('pick');
     setPreview(null);
   });
   const unpick = (card) => run(async () => {
@@ -87,7 +99,7 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
   });
   const claim = () => run(async () => {
     const res = await emit('bingo', { stake });
-    if (res.valid === false) { haptic('error'); toast(res.message); }
+    if (res.valid === false) { haptic('error'); sfx('lose'); toast(res.message); } else sfx('bingo');
   });
   const toggle = (n) => {
     haptic('light');
@@ -119,6 +131,9 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
         <div className="muted small">{t('prize')}</div>
         <div className="big accent">{fmt(room.prize)}</div>
       </div>
+      <button className={`voice-btn ${voiceOn ? 'on' : ''}`} onClick={() => setSound('voice', !voiceOn)} aria-label={t('voiceCaller')} title={t('voiceCaller')}>
+        {voiceOn ? '🔊' : '🔇'}
+      </button>
     </div>
   );
 
@@ -207,6 +222,7 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
           {room.called.slice(-6, -1).reverse().map((n) => (
             <span key={n} className={`mini-ball ball-${letterFor(n)}`}>{n}</span>
           ))}
+          {lastCall && <div className="call-am">{callFor(lastCall).text}</div>}
           <div className="muted small">{t('calledOf', { n: room.called.length })}</div>
         </div>
       </div>

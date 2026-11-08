@@ -61,7 +61,8 @@ export function serveStatic(app, dist) {
     if (p.startsWith('/api') || p.startsWith('/socket.io') || p.startsWith('/tg-webhook') || p === '/healthz') return next();
     const f = files.get(p);
     if (f && p !== '/index.html') {
-      return send(req, res, f, p.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600');
+      return send(req, res, f, p.startsWith('/assets/') ? 'public, max-age=31536000, immutable'
+        : p.startsWith('/voice/') ? 'public, max-age=2592000' : 'public, max-age=3600');
     }
     if (p.startsWith('/assets/')) return res.status(404).end(); // old build file: don't send HTML instead
     if (!index) return next();
