@@ -65,6 +65,8 @@ export function createAdmin({ games, onBalanceChange }) {
           : tr(t.user_id, 'depositRejected', { amount: money(t.amount), ref: t.reference }));
       } else {
         const cur = getTx(id);
+        if (cur && cur.type === 'withdraw' && cur.status === 'pending' && ['sending', 'sent'].includes(cur.payout_status))
+          throw new Error('This withdrawal is being paid automatically by Chapa — wait for it to finish');
         if (approve && cur && cur.type === 'withdraw' && cur.status === 'pending' && twoPersonActive() && -cur.amount >= config.withdrawSecondApproval) {
           const prior = cur.approvals ? JSON.parse(cur.approvals) : [];
           if (!prior.length) {

@@ -138,6 +138,15 @@ export const config = {
     bonusWager: num(process.env.BONUS_WAGER, 1),                       // bonus must be played this many times before withdrawal
   },
 
+  // Chapa payment gateway (automatic deposits/payouts). Empty key = off (manual deposits only).
+  chapa: {
+    secretKey: process.env.CHAPA_SECRET_KEY || '',
+    webhookSecret: process.env.CHAPA_WEBHOOK_SECRET || '',            // defaults to the secret key
+    baseUrl: (process.env.CHAPA_API_URL || 'https://api.chapa.co/v1').replace(/\/+$/, ''),
+    autoPayoutMax: cents(process.env.CHAPA_AUTO_PAYOUT_MAX, 0),        // ETB; 0 = admins approve every payout
+    payoutBank: process.env.CHAPA_PAYOUT_BANK || 'telebirr',           // bank name (or Chapa bank id) for payouts
+  },
+
   // Wallet
   currency: process.env.CURRENCY || 'ETB',
   paymentInfo: process.env.PAYMENT_INFO || 'Telebirr: 09XXXXXXXX (Your Name)',

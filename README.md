@@ -103,6 +103,36 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
    shows roughly where the ball would stop. Every roll is simulated on the server with deterministic shared physics.
 7. 25-second roll clock (`KERENBULA_ROLL_SEC`): running out loses that ball; 3 in a row forfeits. Restart = refund.
 
+**🔊 Bingo voice caller (Amharic)** — every called number is spoken: the letter, then the number in Amharic words
+(54 → "ጂ ሃምሳ አራት"), and shown as text under the ball. Clips are in `client/public/voice/am/` (generated offline with
+eSpeak NG). For a natural voice run `scripts/voice/make-azure.js` (Azure's Amharic neural voices, free tier is enough),
+or drop in real recordings named `1.mp3`…`75.mp3`. Players can switch the voice off in Settings.
+
+**🤖 Practice & 👥 invite a friend** (pool, Kerenbula, Ludo) — free practice against a bot (no money, not recorded);
+"Invite a friend" opens a private table with a code and a Telegram link (`t.me/<bot>?start=pool_CODE`), refunded if
+nobody joins within 30 minutes. The home screen shows how many players are online.
+
+**🎁 Growth** — referral link (`t.me/<bot>?start=ref_<id>`): the inviter gets `REFERRAL_BONUS` when a new player's first
+deposit ≥ `REFERRAL_MIN_DEPOSIT` is approved (once per friend, not for accounts on the same phone). Daily reward
+(`DAILY_REWARD`) after a first deposit. Bonus money must be played `BONUS_WAGER`× before it can be withdrawn.
+Weekly top-winners board on the home screen.
+
+**🛡 Play responsibly** — 18+ confirmation, self-set daily/weekly deposit limits (lower = immediate, higher = after 24 h),
+self-exclusion for 7/30/90/180 days (withdrawals still allowed), play-time reminder with today's result.
+
+**🚩 Fraud & admin security** — device + IP per login; accounts that used the same phone can't sit at the same table;
+Risk tab (shared phones, one-sided pairs, deposit → cash-out without play); warnings on withdrawals; freeze accounts.
+Permanent admin log; optional 6-digit 2-step login for the browser panel (`npm run admin:2fa`); withdrawals ≥
+`WITHDRAW_SECOND_APPROVAL` need a second admin when there are 2+ admins.
+
+**⚡ Chapa (automatic payments)** — with `CHAPA_SECRET_KEY` set, players pay with Telebirr / CBE Birr / M-Pesa on Chapa's
+page and the balance updates by itself. Every payment is re-checked with Chapa's verify API before crediting (webhook
+signatures are checked too, and a payment can never be credited twice). Withdrawals up to `CHAPA_AUTO_PAYOUT_MAX` with
+no fraud warnings are paid automatically; everything else waits for an admin. Manual deposits keep working.
+
+**Also** — sound effects, Settings (sounds / voice / data saver), encrypted Telegram backups (`BACKUP_PASSWORD`,
+`npm run backup:decrypt`), app crashes on phones reported to Admin → App errors.
+
 **Wallet flow**
 - **Deposit:** the player sends money to your account, then enters the amount and transaction ID.
   All admins get a bot message with **Approve / Reject** buttons. Approving credits the balance.
@@ -185,6 +215,8 @@ a 3-player Cutthroat match, Kerenbula physics + scoring (13 checks) and Kerenbul
 and security (35 checks: forged/expired/tampered logins, brute force, rate limits, oversized input, path tricks,
 headers, compression/caching, socket limits). `N=1000 npm run load` runs a load test (1,000 players betting at once).
 GitHub Actions runs the audit, build and all tests on every push (`.github/workflows/ci.yml`).
+Also: multi-card bingo (6), admin security (16), fraud & collusion (14), responsible gambling (21),
+practice & invites (15, full bot games), growth (15), backups & error reports (9), Chapa against a mock API (20).
 
 ## Deploying
 

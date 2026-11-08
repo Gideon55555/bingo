@@ -12,6 +12,10 @@ import { seen, isFrozen, assertNotFrozen } from './risk.js';
 import * as rg from './rg.js';
 import * as growth from './growth.js';
 import { recordClientError } from './clienterrors.js';
+import * as chapa from './chapa.js';
+import { userFlags } from './risk.js';
+import { invalidateStats, logAdmin, getTx } from './db.js';
+import { sendMessage } from './bot.js';
 import { setReferralHandler } from './bot.js';
 import { upsertUser } from './db.js';
 import { startMonitor, health } from './monitor.js';
@@ -74,7 +78,7 @@ setReferralHandler((from, inviterId) => {
 startMonitor({ io, games });
 
 // ---------------- REST API ----------------
-app.use(express.json({ limit: '20kb' }));
+app.use(express.json({ limit: '20kb', verify: (req, _res, buf) => { if (req.url.startsWith('/api/chapa/webhook')) req.rawBody = Buffer.from(buf); } }));
 app.use('/api', limit('api', config.apiRateIp, 60 * 1000)); // per IP (generous: many phones share one carrier IP)
 
 // Health check for uptime monitors / load balancers: 200 when healthy, 503 when not
@@ -121,6 +125,7 @@ app.get('/api/config', (_req, res) =>
       : null,
     devMode: config.devMode,
     botUsername: botUsername(),
+    chapa: chapa.chapaEnabled() ? { enabled: true, autoPayoutMax: config.chapa.autoPayoutMax } : null,
   }));
 
 app.get('/api/me', requireAuth, (req, res) => {
@@ -135,6 +140,70 @@ app.post('/api/client-error', limit('clienterr', 20, 60 * 1000), (req, res) => {
   try { uid = h.startsWith('tma ') ? authenticate(h.slice(4))?.id : null; } catch { /* ignore */ }
   recordClientError(req.body, uid);
   res.json({ ok: true });
+});
+
+const perUser = (req) => req.user.id;
+const walletLimit = limit('wallet', config.walletRate, 10 * 60 * 1000, perUser); // deposit/withdraw requests per 10 min per player
+
+// ---- Chapa: automatic deposits & payouts ----
+const chapaHooks = {
+  async onCredited(t) { // a Chapa deposit was verified and credited (exactly once)
+    invalidateStats();
+    onBalanceChange(t.user_id);
+    await notifyUser(t.user_id, tr(t.user_id, 'depositApproved', { amount: money(t.amount) }));
+    const ref = growth.onDepositApproved(t);
+    if (ref) { onBalanceChange(ref.inviterId); notifyUser(ref.inviterId, tr(ref.inviterId, 'refBonus', { amount: money(ref.amount) })); }
+  },
+  async onPaid(t) {
+    invalidateStats();
+    await notifyUser(t.user_id, tr(t.user_id, 'withdrawSent', { amount: money(-t.amount), phone: t.phone }));
+  },
+  async onFailed(t) { // automatic payout failed → hand it to the admins as a normal request
+    for (const a of config.adminIds) await sendMessage(a, `⚠️ Automatic payout for withdrawal #${t.id} (${money(-t.amount)} to ${t.phone}) failed. Please pay it manually.`);
+    notifyAdmins(t.id);
+  },
+};
+const sweepChapa = chapa.startChapaSweeper(chapaHooks);
+
+app.post('/api/chapa/deposit', requireAuth, walletLimit, async (req, res) => {
+  if (!chapa.chapaEnabled()) return res.status(400).json({ error: 'Online payment is not available' });
+  const amount = Math.floor(Number(req.body.amount));
+  if (!Number.isFinite(amount) || amount < config.minDeposit) return res.status(400).json({ error: `Minimum deposit is ${money(config.minDeposit)}` });
+  if (amount > config.maxDeposit) return res.status(400).json({ error: `Maximum deposit is ${money(config.maxDeposit)}` });
+  try { rg.checkDeposit(req.user.id, amount); } catch (e) { return res.status(400).json({ error: e.message, rg: true }); }
+  if (countPending(req.user.id, 'deposit') >= config.maxPendingDeposits)
+    return res.status(400).json({ error: 'You already have deposits waiting. Please finish or wait for them first.' });
+  try { res.json(await chapa.createCheckout(req.user, amount)); } catch (e) { res.status(502).json({ error: publicMessage(e) }); }
+});
+
+// The app asks "did my payment arrive?" — answered by asking Chapa, never by trusting the phone
+app.get('/api/chapa/status/:ref', requireAuth, async (req, res) => {
+  const t = getTx(Number(String(req.params.ref).replace(/\D/g, '')) || 0);
+  const mine = t && t.user_id === String(req.user.id) ? t : null;
+  const byRef = mine || db.prepare("SELECT * FROM transactions WHERE reference = ? AND user_id = ? AND provider = 'chapa'").get(String(req.params.ref), String(req.user.id));
+  if (!byRef) return res.status(404).json({ error: 'Not found' });
+  try { const r = await chapa.confirmDeposit(byRef.reference, chapaHooks); res.json({ status: r.status }); } catch (e) { res.json({ status: 'pending' }); }
+});
+
+// Chapa → us: signed webhook (x-chapa-signature). Every event is re-checked with Chapa's verify API.
+app.post('/api/chapa/webhook', async (req, res) => {
+  if (!chapa.chapaEnabled()) return res.status(404).end();
+  if (!chapa.validSignature(req.rawBody || Buffer.from(JSON.stringify(req.body)), req.headers)) {
+    console.warn(`[security] Chapa webhook with a bad signature from ${req.ip}`);
+    return res.status(401).json({ error: 'bad signature' });
+  }
+  const ev = req.body || {};
+  res.status(200).json({ ok: true }); // acknowledge fast; then process
+  try {
+    if (String(ev.type).toLowerCase() === 'payout' || String(ev.event || '').startsWith('payout')) await chapa.confirmPayout(ev.reference, chapaHooks);
+    else await chapa.confirmDeposit(ev.tx_ref || ev.trx_ref || ev.reference, chapaHooks);
+  } catch (e) { console.error('[chapa] webhook processing failed:', e.message); }
+});
+// Chapa also calls the callback_url after checkout (GET ?trx_ref=…): same verify-then-credit path
+app.get('/api/chapa/callback', async (req, res) => {
+  const ref = String(req.query.trx_ref || req.query.tx_ref || '');
+  if (chapa.chapaEnabled() && ref) { try { await chapa.confirmDeposit(ref, chapaHooks); } catch { /* sweeper retries */ } }
+  res.type('text').send('ok');
 });
 
 // ---- Growth: referrals, daily reward, leaderboard ----
@@ -168,8 +237,6 @@ app.post('/api/lang', requireAuth, (req, res) => { setUserLang(req.user.id, req.
 app.get('/api/history', requireAuth, (req, res) => res.json({ items: history(req.user.id) }));
 
 const money = (n) => fmtMoney(n, config.currency);
-const perUser = (req) => req.user.id;
-const walletLimit = limit('wallet', config.walletRate, 10 * 60 * 1000, perUser); // deposit/withdraw requests per 10 min per player
 
 app.post('/api/deposit', requireAuth, walletLimit, async (req, res) => {
   const amount = Math.floor(Number(req.body.amount)); // cents
@@ -208,6 +275,14 @@ app.post('/api/withdraw', requireAuth, walletLimit, (req, res) => {
   try {
     const id = createWithdrawal(req.user.id, amount, phone);
     onBalanceChange(req.user.id);
+    const t = getTx(id);
+    if (chapa.canAutoPay(t, userFlags(req.user.id))) {
+      // Small, clean withdrawal: paid automatically through Chapa (admins get an FYI, no buttons)
+      chapa.sendPayout(t)
+        .then(() => Promise.all(config.adminIds.map((a) => sendMessage(a, `🤖 Withdrawal #${id}: ${money(amount)} to ${phone} is being paid automatically via Chapa.`))))
+        .catch(() => chapaHooks.onFailed(t));
+      return res.json({ ok: true, id, auto: true });
+    }
     notifyAdmins(id);
     res.json({ ok: true, id });
   } catch (e) {
