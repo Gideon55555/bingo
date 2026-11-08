@@ -63,7 +63,8 @@ app.get('/api/config', (_req, res) =>
     minAge: config.minAge,
     crash: config.crash.enabled
       ? { minBet: config.crash.minBet, maxBet: config.crash.maxBet, maxWin: config.crash.maxWin,
-          houseEdge: config.crash.houseEdge, maxMultiplier: config.crash.maxMultiplier, betSec: config.crash.betSec }
+          houseEdge: config.crash.houseEdge, maxMultiplier: config.crash.maxMultiplier, betSec: config.crash.betSec,
+          name: config.crash.name }
       : null,
     devMode: config.devMode,
   }));

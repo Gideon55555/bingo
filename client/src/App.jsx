@@ -68,7 +68,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">{rocket ? '🚀 Rocket' : stake !== null ? '🎱 Bingo' : `🎮 ${cfg.appName || 'Games'}`}</div>
+        <div className="brand">{rocket ? `✈️ ${cfg.crash?.name || 'Sky High'}` : stake !== null ? '🎱 Bingo' : `🎮 ${cfg.appName || 'Games'}`}</div>
         <button className="balance" onClick={() => { goHome(); setTab('wallet'); }}>
           {fmt(balance)} {cfg.currency}
         </button>

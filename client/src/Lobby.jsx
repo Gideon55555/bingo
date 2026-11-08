@@ -42,8 +42,8 @@ export default function Lobby({ rooms, cfg, onEnter, crash, onRocket }) {
       {crash && (
         <button className="rocket-card" onClick={onRocket}>
           <div className="rc-left">
-            <div className="rc-title">🚀 Rocket</div>
-            <div className="small">Cash out before it flies away</div>
+            <div className="rc-title">✈️ {cfg.crash?.name || 'Sky High'}</div>
+            <div className="small">Cash out before the plane flies away</div>
             <div className="rc-chips">
               {crash.last.map((p, i) => <span key={i} className={`x-chip ${p < 200 ? 'x-low' : p < 1000 ? 'x-mid' : 'x-high'}`}>{fmtX(p)}</span>)}
             </div>

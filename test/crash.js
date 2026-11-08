@@ -145,7 +145,7 @@ try {
   srv = startServer(); await srv.ready;
   assert.equal(db.getUser('3003').balance, 100000); ok('crash of the server refunds Rocket bets on restart');
 
-  console.log(`\nAll ${passed} Rocket checks passed ✅`);
+  console.log(`\nAll ${passed} crash-game checks passed ✅`);
 } catch (e) {
   console.error('\n❌ FAILED:', e.message);
   if (srv) console.error(srv.log().slice(-1500));

@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { socket, emit, haptic, toast } from './api.js';
 import { fmt, toCents } from '../../shared/money.js';
-import { multiplierAt, fmtX } from '../../shared/crash.js';
+import { fmtX, msFor } from '../../shared/crash.js';
+import { startFlight } from './flight.js';
 
 const loadPref = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 const savePref = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
@@ -17,63 +18,83 @@ export default function Crash({ cfg, balance }) {
   const [busy, setBusy] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [flash, setFlash] = useState(null);
-  const flightRef = useRef(null); // performance.now() at take-off
-  const bettingEndRef = useRef(null);
-  const [now, setNow] = useState(0);
+
+  // Live animation data, read by the canvas loop (no React re-render per frame)
+  const engine = useRef({ phase: 'idle', flightStart: null, point: 100, crashMs: 0, crashedAt: 0, bettingEnd: 0,
+    betSec: cfg.crash.betSec || 7, myAmount: 0, currency: cfg.currency }).current;
+  const canvasRef = useRef(null);
+  const multRef = useRef(null);
+  const countRef = useRef(null);
+  const barRef = useRef(null);
+  const cashRef = useRef(null);
 
   // ---------- server sync ----------
   useEffect(() => {
     const apply = (s) => {
+      const now = performance.now();
+      if (s.phase === 'flying') engine.flightStart = now - s.elapsedMs;
+      if (s.phase === 'betting') engine.bettingEnd = now + s.bettingLeftMs;
+      if (s.phase === 'crashed') {
+        engine.point = s.point;
+        engine.crashMs = msFor(s.point);
+        engine.crashedAt = now;
+      }
+      engine.phase = s.phase;
       setSt(s);
-      if (s.phase === 'flying') flightRef.current = performance.now() - s.elapsedMs;
-      if (s.phase === 'betting') bettingEndRef.current = performance.now() + s.bettingLeftMs;
     };
+    // Gentle clock correction once a second: small drift is eased out, big gaps snap
+    const onTime = ({ e }) => {
+      if (engine.phase !== 'flying') return;
+      const target = performance.now() - e;
+      const diff = target - engine.flightStart;
+      engine.flightStart += Math.abs(diff) > 400 ? diff : diff * 0.25;
+    };
+    const onBets = ({ bets }) => setSt((p) => (p ? { ...p, bets } : p));
     const enter = () => emit('crash:enter').then((r) => { apply(r.state); setMe(r.me); }).catch((e) => toast(e.message));
     enter();
     socket.on('connect', enter);
     socket.on('crash:state', apply);
-    socket.on('crash:bets', ({ bets }) => setSt((p) => (p ? { ...p, bets } : p)));
+    socket.on('crash:t', onTime);
+    socket.on('crash:bets', onBets);
     socket.on('crash:me', setMe);
     return () => {
       socket.off('connect', enter);
       socket.off('crash:state', apply);
-      socket.off('crash:bets');
+      socket.off('crash:t', onTime);
+      socket.off('crash:bets', onBets);
       socket.off('crash:me', setMe);
       emit('crash:exit').catch(() => {});
     };
   }, []);
 
-  // ---------- animation clock ----------
+  // ---------- canvas loop ----------
+  const hasStage = !!st;
   useEffect(() => {
-    let raf;
-    const loop = () => { setNow(performance.now()); raf = requestAnimationFrame(loop); };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+    if (!canvasRef.current) return;
+    return startFlight(canvasRef.current, engine, {
+      get mult() { return multRef.current; },
+      get count() { return countRef.current; },
+      get bar() { return barRef.current; },
+      get cash() { return cashRef.current; },
+    });
+  }, [hasStage]);
 
   const phase = st?.phase;
-  const elapsed = phase === 'flying' && flightRef.current ? now - flightRef.current : 0;
-  const m = phase === 'flying' ? multiplierAt(elapsed) : phase === 'crashed' ? st.point : 100;
-  const bettingLeft = phase === 'betting' ? Math.max(0, (bettingEndRef.current - now) / 1000) : 0;
+  engine.myAmount = me && !me.cashedAt ? me.amount : 0;
 
   // ---------- reactions to phase changes ----------
   useEffect(() => {
-    if (phase === 'crashed') {
-      haptic(me && !me.cashedAt ? 'error' : 'light');
-    }
-    if (phase === 'betting' && queued) {
-      setQueued(false);
-      placeBet();
-    }
+    if (phase === 'crashed') haptic(me && !me.cashedAt ? 'error' : 'light');
+    if (phase === 'flying' && me) haptic('medium');
+    if (phase === 'betting' && queued) { setQueued(false); placeBet(); }
   }, [phase, st?.round]);
 
   useEffect(() => {
-    if (me?.cashedAt) {
-      setFlash(`+${fmt(me.win)} ${cfg.currency} at ${fmtX(me.cashedAt)}`);
-      haptic('success');
-      const t = setTimeout(() => setFlash(null), 3500);
-      return () => clearTimeout(t);
-    }
+    if (!me?.cashedAt) return;
+    setFlash(`+${fmt(me.win)} ${cfg.currency} at ${fmtX(me.cashedAt)}`);
+    haptic('success');
+    const t = setTimeout(() => setFlash(null), 3500);
+    return () => clearTimeout(t);
   }, [me?.cashedAt]);
 
   // ---------- actions ----------
@@ -94,23 +115,22 @@ export default function Crash({ cfg, balance }) {
   }
   const cancel = () => run(async () => { await emit('crash:cancel'); setMe(null); });
   const cashout = () => run(async () => { const r = await emit('crash:cashout'); setMe(r.me); });
-
   const setAmt = (cents) => {
     const c = Math.min(cfg.crash.maxBet, Math.max(cfg.crash.minBet, Math.round(cents)));
     setAmount(String(c / 100));
   };
 
-  if (!st) return <div className="center muted">Loading Rocket…</div>;
+  if (!st) return <div className="center muted">Loading {cfg.crash.name}…</div>;
 
   // ---------- main button ----------
   let btn;
   const live = me && !me.cashedAt && phase === 'flying';
-  if (phase === 'paused') btn = <button className="rk-btn" disabled>Paused for maintenance</button>;
-  else if (phase === 'betting' && me) btn = <button className="rk-btn cancel" disabled={busy} onClick={cancel}>Cancel<small>waiting for take-off</small></button>;
-  else if (phase === 'betting') btn = <button className="rk-btn bet" disabled={busy || !(amountCents > 0)} onClick={placeBet}>BET<small>{fmt(amountCents)} {cfg.currency}</small></button>;
-  else if (live) btn = <button className="rk-btn cash" disabled={busy} onClick={cashout}>CASH OUT<small>{fmt(Math.floor((me.amount * m) / 100))} {cfg.currency}</small></button>;
-  else if (queued) btn = <button className="rk-btn cancel" onClick={() => setQueued(false)}>Cancel<small>bet for next round</small></button>;
-  else btn = <button className="rk-btn bet" disabled={!(amountCents > 0)} onClick={() => { setQueued(true); haptic('light'); }}>BET<small>next round · {fmt(amountCents)} {cfg.currency}</small></button>;
+  if (phase === 'paused') btn = <button key="paused" className="rk-btn" disabled>Paused for maintenance</button>;
+  else if (phase === 'betting' && me) btn = <button key="cancel" className="rk-btn cancel" disabled={busy} onClick={cancel}>Cancel<small>waiting for take-off</small></button>;
+  else if (phase === 'betting') btn = <button key="bet" className="rk-btn bet" disabled={busy || !(amountCents > 0)} onClick={placeBet}>BET<small>{fmt(amountCents)} {cfg.currency}</small></button>;
+  else if (live) btn = <button key="cash" className="rk-btn cash" disabled={busy} onPointerDown={cashout}>CASH OUT<small ref={cashRef}>{fmt(me.amount)} {cfg.currency}</small></button>;
+  else if (queued) btn = <button key="unqueue" className="rk-btn cancel" onClick={() => setQueued(false)}>Cancel<small>bet for next round</small></button>;
+  else btn = <button key="queue" className="rk-btn bet" disabled={!(amountCents > 0)} onClick={() => { setQueued(true); haptic('light'); }}>BET<small>next round · {fmt(amountCents)} {cfg.currency}</small></button>;
 
   return (
     <div className="rocket">
@@ -119,17 +139,21 @@ export default function Crash({ cfg, balance }) {
       </div>
 
       <div className={`rk-stage ${phase}`}>
-        <FlightCanvas phase={phase} elapsed={elapsed} m={m} />
+        <canvas ref={canvasRef} className="rk-canvas" />
         <div className="rk-center">
           {phase === 'betting' && (
             <>
               <div className="rk-wait">Place your bets</div>
-              <div className="rk-count">{bettingLeft.toFixed(1)}s</div>
-              <div className="rk-bar"><span style={{ width: `${(bettingLeft / (cfg.crash.betSec || 7)) * 100}%` }} /></div>
+              <div className="rk-count" ref={countRef}>{(st.bettingLeftMs / 1000).toFixed(1)}s</div>
+              <div className="rk-bar"><span ref={barRef} /></div>
             </>
           )}
-          {phase === 'flying' && <div className="rk-mult">{fmtX(m)}</div>}
-          {phase === 'crashed' && (<><div className="rk-mult crashed">{fmtX(st.point)}</div><div className="rk-wait">Flew away!</div></>)}
+          {(phase === 'flying' || phase === 'crashed') && (
+            <div key={phase} className={`rk-mult ${phase === 'crashed' ? 'crashed' : ''}`} ref={multRef}>
+              {phase === 'crashed' ? fmtX(st.point) : '1.00x'}
+            </div>
+          )}
+          {phase === 'crashed' && <div className="rk-wait rk-away">Flew away!</div>}
           {phase === 'paused' && <div className="rk-wait">⏸ Paused for maintenance</div>}
         </div>
         {flash && <div className="rk-flash">🎉 {flash}</div>}
@@ -142,9 +166,7 @@ export default function Crash({ cfg, balance }) {
           <button onClick={() => setAmt(amountCents * 2)} disabled={!!me && phase !== 'crashed'}>2×</button>
         </div>
         <div className="rk-presets">
-          {[10, 50, 100, 500].map((v) => (
-            <button key={v} onClick={() => setAmt(v * 100)}>{v}</button>
-          ))}
+          {[10, 50, 100, 500].map((v) => <button key={v} onClick={() => setAmt(v * 100)}>{v}</button>)}
         </div>
         <label className="rk-auto">
           <input type="checkbox" checked={autoOn} onChange={(e) => setAutoOn(e.target.checked)} />
@@ -188,7 +210,7 @@ function Info({ cfg, st }) {
       <ol>
         <li>Place a bet before take-off.</li>
         <li>The multiplier rises from 1.00x. Press <b>CASH OUT</b> any time to win your bet × the multiplier.</li>
-        <li>If the rocket flies away before you cash out, you lose the bet.</li>
+        <li>If the plane flies away before you cash out, you lose the bet.</li>
         <li>Turn on <b>Auto cash out</b> to cash out automatically at the multiplier you choose.</li>
       </ol>
       <p className="small muted">
@@ -197,7 +219,7 @@ function Info({ cfg, st }) {
       </p>
       <h3>Provably fair</h3>
       <p className="small">
-        Before each round, we publish a fingerprint (hash) of a secret seed. After the crash, we reveal the seed.
+        Before each round, we publish a fingerprint (hash) of a secret seed. After the round, we reveal the seed.
         Check that SHA-256(seed) equals the hash, so the result was fixed before anyone bet. The crash point comes from
         HMAC-SHA256(key = seed, message = "rocket").
       </p>
@@ -205,66 +227,4 @@ function Info({ cfg, st }) {
       {st.seed && <div className="mono small break">Last seed: {st.seed}</div>}
     </div>
   );
-}
-
-/** Curve + rocket drawn on a canvas, sized to its container. */
-function FlightCanvas({ phase, elapsed, m }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const c = ref.current;
-    if (!c) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = c.clientWidth, h = c.clientHeight;
-    if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
-    const ctx = c.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-    if (phase !== 'flying' && phase !== 'crashed') return;
-
-    const pad = 18;
-    const tMax = Math.max(8000, elapsed * 1.15);
-    const mMax = Math.max(2, (m / 100) * 1.2);
-    const X = (t) => pad + (t / tMax) * (w - pad * 2);
-    const Y = (mult) => h - pad - ((mult - 1) / (mMax - 1)) * (h - pad * 2);
-
-    const pts = [];
-    const steps = 60;
-    for (let i = 0; i <= steps; i++) {
-      const t = (elapsed * i) / steps;
-      pts.push([X(t), Y(Math.min(m / 100, Math.exp(0.00008 * t)))]);
-    }
-    const crashed = phase === 'crashed';
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, crashed ? 'rgba(255,77,94,.35)' : 'rgba(255,138,31,.35)');
-    grad.addColorStop(1, 'rgba(255,138,31,0)');
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], h - pad);
-    pts.forEach(([x, y]) => ctx.lineTo(x, y));
-    ctx.lineTo(pts[pts.length - 1][0], h - pad);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
-    ctx.beginPath();
-    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-    ctx.strokeStyle = crashed ? '#ff4d5e' : '#ff8a1f';
-    ctx.lineWidth = 4;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    const [tx, ty] = pts[pts.length - 1];
-    const [px, py] = pts[Math.max(0, pts.length - 4)];
-    ctx.save();
-    ctx.translate(tx, ty);
-    ctx.font = '30px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    if (crashed) {
-      ctx.fillText('💥', 0, 0);
-    } else {
-      ctx.rotate(Math.atan2(ty - py, tx - px) + Math.PI / 4); // 🚀 emoji points up-right
-      ctx.fillText('🚀', 0, 0);
-    }
-    ctx.restore();
-  });
-  return <canvas ref={ref} className="rk-canvas" />;
 }

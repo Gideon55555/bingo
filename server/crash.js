@@ -12,7 +12,7 @@ import { multiplierAt, msFor, crashPointFromHash, GROWTH } from '../shared/crash
 import { fmt } from '../shared/money.js';
 
 const CRASHED_SHOW_MS = 3500;
-const LABEL = 'Rocket';
+const LABEL = config.crash.name;
 
 export function crashPointForSeed(seed) {
   const h = crypto.createHmac('sha256', seed).update('rocket').digest('hex');
@@ -60,6 +60,7 @@ export class CrashGame {
   startFlight() {
     this.phase = 'flying';
     this.startedAt = Date.now();
+    this.tickCount = 0;
     this.broadcast();
     this.ticker = setInterval(() => this.tick(), 100);
     // Crash exactly on time (the ticker handles auto cash-outs in between)
@@ -72,6 +73,8 @@ export class CrashGame {
 
   tick() {
     if (this.phase !== 'flying') return;
+    // Once a second, send the true flight time so every phone's animation stays in sync
+    if (++this.tickCount % 10 === 0) this.io.to(this.channel).emit('crash:t', { e: Date.now() - this.startedAt });
     const m = this.current();
     for (const [uid, b] of this.bets) {
       if (b.cashedAt) continue;

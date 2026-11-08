@@ -251,7 +251,7 @@ export const refundRound = db.transaction((roundId, label, reason, status = 'ref
   return refunds;
 });
 
-const roundLabel = (r) => (r.game === 'crash' ? 'Rocket' : `Bingo ${fmt(r.stake)}`);
+const roundLabel = (r) => (r.game === 'crash' ? config.crash.name : `Bingo ${fmt(r.stake)}`);
 
 /** Called on startup and shutdown: refund every round that never finished. */
 export function refundOpenRounds(reason = 'interrupted (server restart)') {

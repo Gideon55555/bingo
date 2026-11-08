@@ -91,12 +91,12 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
       <div className="tiles">
         <Tile label="House earnings" value={c(r.houseEarnings)} accent />
         <Tile label="· from Bingo" value={c(r.bingoEarnings)} />
-        <Tile label="· from Rocket" value={c(r.crashEarnings)} />
+        <Tile label={`· from ${cfg.crash?.name || 'Sky High'}`} value={c(r.crashEarnings)} />
         <Tile label="Deposits" value={c(r.deposits)} />
         <Tile label="Withdrawals" value={c(r.withdrawals)} />
         <Tile label="Net cash in" value={c(r.deposits - r.withdrawals)} />
         <Tile label="Bingo games" value={r.games} />
-        <Tile label="Rocket rounds (with bets)" value={r.crashRounds} />
+        <Tile label={`${cfg.crash?.name || 'Sky High'} rounds (with bets)`} value={r.crashRounds} />
         <Tile label="Total bets" value={c(r.totalBets)} />
         <Tile label="Active players" value={r.activePlayers} />
         <Tile label="New users" value={r.newUsers} />
@@ -115,7 +115,7 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
       {s.crash && (
         <div className="tile rk-admin">
           <div className="row-between">
-            <b>🚀 Rocket — round #{s.crash.round} · <span className={`pill ${s.crash.phase === 'flying' ? 'playing' : s.crash.phase}`}>{s.crash.phase}</span></b>
+            <b>✈️ {cfg.crash?.name || 'Sky High'} — round #{s.crash.round} · <span className={`pill ${s.crash.phase === 'flying' ? 'playing' : s.crash.phase}`}>{s.crash.phase}</span></b>
             <span className="small">{s.crash.players} bettor(s) · bets {c(s.crash.betsTotal)} · paid {c(s.crash.paidOut)}</span>
           </div>
           <div className="rc-chips">{s.crash.last.map((p, i) => <span key={i} className={`x-chip ${p < 200 ? 'x-low' : p < 1000 ? 'x-mid' : 'x-high'}`}>{fmtX(p)}</span>)}</div>
@@ -354,7 +354,7 @@ function Games({ cfg }) {
     <div className="admin-section">
       <div className="seg small-seg">
         <button className={which === 'bingo' ? 'active' : ''} onClick={() => setWhich('bingo')}>🎱 Bingo</button>
-        <button className={which === 'rocket' ? 'active' : ''} onClick={() => setWhich('rocket')}>🚀 Rocket</button>
+        <button className={which === 'rocket' ? 'active' : ''} onClick={() => setWhich('rocket')}>✈️ {cfg.crash?.name || 'Sky High'}</button>
       </div>
       {which === 'bingo' ? <BingoGames cfg={cfg} /> : <RocketRounds cfg={cfg} />}
     </div>

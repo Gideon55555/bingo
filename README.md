@@ -1,4 +1,4 @@
-# 🎱 Telegram Bingo + 🚀 Rocket Mini App
+# 🎱 Telegram Bingo + ✈️ Sky High Mini App
 
 A multiplayer 75-ball bingo game that runs inside Telegram, with a player wallet.
 Players send you money (Telebirr, bank and so on), submit the transaction ID in the app,
@@ -28,11 +28,11 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
 6. The winner gets the pot minus the house cut (20% by default). If several players complete
    a line on the same ball, they split the prize. The room then resets.
 
-**🚀 Rocket (crash game)**
+**✈️ Sky High (crash game)** (rename it with `CRASH_NAME`)
 1. One shared round for everyone. Players bet during a 7-second betting window.
-2. The rocket takes off and the multiplier climbs from 1.00x. Players press **CASH OUT** to win bet × multiplier,
+2. The plane takes off and the multiplier climbs from 1.00x. Players press **CASH OUT** to win bet × multiplier,
    or set **auto cash out** (for example 2.00x).
-3. When the rocket flies away, every bet that wasn't cashed out is lost. Then the next round opens.
+3. When the plane flies away, every bet that wasn't cashed out is lost. Then the next round opens.
 4. **House edge 3%** (`CRASH_HOUSE_EDGE`): players get back 97% of bets on average, whatever strategy they use.
    About 4% of rounds crash instantly at 1.00x.
 5. **Provably fair:** each round's result is fixed before betting opens. Players see its hash (fingerprint)
@@ -112,8 +112,8 @@ npm test
 ```
 This runs, with real signed Telegram auth: a full Bingo game (41 checks): auth forgery,
 deposits, duplicate references, entry fees, refunds, false BINGO, payouts, house cut,
-withdrawals and every admin feature. crash recovery (10 checks), Rocket end-to-end (26 checks: bets, cash-outs, fairness, pause, restart),
-and a statistical check of Rocket's house edge over 200,000 simulated rounds.
+withdrawals and every admin feature. crash recovery (10 checks), Sky High end-to-end (26 checks: bets, cash-outs, fairness, pause, restart),
+and a statistical check of the crash game's house edge over 200,000 simulated rounds.
 
 ## Deploying
 
@@ -136,7 +136,7 @@ See **[DEPLOY.md](DEPLOY.md)** for step-by-step guides (VPS, or DirectAdmin Node
 server/
   index.js    Express API + Socket.IO + static hosting
   game.js     Bingo room state machine (picking → countdown → playing → finished)
-  crash.js    Rocket crash game (betting → flying → crashed), provably fair
+  crash.js    Sky High crash game (betting → flying → crashed), provably fair
   bingo.js    secure number shuffle
   db.js       SQLite schema + atomic wallet operations
   auth.js     Telegram initData HMAC validation
@@ -149,6 +149,7 @@ ecosystem.config.cjs  pm2 config for a VPS
 deploy/           VPS setup + update scripts, Caddy config
 shared/cards.js   deterministic card generation + win check (used by server and client)
 shared/crash.js   multiplier curve + crash-point formula (server and client)
+client/src/flight.js  60fps canvas animation (plane, curve, stars, fly-away)
 shared/money.js   all money is stored in cents; helpers to convert/format
 client/src/       React mini app (Lobby, Room, Card, Wallet, Admin)
 test/simulate.js  end-to-end test
