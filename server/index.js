@@ -10,6 +10,9 @@ import { securityHeaders, errorHandler, publicMessage, socketIp } from './securi
 import { serveStatic } from './static.js';
 import { seen, isFrozen, assertNotFrozen } from './risk.js';
 import * as rg from './rg.js';
+import * as growth from './growth.js';
+import { setReferralHandler } from './bot.js';
+import { upsertUser } from './db.js';
 import { startMonitor, health } from './monitor.js';
 import { db, setUserLang, getUser, history, createDeposit, createWithdrawal, countPending, refundOpenRounds } from './db.js';
 import { GameManager } from './game.js';
@@ -61,6 +64,12 @@ games.ludo = config.ludo.enabled ? new LudoManager(io, onBalanceChange, games) :
 games.pool = config.pool.enabled ? new PoolManager(io, onBalanceChange, games) : null;
 games.kerenbula = config.kerenbula.enabled ? new KerenbulaManager(io, onBalanceChange, games) : null;
 const admin = createAdmin({ games, onBalanceChange, io });
+// Referral links open the bot first: remember who invited a brand-new player
+setReferralHandler((from, inviterId) => {
+  const wasNew = !getUser(from.id);
+  upsertUser(from);
+  if (growth.recordReferral(from, inviterId, { wasNew })) console.log(`[growth] ${from.id} joined via ${inviterId}'s link`);
+});
 startMonitor({ io, games });
 
 // ---------------- REST API ----------------
@@ -118,6 +127,19 @@ app.get('/api/me', requireAuth, (req, res) => {
   res.json({ user: { ...req.user, isAdmin: isAdminId(req.user.id), ageConfirmed: l.ageConfirmed, excludedUntil: l.excludedUntil, reminderMin: l.reminderMin } });
 });
 
+// ---- Growth: referrals, daily reward, leaderboard ----
+app.get('/api/growth', requireAuth, (req, res) => res.json({
+  referral: growth.referralInfo(req.user.id), daily: growth.dailyStatus(req.user.id), wallet: growth.withdrawable(req.user.id),
+}));
+app.post('/api/daily', requireAuth, (req, res) => {
+  try {
+    const r = growth.claimDaily(req.user.id);
+    onBalanceChange(req.user.id);
+    res.json(r);
+  } catch (e) { res.status(400).json({ error: publicMessage(e) }); }
+});
+app.get('/api/leaderboard', requireAuth, (req, res) => res.json(growth.leaderboard()));
+
 // ---- Responsible gambling ----
 const rgRoute = (fn) => (req, res) => { try { res.json(fn(req)); } catch (e) { res.status(400).json({ error: publicMessage(e) }); } };
 app.get('/api/rg', requireAuth, rgRoute((req) => rg.getLimits(req.user.id)));
@@ -167,6 +189,10 @@ app.post('/api/withdraw', requireAuth, walletLimit, (req, res) => {
   if (!Number.isFinite(amount) || amount < config.minWithdraw)
     return res.status(400).json({ error: `Minimum withdrawal is ${money(config.minWithdraw)}` });
   if (!/^\+?\d{9,15}$/.test(phone)) return res.status(400).json({ error: 'Enter a valid phone number' });
+  const w = growth.withdrawable(req.user.id);
+  if (amount > w.withdrawable && amount <= w.balance) {
+    return res.status(400).json({ error: `You can withdraw up to ${money(w.withdrawable)} now. Play ${money(w.toPlay)} more to unlock your bonus money.` });
+  }
   if (countPending(req.user.id, 'withdraw') >= config.maxPendingWithdrawals)
     return res.status(400).json({ error: 'You already have withdrawals being processed. Please wait for them first.' });
   try {

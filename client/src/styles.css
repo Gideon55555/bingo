@@ -476,3 +476,13 @@ textarea { width: 100%; resize: vertical; }
 .practice-badge { background: color-mix(in srgb, #6366f1 25%, var(--bg2)); border-radius: 8px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
 .online-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--hint); margin-bottom: 8px; }
 .online-pill::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+
+/* Home: growth cards */
+.growth { display: grid; gap: 8px; margin: 12px 0; }
+.gcard { background: var(--bg2); border-radius: 12px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.gcard.daily.ready { background: linear-gradient(135deg, color-mix(in srgb, #f59e0b 30%, var(--bg2)), var(--bg2)); }
+.gcard.lb { display: block; }
+.lb-list { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 4px; }
+.lb-list li { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; font-size: 14px; }
+.lb-list li.me { font-weight: 800; }
+.lb-rank { text-align: center; }

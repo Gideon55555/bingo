@@ -15,7 +15,11 @@ export default function Wallet({ cfg, balance }) {
   const [busy, setBusy] = useState(false);
   const [items, setItems] = useState([]);
 
-  const load = () => api.history().then((r) => setItems(r.items)).catch(() => {});
+  const [lock, setLock] = useState(null);
+  const load = () => {
+    api.growth().then((g) => setLock(g.wallet)).catch(() => {});
+    return api.history().then((r) => setItems(r.items)).catch(() => {});
+  };
   useEffect(() => { load(); }, [balance]);
 
   const submit = async (e) => {
@@ -70,6 +74,7 @@ export default function Wallet({ cfg, balance }) {
             <input inputMode="decimal" placeholder={t('amountMin', { min: fmt(cfg.minWithdraw) })} value={amount}
               onChange={(e) => setAmount(cleanAmount(e.target.value))} required />
             <input inputMode="tel" placeholder={t('phoneReceive')} value={phone} onChange={(e) => setPhone(e.target.value)} required />
+            {lock?.locked > 0 && <div className="small warn">{t('bonusLocked', { amount: `${fmt(lock.withdrawable)} ${cfg.currency}`, toPlay: `${fmt(lock.toPlay)} ${cfg.currency}` })}</div>}
           </>
         )}
         <button className="primary" disabled={busy}>{busy ? t('sending') : mode === 'deposit' ? t('submitDeposit') : t('requestWithdraw')}</button>

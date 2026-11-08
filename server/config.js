@@ -129,6 +129,15 @@ export const config = {
     delayScale: num(process.env.KERENBULA_DELAY_SCALE, 1), // < 1 only for automated tests
   },
 
+  // Growth: referrals, daily reward. Amounts in ETB in .env (0 = off).
+  growth: {
+    referralBonus: cents(process.env.REFERRAL_BONUS, 10),           // to the inviter
+    referralFriendBonus: cents(process.env.REFERRAL_FRIEND_BONUS, 0), // to the new player
+    referralMinDeposit: cents(process.env.REFERRAL_MIN_DEPOSIT, 50),   // friend's first deposit must be at least this
+    dailyReward: cents(process.env.DAILY_REWARD, 2),
+    bonusWager: num(process.env.BONUS_WAGER, 1),                       // bonus must be played this many times before withdrawal
+  },
+
   // Wallet
   currency: process.env.CURRENCY || 'ETB',
   paymentInfo: process.env.PAYMENT_INFO || 'Telebirr: 09XXXXXXXX (Your Name)',

@@ -1,9 +1,10 @@
 import React from 'react';
 import { t, useLang, crashName } from './i18n.js';
 import { GAME_ART } from './GameArt.jsx';
+import GrowthCards from './Growth.jsx';
 
 /** Home screen: a grid of square game tiles, each with its own illustration. */
-export default function Home({ cfg, live, rooms, onOpen }) {
+export default function Home({ cfg, live, rooms, onOpen, user }) {
   useLang();
   const bingoPlayers = rooms.reduce((s, r) => s + (r.players || 0), 0);
   const tiles = [
@@ -47,6 +48,7 @@ export default function Home({ cfg, live, rooms, onOpen }) {
           </div>
         )}
       </div>
+      {user && <GrowthCards cfg={cfg} user={user} />}
       <p className="muted small center-text">{t('ageNote', { age: cfg.minAge })}{cfg.supportContact ? ` · ${t('help')}: ${cfg.supportContact}` : ''}</p>
     </div>
   );

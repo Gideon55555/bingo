@@ -5,7 +5,7 @@ import { fmtX } from '../../shared/crash.js';
 
 const fmtDate = (s) => new Date(s * 1000).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
 const name = (u) => [u.first_name, u.username && `@${u.username}`].filter(Boolean).join(' ') || u.user_id || u.id;
-const TYPE = { deposit: 'Deposit', withdraw: 'Withdrawal', bet: 'Bet / entry', win: 'Win', refund: 'Refund', adjust: 'Adjustment' };
+const TYPE = { deposit: 'Deposit', withdraw: 'Withdrawal', bet: 'Bet / entry', win: 'Win', refund: 'Refund', adjust: 'Adjustment', bonus: 'Bonus' };
 
 /** Poll a loader every `ms` and return [data, reload, error] */
 function usePoll(loader, ms, deps = []) {
@@ -102,6 +102,7 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
         <Tile label="· from Ludo" value={c(r.ludoEarnings)} />
         <Tile label="· from Pool" value={c(r.poolEarnings)} />
         <Tile label="· from Kerenbula" value={c(r.kerenbulaEarnings)} />
+        <Tile label="Bonuses paid (referral, daily)" value={c(r.bonusesPaid || 0)} />
         <Tile label="Deposits" value={c(r.deposits)} />
         <Tile label="Withdrawals" value={c(r.withdrawals)} />
         <Tile label="Net cash in" value={c(r.deposits - r.withdrawals)} />

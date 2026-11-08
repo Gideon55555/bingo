@@ -158,7 +158,7 @@ export default function App() {
           : game === 'bingo' ? (stake !== null
             ? <Room stake={stake} cfg={cfg} user={user} balance={balance} onExit={() => setStake(null)} />
             : <BingoRooms rooms={rooms} cfg={cfg} onEnter={setStake} />)
-          : tab === 'play' ? <Home cfg={cfg} live={live} rooms={rooms} onOpen={openGame} />
+          : tab === 'play' ? <Home cfg={cfg} live={live} rooms={rooms} onOpen={openGame} user={user} />
           : tab === 'admin' && user.isAdmin ? <Admin cfg={cfg} />
           : <Wallet cfg={cfg} balance={balance} />}
         </Suspense>

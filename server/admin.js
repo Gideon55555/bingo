@@ -15,6 +15,7 @@ import { tr } from './i18n.js';
 import { publicMessage } from './security.js';
 import { metrics } from './monitor.js';
 import { verifyTotp } from './totp.js';
+import { onDepositApproved } from './growth.js';
 import { sharedDevices, suspiciousPairs, lowPlayCashouts, userFlags, linkedAccounts, setFrozen } from './risk.js';
 
 export const isAdminId = (id) => config.adminIds.includes(String(id));
@@ -81,6 +82,14 @@ export function createAdmin({ games, onBalanceChange }) {
       }
       if (!t) throw new Error('Already handled (or not found)');
       invalidateStats();
+      if (kind === 'deposit' && approve) {
+        const ref = onDepositApproved(t); // friend's first deposit → inviter's referral bonus
+        if (ref) {
+          onBalanceChange(ref.inviterId);
+          notifyUser(ref.inviterId, tr(ref.inviterId, 'refBonus', { amount: money(ref.amount) }));
+          if (ref.friendAmount) onBalanceChange(ref.friendId);
+        }
+      }
       logAdmin(who, `${approve ? 'approve' : 'reject'}_${kind}`, id, { amount: Math.abs(t.amount), user: t.user_id, ref: t.reference || undefined, phone: t.phone || undefined }, who.ip);
       onBalanceChange(t.user_id);
       await notifyUser(t.user_id, msg);

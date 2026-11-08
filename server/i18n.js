@@ -5,6 +5,7 @@ import { getUser } from './db.js';
 const M = {
   am: {
     welcome: 'እንኳን ደህና መጡ! 🎮 ቢንጎ፣ አቪዬተር፣ ኬኖ፣ ሉዶ፣ ፑል እና ከረንቡላ ይጫወቱ። ለመጀመር ከታች ያለውን ቁልፍ ይጫኑ።',
+    refBonus: '🎁 የጋበዙት ጓደኛ ገንዘብ አስገብቷል — {amount} የግብዣ ጉርሻ ወደ ሂሳብዎ ተጨምሯል!',
     inviteOpen: '🎮 ጓደኛዎ ለጨዋታ ጋብዞዎታል! ለመቀላቀል ከታች ያለውን ቁልፍ ይጫኑ።', inviteButton: '🎮 ጨዋታውን ተቀላቀል',
     playButton: '🎮 ይጫወቱ',
     balance: 'ቀሪ ሂሳብዎ፦ {amount}',
@@ -31,6 +32,7 @@ const M = {
   },
   en: {
     welcome: 'Welcome! 🎮 Play Bingo, Aviator, Keno, Ludo, Pool and Kerenbula. Tap the button below to start.',
+    refBonus: '🎁 A friend you invited made a deposit — {amount} referral bonus added to your balance!',
     inviteOpen: '🎮 A friend invited you to a match! Tap the button below to join.', inviteButton: '🎮 Join the match',
     playButton: '🎮 Play',
     balance: 'Your balance: {amount}',

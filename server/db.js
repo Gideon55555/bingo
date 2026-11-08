@@ -495,6 +495,7 @@ function computeStats() {
     poolGames: scalar('SELECT COUNT(*) FROM pool_games WHERE created_at >= ?', since),
     kerenbulaEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM kerenbula_games WHERE created_at >= ?', since),
     kerenbulaGames: scalar('SELECT COUNT(*) FROM kerenbula_games WHERE created_at >= ?', since),
+    bonusesPaid: scalar("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='bonus' AND created_at >= ?", since),
     activePlayers: scalar("SELECT COUNT(DISTINCT user_id) FROM transactions WHERE type='bet' AND created_at >= ?", since),
     newUsers: scalar('SELECT COUNT(*) FROM users WHERE created_at >= ?', since),
   });
