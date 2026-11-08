@@ -60,46 +60,46 @@ async function seatPlayers(stake, waitForPlaying) {
 let srv;
 try {
   const { upsertUser, credit, getUser, db } = await import('../server/db.js');
-  for (const u of users) { upsertUser(u); credit(u.id, 100, 'deposit', 'seed'); }
+  for (const u of users) { upsertUser(u); credit(u.id, 10000, 'deposit', 'seed'); }
 
   console.log('Crash during a game (kill -9)');
   srv = startServer(); await srv.ready;
-  let socks = await seatPlayers(50, true);
-  assert.equal(getUser(2001).balance, 50); ok('entry fees taken, game running');
+  let socks = await seatPlayers(5000, true);
+  assert.equal(getUser(2001).balance, 5000); ok('entry fees taken, game running');
   srv.proc.kill('SIGKILL'); await exited(srv.proc);
   socks.forEach((s) => s.close());
-  assert.equal(getUser(2001).balance, 50); ok('after crash, money is still held (server dead)');
+  assert.equal(getUser(2001).balance, 5000); ok('after crash, money is still held (server dead)');
 
   srv = startServer(); await srv.ready;
-  assert.equal(getUser(2001).balance, 100); assert.equal(getUser(2002).balance, 100); ok('restart refunds both players');
+  assert.equal(getUser(2001).balance, 10000); assert.equal(getUser(2002).balance, 10000); ok('restart refunds both players');
   assert.match(srv.log(), /refunded 2 entr/); ok('recovery logged');
   const open = db.prepare("SELECT COUNT(*) n FROM rounds WHERE status='open'").get().n;
   assert.equal(open, 0); ok('no rounds left open');
 
   console.log('Graceful restart while players wait (SIGTERM)');
-  socks = await seatPlayers(20, false);
-  assert.equal(getUser(2001).balance, 80);
+  socks = await seatPlayers(2000, false);
+  assert.equal(getUser(2001).balance, 8000);
   srv.proc.kill('SIGTERM'); await exited(srv.proc);
   socks.forEach((s) => s.close());
-  assert.equal(getUser(2001).balance, 100); ok('shutdown refunds waiting players immediately');
+  assert.equal(getUser(2001).balance, 10000); ok('shutdown refunds waiting players immediately');
   assert.match(srv.log(), /refunded 2 entr/); ok('shutdown refund logged');
 
   console.log('Normal game still settles and closes its round');
   srv = startServer(); await srv.ready;
-  assert.equal(getUser(2001).balance, 100); ok('no double refund on next start');
-  socks = await seatPlayers(10, true);
+  assert.equal(getUser(2001).balance, 10000); ok('no double refund on next start');
+  socks = await seatPlayers(1000, true);
   const finished = new Promise((r) => socks[0].on('room', (st) => st.state === 'finished' && r(st)));
   // Nobody claims → after 75 calls the server auto-awards; speed this up by claiming when possible
   const { findWin } = await import('../server/bingo.js');
   const called = new Set();
   socks[0].on('call', ({ number }) => {
     called.add(number);
-    socks.forEach((s, i) => findWin(i + 1, called) && emit(s, 'bingo', { stake: 10 }));
+    socks.forEach((s, i) => findWin(i + 1, called) && emit(s, 'bingo', { stake: 1000 }));
   });
   const st = await Promise.race([finished, sleep(200000).then(() => null)]);
   assert.ok(st, 'game finished');
   const total = getUser(2001).balance + getUser(2002).balance;
-  assert.equal(total, 200 - 20 + st.result.amountEach * st.result.winners.length); ok('payout correct');
+  assert.equal(total, 20000 - 2000 + st.result.amountEach * st.result.winners.length); ok('payout correct');
   srv.proc.kill('SIGKILL'); await exited(srv.proc);
   srv = startServer(); await srv.ready;
   assert.equal(getUser(2001).balance + getUser(2002).balance, total); ok('finished round is not refunded after a crash');

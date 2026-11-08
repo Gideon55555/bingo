@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Rules from './Rules.jsx';
+import { fmt } from '../../shared/money.js';
 import { useCountdown } from './hooks.js';
 
 const STATUS = {
@@ -13,13 +14,13 @@ function RoomCard({ r, cfg, onEnter }) {
   const secs = useCountdown(r.countdownEndsAt);
   return (
     <button className={`room-card ${r.state}`} onClick={() => onEnter(r.stake)}>
-      <div className="stake">{r.stake} <small>{cfg.currency}</small></div>
+      <div className="stake">{fmt(r.stake)} <small>{cfg.currency}</small></div>
       <div className="room-meta">
         <span className={`pill ${r.state}`}>
           {r.state === 'countdown' ? `Starts in ${secs}s` : STATUS[r.state]}
         </span>
         <span>👥 {r.players}</span>
-        <span>🏆 {r.prize} {cfg.currency}</span>
+        <span>🏆 {fmt(r.prize)} {cfg.currency}</span>
       </div>
       <div className="join">{r.state === 'playing' ? 'Watch' : 'Join'} →</div>
     </button>

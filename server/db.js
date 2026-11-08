@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
+import { fmt } from '../shared/money.js';
 
 fs.mkdirSync(path.dirname(config.dbPath), { recursive: true });
 export const db = new Database(config.dbPath);
@@ -41,6 +42,18 @@ CREATE TABLE IF NOT EXISTS rounds (
   closed_at   INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS crash_rounds (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  round_id     INTEGER,               -- rounds.id (only when someone bet)
+  crash_point  INTEGER NOT NULL,      -- multiplier x100 (e.g. 245 = 2.45x)
+  seed         TEXT NOT NULL,         -- revealed after the round
+  hash         TEXT NOT NULL,         -- sha256(seed), shown before the round
+  bets_total   INTEGER NOT NULL DEFAULT 0,  -- cents
+  payout_total INTEGER NOT NULL DEFAULT 0,  -- cents
+  players      INTEGER NOT NULL DEFAULT 0,
+  created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
 CREATE TABLE IF NOT EXISTS games (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   stake       INTEGER NOT NULL,
@@ -58,7 +71,23 @@ CREATE TABLE IF NOT EXISTS games (
 const cols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
 if (!cols('transactions').includes('round_id')) db.exec('ALTER TABLE transactions ADD COLUMN round_id INTEGER');
 if (!cols('games').includes('round_id')) db.exec('ALTER TABLE games ADD COLUMN round_id INTEGER');
+if (!cols('rounds').includes('game')) db.exec("ALTER TABLE rounds ADD COLUMN game TEXT NOT NULL DEFAULT 'bingo'");
 db.exec('CREATE INDEX IF NOT EXISTS tx_round ON transactions(round_id)');
+
+// --- v1 → v2: money moved from whole ETB to cents. Multiply every stored amount by 100 once. ---
+if (db.pragma('user_version', { simple: true }) < 1) {
+  const hadData = db.prepare('SELECT COUNT(*) n FROM users').get().n > 0;
+  db.transaction(() => {
+    db.exec(`
+      UPDATE users SET balance = balance * 100;
+      UPDATE transactions SET amount = amount * 100;
+      UPDATE games SET pot = pot * 100, payout = payout * 100, house = house * 100, stake = stake * 100;
+      UPDATE rounds SET stake = stake * 100;
+    `);
+    db.pragma('user_version = 1');
+  })();
+  if (hadData) console.log('[db] migrated stored amounts from ETB to cents');
+}
 
 const stmts = {
   upsertUser: db.prepare(`
@@ -84,12 +113,15 @@ const stmts = {
     INSERT INTO games (stake, players, pot, payout, house, winners, calls, round_id)
     VALUES (@stake, @players, @pot, @payout, @house, @winners, @calls, @round_id)
   `),
-  openRound: db.prepare('INSERT INTO rounds (stake) VALUES (?)'),
+  openRound: db.prepare('INSERT INTO rounds (stake, game) VALUES (?, ?)'),
+  insertCrash: db.prepare(`
+    INSERT INTO crash_rounds (round_id, crash_point, seed, hash, bets_total, payout_total, players)
+    VALUES (@round_id, @crash_point, @seed, @hash, @bets_total, @payout_total, @players)`),
   closeRound: db.prepare("UPDATE rounds SET status = ?, closed_at = unixepoch() WHERE id = ? AND status = 'open'"),
   openRounds: db.prepare("SELECT * FROM rounds WHERE status = 'open'"),
   roundNet: db.prepare(`
     SELECT user_id, SUM(amount) AS net FROM transactions
-    WHERE round_id = ? AND type IN ('bet', 'refund') GROUP BY user_id`),
+    WHERE round_id = ? AND type IN ('bet', 'refund', 'win') GROUP BY user_id`),
 };
 
 export function upsertUser(u) {
@@ -179,7 +211,19 @@ export const rejectWithdrawal = db.transaction((id) => {
 // Every entry fee is tied to a round. A round is "open" until it is paid out or cancelled.
 // If the server stops while a round is open, refundOpenRounds() gives everyone their entry back.
 
-export const openRound = (stake) => Number(stmts.openRound.run(stake).lastInsertRowid);
+export const openRound = (stake, game = 'bingo') => Number(stmts.openRound.run(stake, game).lastInsertRowid);
+
+/** Crash: record the finished round and close its money round (if anyone bet) atomically. */
+export const settleCrashRound = db.transaction((roundId, record) => {
+  stmts.insertCrash.run({ round_id: roundId, ...record });
+  if (roundId) stmts.closeRound.run('finished', roundId);
+});
+
+export const recentCrashes = (n = 20) =>
+  db.prepare('SELECT id, crash_point, hash, seed FROM crash_rounds ORDER BY id DESC LIMIT ?').all(n);
+
+export const listCrashRounds = (limit = 50) =>
+  db.prepare('SELECT * FROM crash_rounds ORDER BY id DESC LIMIT ?').all(limit);
 
 /** Pay winners, record the game and close the round — all or nothing. */
 export const settleRound = db.transaction((roundId, payouts, game) => {
@@ -194,23 +238,25 @@ export const settleRound = db.transaction((roundId, payouts, game) => {
 });
 
 /** Refund everyone's net entry in one round and close it. Returns [{userId, amount}]. */
-export const refundRound = db.transaction((roundId, stake, reason, status = 'refunded') => {
+export const refundRound = db.transaction((roundId, label, reason, status = 'refunded') => {
   const refunds = [];
   for (const { user_id, net } of stmts.roundNet.all(roundId)) {
     if (net < 0) {
       stmts.credit.run(-net, user_id);
-      tx({ user_id, type: 'refund', amount: -net, status: 'done', note: `Bingo ${stake} ${reason}`, round_id: roundId });
-      refunds.push({ userId: user_id, amount: -net, stake });
+      tx({ user_id, type: 'refund', amount: -net, status: 'done', note: `${label} ${reason}`, round_id: roundId });
+      refunds.push({ userId: user_id, amount: -net, label });
     }
   }
   stmts.closeRound.run(status, roundId);
   return refunds;
 });
 
+const roundLabel = (r) => (r.game === 'crash' ? 'Rocket' : `Bingo ${fmt(r.stake)}`);
+
 /** Called on startup and shutdown: refund every round that never finished. */
 export function refundOpenRounds(reason = 'interrupted (server restart)') {
   const all = [];
-  for (const r of stmts.openRounds.all()) all.push(...refundRound(r.id, r.stake, reason));
+  for (const r of stmts.openRounds.all()) all.push(...refundRound(r.id, roundLabel(r), reason));
   return all;
 }
 
@@ -230,9 +276,14 @@ export function getStats() {
   const block = (since) => ({
     deposits: scalar("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='deposit' AND status='approved' AND created_at >= ?", since),
     withdrawals: -scalar("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='withdraw' AND status='approved' AND created_at >= ?", since),
-    houseEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM games WHERE created_at >= ?', since),
+    houseEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM games WHERE created_at >= ?', since)
+      + scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM crash_rounds WHERE created_at >= ?', since),
     games: scalar('SELECT COUNT(*) FROM games WHERE created_at >= ?', since),
-    totalBets: scalar('SELECT COALESCE(SUM(pot),0) FROM games WHERE created_at >= ?', since),
+    totalBets: scalar('SELECT COALESCE(SUM(pot),0) FROM games WHERE created_at >= ?', since)
+      + scalar('SELECT COALESCE(SUM(bets_total),0) FROM crash_rounds WHERE created_at >= ?', since),
+    bingoEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM games WHERE created_at >= ?', since),
+    crashEarnings: scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM crash_rounds WHERE created_at >= ?', since),
+    crashRounds: scalar('SELECT COUNT(*) FROM crash_rounds WHERE players > 0 AND created_at >= ?', since),
     activePlayers: scalar("SELECT COUNT(DISTINCT user_id) FROM transactions WHERE type='bet' AND created_at >= ?", since),
     newUsers: scalar('SELECT COUNT(*) FROM users WHERE created_at >= ?', since),
   });

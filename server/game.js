@@ -1,6 +1,7 @@
 import { config } from './config.js';
 import { debit, credit, getUser, openRound, settleRound, refundRound } from './db.js';
 import { findWin, shuffledBalls } from './bingo.js';
+import { fmt } from '../shared/money.js';
 
 /**
  * One Room per stake. Lifecycle:
@@ -96,7 +97,7 @@ export class Room {
       existing.card = cardId;
     } else {
       if (!this.roundId) this.roundId = openRound(this.stake);
-      if (!debit(uid, this.stake, 'bet', `Bingo ${this.stake} entry`, this.roundId)) {
+      if (!debit(uid, this.stake, 'bet', `Bingo ${fmt(this.stake)} entry`, this.roundId)) {
         throw new Error('Insufficient balance. Please deposit first.');
       }
       this.players.set(uid, { card: cardId, name: user.first_name || user.username || 'Player', disqualified: false });
@@ -114,7 +115,7 @@ export class Room {
     if (!p) return;
     this.players.delete(uid);
     this.cardOwners.delete(p.card);
-    credit(uid, this.stake, 'refund', `Bingo ${this.stake} left before start`, this.roundId);
+    credit(uid, this.stake, 'refund', `Bingo ${fmt(this.stake)} left before start`, this.roundId);
     this.onBalanceChange(uid);
     if (this.state === 'countdown' && this.players.size < config.minPlayers) {
       clearTimeout(this.timer);
@@ -146,7 +147,7 @@ export class Room {
     if (!['waiting', 'countdown'].includes(this.state)) return 0;
     const n = this.players.size;
     if (this.roundId) {
-      for (const { userId } of refundRound(this.roundId, this.stake, reason, 'cancelled')) this.onBalanceChange(userId);
+      for (const { userId } of refundRound(this.roundId, `Bingo ${fmt(this.stake)}`, reason, 'cancelled')) this.onBalanceChange(userId);
     }
     this.reset();
     this.broadcast();
@@ -211,7 +212,7 @@ export class Room {
     // Payouts + game record + closing the round happen in one DB transaction
     settleRound(
       this.roundId,
-      ids.map((id) => ({ userId: id, amount: each, note: `Bingo ${this.stake} win` })),
+      ids.map((id) => ({ userId: id, amount: each, note: `Bingo ${fmt(this.stake)} win` })),
       {
         stake: this.stake,
         players: this.players.size,

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { api, haptic, toast } from './api.js';
+import { fmt, toCents } from '../../shared/money.js';
 
 const LABELS = { deposit: 'Deposit', withdraw: 'Withdrawal', bet: 'Game entry', win: 'Win', refund: 'Refund', adjust: 'Bonus / adjustment' };
+const cleanAmount = (v) => v.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1').replace(/(\.\d{2}).*/, '$1');
 
 export default function Wallet({ cfg, balance }) {
   const [mode, setMode] = useState('deposit');
@@ -19,11 +21,11 @@ export default function Wallet({ cfg, balance }) {
     setBusy(true);
     try {
       if (mode === 'deposit') {
-        await api.deposit(Number(amount), ref);
+        await api.deposit(toCents(amount), ref);
         toast('Deposit submitted! Your balance updates as soon as it is approved.');
         setRef('');
       } else {
-        await api.withdraw(Number(amount), phone);
+        await api.withdraw(toCents(amount), phone);
         toast('Withdrawal requested. You will be notified when it is sent.');
       }
       haptic('success');
@@ -41,7 +43,7 @@ export default function Wallet({ cfg, balance }) {
     <div className="wallet">
       <div className="balance-card">
         <div className="muted small">Balance</div>
-        <div className="huge">{balance} <small>{cfg.currency}</small></div>
+        <div className="huge">{fmt(balance)} <small>{cfg.currency}</small></div>
       </div>
 
       <div className="seg">
@@ -57,15 +59,15 @@ export default function Wallet({ cfg, balance }) {
               <div className="payinfo">{cfg.paymentInfo}</div>
               <b>2.</b> Enter the amount and the transaction ID from your confirmation SMS.
             </div>
-            <input inputMode="numeric" placeholder={`Amount (min ${cfg.minDeposit})`} value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))} required />
+            <input inputMode="decimal" placeholder={`Amount (min ${fmt(cfg.minDeposit)})`} value={amount}
+              onChange={(e) => setAmount(cleanAmount(e.target.value))} required />
             <input placeholder="Transaction ID (e.g. CHK3A1B2C)" value={ref}
               onChange={(e) => setRef(e.target.value)} required />
           </>
         ) : (
           <>
-            <input inputMode="numeric" placeholder={`Amount (min ${cfg.minWithdraw})`} value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))} required />
+            <input inputMode="decimal" placeholder={`Amount (min ${fmt(cfg.minWithdraw)})`} value={amount}
+              onChange={(e) => setAmount(cleanAmount(e.target.value))} required />
             <input inputMode="tel" placeholder="Phone number to receive money" value={phone}
               onChange={(e) => setPhone(e.target.value)} required />
           </>
@@ -85,7 +87,7 @@ export default function Wallet({ cfg, balance }) {
               </div>
             </div>
             <div className="right">
-              <div className={t.amount >= 0 ? 'pos' : 'neg'}>{t.amount > 0 ? '+' : ''}{t.amount}</div>
+              <div className={t.amount >= 0 ? 'pos' : 'neg'}>{t.amount > 0 ? '+' : ''}{fmt(t.amount)}</div>
               {t.status !== 'done' && <div className={`pill ${t.status}`}>{t.status}</div>}
             </div>
           </div>

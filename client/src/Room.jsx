@@ -3,6 +3,7 @@ import { socket, emit, haptic, toast, withEndsAt } from './api.js';
 import { useCountdown } from './hooks.js';
 import { letterFor } from '../../shared/cards.js';
 import Card from './Card.jsx';
+import { fmt } from '../../shared/money.js';
 
 const loadAutoMark = () => {
   try { return localStorage.getItem('automark') !== '0'; } catch { return true; }
@@ -101,7 +102,7 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
     <div className="room-head">
       <div>
         <div className="muted small">Room</div>
-        <div className="big">{stake} {cfg.currency}</div>
+        <div className="big">{fmt(stake)} {cfg.currency}</div>
       </div>
       <div>
         <div className="muted small">Players</div>
@@ -109,7 +110,7 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
       </div>
       <div>
         <div className="muted small">Prize</div>
-        <div className="big accent">{room.prize}</div>
+        <div className="big accent">{fmt(room.prize)}</div>
       </div>
     </div>
   );
@@ -133,7 +134,7 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
             <div className="preview-actions">
               {preview && preview !== room.myCard ? (
                 <button className="primary" disabled={busy} onClick={() => pick(preview)}>
-                  {inGame ? `Switch to card #${preview}` : `Play card #${preview} — ${stake} ${cfg.currency}`}
+                  {inGame ? `Switch to card #${preview}` : `Play card #${preview} — ${fmt(stake)} ${cfg.currency}`}
                 </button>
               ) : (
                 <div className="ok">✅ You're in with card #{room.myCard}</div>
@@ -217,11 +218,11 @@ export default function Room({ stake, cfg, user, balance, onExit }) {
       {result && (
         <div className="overlay">
           <div className="result">
-            {myWin ? <h2>🎉 You won {result.amountEach} {cfg.currency}!</h2>
+            {myWin ? <h2>🎉 You won {fmt(result.amountEach)} {cfg.currency}!</h2>
               : result.winners.length ? <h2>Game over</h2> : <h2>No winner</h2>}
             {result.winners.map((w) => (
               <div key={w.userId} className="winner">
-                <div>🏆 <b>{w.name}</b> — card #{w.card} — {result.amountEach} {cfg.currency}</div>
+                <div>🏆 <b>{w.name}</b> — card #{w.card} — {fmt(result.amountEach)} {cfg.currency}</div>
                 <Card id={w.card} called={called} marked={called} winLine={w.line} size="sm" />
               </div>
             ))}

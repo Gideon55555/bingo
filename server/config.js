@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { toCents } from '../shared/money.js';
 
 // Always load .env from the project root, no matter where the process is started from
 // (shared hosting / Passenger often starts apps from a different working directory).
@@ -12,6 +13,8 @@ dotenv.config({ path: path.join(ROOT, '.env') });
 process.env.TZ = process.env.TIMEZONE || 'Africa/Addis_Ababa';
 
 const num = (v, d) => (v === undefined || v === '' ? d : Number(v));
+// Amounts in .env are written in ETB; internally everything is cents.
+const cents = (v, d) => toCents(v === undefined || v === '' ? d : v);
 const list = (v) => (v || '').split(',').map((s) => s.trim()).filter(Boolean);
 const fromRoot = (p) => (path.isAbsolute(p) ? p : path.join(ROOT, p));
 const botToken = process.env.BOT_TOKEN || '';
@@ -34,7 +37,7 @@ export const config = {
   webhookSecret: derived('secret'),
 
   // Game
-  stakes: list(process.env.STAKES || '10,20,50,100').map(Number),
+  stakes: list(process.env.STAKES || '10,20,50,100').map(toCents), // cents
   cardCount: num(process.env.CARD_COUNT, 100),
   minPlayers: num(process.env.MIN_PLAYERS, 2),
   countdownSec: num(process.env.COUNTDOWN_SEC, 30),
@@ -45,9 +48,10 @@ export const config = {
   // Wallet
   currency: process.env.CURRENCY || 'ETB',
   paymentInfo: process.env.PAYMENT_INFO || 'Telebirr: 09XXXXXXXX (Your Name)',
-  minDeposit: num(process.env.MIN_DEPOSIT, 10),
-  maxDeposit: num(process.env.MAX_DEPOSIT, 100000),
-  minWithdraw: num(process.env.MIN_WITHDRAW, 50),
+  // (cents)
+  minDeposit: cents(process.env.MIN_DEPOSIT, 10),
+  maxDeposit: cents(process.env.MAX_DEPOSIT, 100000),
+  minWithdraw: cents(process.env.MIN_WITHDRAW, 50),
   maxPendingDeposits: num(process.env.MAX_PENDING_DEPOSITS, 3),
   maxPendingWithdrawals: num(process.env.MAX_PENDING_WITHDRAWALS, 2),
 
@@ -81,7 +85,7 @@ export function checkConfig() {
     warnings.push('DEV_MODE is ON — anyone can log in as any user. Never use this in production.');
   }
   if (config.houseCut < 0 || config.houseCut >= 1) errors.push('HOUSE_CUT must be between 0 and 0.99.');
-  if (!config.stakes.length || config.stakes.some((s) => !Number.isInteger(s) || s <= 0)) errors.push('STAKES must be positive whole numbers.');
+  if (!config.stakes.length || config.stakes.some((s) => !Number.isInteger(s) || s <= 0)) errors.push('STAKES must be positive amounts.');
   for (const w of warnings) console.warn(`⚠️  ${w}`);
   if (errors.length) {
     for (const e of errors) console.error(`❌ ${e}`);

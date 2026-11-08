@@ -1,11 +1,12 @@
 import { Bot, InlineKeyboard, InputFile, webhookCallback } from 'grammy';
 import { config } from './config.js';
+import { fmtMoney, fmt, toCents } from '../shared/money.js';
 import { getUser, getTx } from './db.js';
 
 export let bot = null;
 const isAdmin = (id) => config.adminIds.includes(String(id));
 const who = (t) => (t.username ? `@${t.username}` : t.first_name || t.user_id || t.id);
-const money = (n) => `${n} ${config.currency}`;
+const money = (n) => fmtMoney(n, config.currency);
 const fmtDate = (s) => new Date(s * 1000).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
 
 function txText(t) {
@@ -111,7 +112,7 @@ export async function startBot({ actions, app }) {
       `Games: ${x.games}  ·  Bets: ${money(x.totalBets)}\n🏦 House earned: ${money(x.houseEarnings)}\n` +
       `💰 Deposits: ${money(x.deposits)}  ·  🏧 Withdrawals: ${money(x.withdrawals)}\n` +
       `👥 Active players: ${x.activePlayers}  ·  New users: ${x.newUsers}`;
-    const rooms = s.rooms.map((r) => `${r.stake}: ${r.state}, ${r.players} players`).join('\n');
+    const rooms = s.rooms.map((r) => `${fmt(r.stake)}: ${r.state}, ${r.players} players`).join('\n');
     return ctx.reply(
       `📊 TODAY\n${b(s.today)}\n\n📈 ALL TIME\n${b(s.allTime)}\n\n` +
       `Users: ${s.users}  ·  Player balances held: ${money(s.playerBalances)}\n` +
@@ -132,7 +133,7 @@ export async function startBot({ actions, app }) {
     if (!q) return ctx.reply('Usage: /user <id or @username>');
     const { user: u, history } = actions.userDetail(q);
     const lines = history.slice(0, 10).map((t) =>
-      `${fmtDate(t.created_at)}  ${t.type}  ${t.amount > 0 ? '+' : ''}${t.amount}${t.status !== 'done' ? ` (${t.status})` : ''}`);
+      `${fmtDate(t.created_at)}  ${t.type}  ${t.amount > 0 ? '+' : ''}${fmt(t.amount)}${t.status !== 'done' ? ` (${t.status})` : ''}`);
     return ctx.reply(
       `👤 ${u.first_name || ''} ${u.username ? `@${u.username}` : ''}\nid: ${u.id}\n` +
       `Balance: ${money(u.balance)}\nDeposited: ${money(u.deposited ?? 0)}  ·  Withdrawn: ${money(u.withdrawn ?? 0)}\n` +
@@ -143,10 +144,10 @@ export async function startBot({ actions, app }) {
 
   bot.command('addbalance', adminOnly(async (ctx) => {
     const [q, amount, ...note] = args(ctx).split(/\s+/);
-    if (!q || !amount || Number.isNaN(Number(amount))) {
+    if (!q || !amount || !Number.isFinite(toCents(amount)) || toCents(amount) === 0) {
       return ctx.reply('Usage: /addbalance <id or @username> <amount> [note]\nExample: /addbalance @abebe 50 welcome bonus\nUse a negative amount to subtract.');
     }
-    const u = await actions.adjust(q, amount, note.join(' '), ctx.from.first_name);
+    const u = await actions.adjust(q, toCents(amount), note.join(' '), ctx.from.first_name);
     return ctx.reply(`✅ Done. ${who(u)} now has ${money(u.balance)}.`);
   }));
 

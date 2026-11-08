@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { adminApi, toast, confirmBox, haptic } from './api.js';
+import { fmt, toCents } from '../../shared/money.js';
 
 const fmtDate = (s) => new Date(s * 1000).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
 const name = (u) => [u.first_name, u.username && `@${u.username}`].filter(Boolean).join(' ') || u.user_id || u.id;
-const TYPE = { deposit: 'Deposit', withdraw: 'Withdrawal', bet: 'Game entry', win: 'Win', refund: 'Refund', adjust: 'Adjustment' };
+const TYPE = { deposit: 'Deposit', withdraw: 'Withdrawal', bet: 'Bet / entry', win: 'Win', refund: 'Refund', adjust: 'Adjustment' };
 
 /** Poll a loader every `ms` and return [data, reload, error] */
 function usePoll(loader, ms, deps = []) {
@@ -58,7 +59,7 @@ export default function Admin({ cfg, onLogout }) {
 function Overview({ stats: s, cfg, reload, goRequests }) {
   const [range, setRange] = useState('today');
   const r = s[range];
-  const c = (n) => `${Number(n).toLocaleString()} ${cfg.currency}`;
+  const c = (n) => `${fmt(n)} ${cfg.currency}`;
   const pending = s.pendingDeposits.n + s.pendingWithdrawals.n;
 
   const togglePause = async () => {
@@ -113,10 +114,10 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
           <tbody>
             {s.rooms.map((rm) => (
               <tr key={rm.stake}>
-                <td><b>{rm.stake}</b></td>
+                <td><b>{fmt(rm.stake)}</b></td>
                 <td><span className={`pill ${rm.state}`}>{rm.state}</span></td>
                 <td>{rm.players}</td>
-                <td>{rm.prize}</td>
+                <td>{fmt(rm.prize)}</td>
                 <td>{rm.state === 'playing' ? `${rm.called}/75` : '—'}</td>
                 <td className="small muted">{rm.cards.map((p) => `#${p.card} ${p.name}${p.disqualified ? ' ❌' : ''}`).join(', ') || '—'}</td>
               </tr>
@@ -146,7 +147,7 @@ function Requests({ cfg, onChange }) {
 
   const decide = async (t, approve) => {
     const kind = t.type === 'deposit' ? 'deposit' : 'withdraw';
-    const amt = Math.abs(t.amount);
+    const amt = fmt(Math.abs(t.amount));
     const q = kind === 'deposit'
       ? (approve ? `Approve deposit of ${amt} ${cfg.currency} (ref ${t.reference})?\n\nOnly approve if the money is in your account.` : `Reject deposit #${t.id}?`)
       : (approve ? `Did you send ${amt} ${cfg.currency} to ${t.phone}?` : `Reject withdrawal #${t.id} and refund ${amt} ${cfg.currency}?`);
@@ -174,7 +175,7 @@ function Requests({ cfg, onChange }) {
             <div key={t.id} className={`req ${t.type}`}>
               <div className="req-head">
                 <span className="req-type">{t.type === 'deposit' ? '💰 Deposit' : '🏧 Withdrawal'} #{t.id}</span>
-                <span className="req-amt">{Math.abs(t.amount)} {cfg.currency}</span>
+                <span className="req-amt">{fmt(Math.abs(t.amount))} {cfg.currency}</span>
               </div>
               <div className="small">{name(t)} <span className="muted">· id {t.user_id}</span></div>
               <div className="small">
@@ -227,7 +228,7 @@ function TxTable({ items, showUser }) {
               <td className="nowrap">{fmtDate(t.created_at)}</td>
               {showUser && <td>{name(t)}</td>}
               <td>{TYPE[t.type] || t.type}</td>
-              <td className={t.amount >= 0 ? 'pos' : 'neg'}>{t.amount > 0 ? '+' : ''}{t.amount}</td>
+              <td className={t.amount >= 0 ? 'pos' : 'neg'}>{t.amount > 0 ? '+' : ''}{fmt(t.amount)}</td>
               <td><span className={`pill ${t.status}`}>{t.status}</span></td>
               <td className="small muted">{t.reference || t.phone || t.note || ''}</td>
             </tr>
@@ -263,9 +264,9 @@ function Players({ cfg }) {
             {list?.rows.map((u) => (
               <tr key={u.id} className="clickable" onClick={() => setSelected(u.id)}>
                 <td>{name(u)}<div className="muted small">{u.id}</div></td>
-                <td><b>{u.balance}</b></td>
-                <td>{u.deposited}</td>
-                <td>{u.withdrawn}</td>
+                <td><b>{fmt(u.balance)}</b></td>
+                <td>{fmt(u.deposited)}</td>
+                <td>{fmt(u.withdrawn)}</td>
                 <td>{u.games_played}</td>
                 <td>{u.games_won}</td>
                 <td className="nowrap small">{fmtDate(u.created_at)}</td>
@@ -285,10 +286,10 @@ function PlayerDetail({ id, cfg, onBack }) {
   const [busy, setBusy] = useState(false);
 
   const adjust = async (sign) => {
-    const n = Math.abs(parseInt(amount, 10));
+    const n = Math.abs(toCents(amount));
     if (!n) return toast('Enter an amount');
     const amt = sign * n;
-    if (!(await confirmBox(`${amt > 0 ? 'Add' : 'Subtract'} ${n} ${cfg.currency} ${amt > 0 ? 'to' : 'from'} this player?`))) return;
+    if (!(await confirmBox(`${amt > 0 ? 'Add' : 'Subtract'} ${fmt(n)} ${cfg.currency} ${amt > 0 ? 'to' : 'from'} this player?`))) return;
     setBusy(true);
     try {
       await adminApi.adjust(id, amt, note);
@@ -309,18 +310,18 @@ function PlayerDetail({ id, cfg, onBack }) {
           <h2 style={{ margin: 0 }}>{u.first_name || 'Player'}</h2>
           <div className="muted small">{u.username ? `@${u.username} · ` : ''}id {u.id} · joined {fmtDate(u.created_at)}</div>
         </div>
-        <div className="huge">{u.balance} <small>{cfg.currency}</small></div>
+        <div className="huge">{fmt(u.balance)} <small>{cfg.currency}</small></div>
       </div>
       <div className="tiles">
-        <Tile label="Deposited" value={u.deposited ?? 0} />
-        <Tile label="Withdrawn" value={u.withdrawn ?? 0} />
+        <Tile label="Deposited" value={fmt(u.deposited ?? 0)} />
+        <Tile label="Withdrawn" value={fmt(u.withdrawn ?? 0)} />
         <Tile label="Games" value={u.games_played ?? 0} />
         <Tile label="Wins" value={u.games_won ?? 0} />
       </div>
 
       <h3>Adjust balance</h3>
       <div className="adjust">
-        <input inputMode="numeric" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))} />
+        <input inputMode="decimal" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))} />
         <input placeholder="Note (e.g. welcome bonus, correction)" value={note} onChange={(e) => setNote(e.target.value)} />
         <button className="primary sm" disabled={busy} onClick={() => adjust(1)}>＋ Add</button>
         <button className="danger sm" disabled={busy} onClick={() => adjust(-1)}>－ Subtract</button>
@@ -348,11 +349,11 @@ function Games({ cfg }) {
               <tr key={g.id}>
                 <td className="muted">{g.id}</td>
                 <td className="nowrap">{fmtDate(g.created_at)}</td>
-                <td>{g.stake}</td>
+                <td>{fmt(g.stake)}</td>
                 <td>{g.players}</td>
-                <td>{g.pot}</td>
-                <td>{g.payout}</td>
-                <td className="pos">{g.house}</td>
+                <td>{fmt(g.pot)}</td>
+                <td>{fmt(g.payout)}</td>
+                <td className="pos">{fmt(g.house)}</td>
                 <td>{g.calls}</td>
                 <td className="small">{g.winners.map((w) => `${name(w)} (#${w.card})`).join(', ') || <span className="muted">none</span>}</td>
               </tr>

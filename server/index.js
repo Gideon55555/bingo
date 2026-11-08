@@ -11,6 +11,7 @@ import { startBot, stopBot, notifyAdmins, notifyUser } from './bot.js';
 import { createAdmin, isAdminId } from './admin.js';
 import { limit, allow } from './ratelimit.js';
 import { scheduleBackups } from './backup.js';
+import { fmtMoney } from '../shared/money.js';
 
 checkConfig();
 
@@ -64,16 +65,17 @@ app.get('/api/me', requireAuth, (req, res) => res.json({ user: { ...req.user, is
 
 app.get('/api/history', requireAuth, (req, res) => res.json({ items: history(req.user.id) }));
 
+const money = (n) => fmtMoney(n, config.currency);
 const perUser = (req) => req.user.id;
 const walletLimit = limit('wallet', 5, 10 * 60 * 1000, perUser); // 5 requests / 10 min / user
 
 app.post('/api/deposit', requireAuth, walletLimit, async (req, res) => {
-  const amount = Math.floor(Number(req.body.amount));
+  const amount = Math.floor(Number(req.body.amount)); // cents
   const reference = String(req.body.reference || '').trim().toUpperCase().replace(/\s+/g, '');
   if (!Number.isFinite(amount) || amount < config.minDeposit)
-    return res.status(400).json({ error: `Minimum deposit is ${config.minDeposit} ${config.currency}` });
+    return res.status(400).json({ error: `Minimum deposit is ${money(config.minDeposit)}` });
   if (amount > config.maxDeposit)
-    return res.status(400).json({ error: `Maximum deposit is ${config.maxDeposit} ${config.currency}` });
+    return res.status(400).json({ error: `Maximum deposit is ${money(config.maxDeposit)}` });
   if (!/^[A-Z0-9\-_.]{4,64}$/.test(reference))
     return res.status(400).json({ error: 'Enter the transaction ID exactly as it appears in your payment SMS' });
   if (countPending(req.user.id, 'deposit') >= config.maxPendingDeposits)
@@ -88,10 +90,10 @@ app.post('/api/deposit', requireAuth, walletLimit, async (req, res) => {
 });
 
 app.post('/api/withdraw', requireAuth, walletLimit, (req, res) => {
-  const amount = Math.floor(Number(req.body.amount));
+  const amount = Math.floor(Number(req.body.amount)); // cents
   const phone = String(req.body.phone || '').replace(/[\s-]/g, '');
   if (!Number.isFinite(amount) || amount < config.minWithdraw)
-    return res.status(400).json({ error: `Minimum withdrawal is ${config.minWithdraw} ${config.currency}` });
+    return res.status(400).json({ error: `Minimum withdrawal is ${money(config.minWithdraw)}` });
   if (!/^\+?\d{9,15}$/.test(phone)) return res.status(400).json({ error: 'Enter a valid phone number' });
   if (countPending(req.user.id, 'withdraw') >= config.maxPendingWithdrawals)
     return res.status(400).json({ error: 'You already have withdrawals being processed. Please wait for them first.' });
@@ -157,9 +159,8 @@ io.on('connection', (socket) => {
 });
 
 // ---------------- Startup ----------------
-const money = (n) => `${n} ${config.currency}`;
 const tellRefunds = (list, why) =>
-  Promise.all(list.map((r) => notifyUser(r.userId, `↩️ Your ${money(r.amount)} entry for the ${r.stake} room was refunded — ${why}.`)));
+  Promise.all(list.map((r) => notifyUser(r.userId, `↩️ Your ${money(r.amount)} entry (${r.label}) was refunded — ${why}.`)));
 
 async function main() {
   // Registers the webhook route synchronously (before the catch-all below), then connects to

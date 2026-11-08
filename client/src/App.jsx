@@ -4,6 +4,7 @@ import Lobby from './Lobby.jsx';
 import Room from './Room.jsx';
 import Wallet from './Wallet.jsx';
 import Admin from './Admin.jsx';
+import { fmt } from '../../shared/money.js';
 
 export default function App() {
   const [cfg, setCfg] = useState(null);
@@ -62,7 +63,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">🎱 Bingo</div>
         <button className="balance" onClick={() => { setStake(null); setTab('wallet'); }}>
-          {balance} {cfg.currency}
+          {fmt(balance)} {cfg.currency}
         </button>
       </header>
       {error && <div className="banner">{error}</div>}

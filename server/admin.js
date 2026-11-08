@@ -2,6 +2,7 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import { config } from './config.js';
+import { fmtMoney, fmt, toCents } from '../shared/money.js';
 import { authenticate } from './auth.js';
 import {
   getStats, findUser, listUsers, listTransactions, listGames, adjustBalance, allUserIds, history,
@@ -11,7 +12,7 @@ import { notifyUser, sendMessage } from './bot.js';
 import { runBackup } from './backup.js';
 
 export const isAdminId = (id) => config.adminIds.includes(String(id));
-const money = (n) => `${n} ${config.currency}`;
+const money = (n) => fmtMoney(n, config.currency);
 
 export function createAdmin({ games, onBalanceChange }) {
   let broadcastJob = null;
@@ -57,7 +58,7 @@ export function createAdmin({ games, onBalanceChange }) {
       if (!u) throw new Error('User not found');
       const updated = adjustBalance(u.id, amount, note || `Adjusted by ${adminName}`);
       onBalanceChange(u.id);
-      const amt = Math.trunc(Number(amount));
+      const amt = Math.trunc(Number(amount)); // cents
       await notifyUser(u.id, amt > 0
         ? `🎁 ${money(amt)} was added to your balance.${note ? ` (${note})` : ''}`
         : `ℹ️ ${money(-amt)} was deducted from your balance.${note ? ` (${note})` : ''}`);
