@@ -1,4 +1,4 @@
-# 🎱 Telegram Bingo Mini App
+# 🎱 Telegram Bingo + 🚀 Rocket Mini App
 
 A multiplayer 75-ball bingo game that runs inside Telegram, with a player wallet.
 Players send you money (Telebirr, bank and so on), submit the transaction ID in the app,
@@ -27,6 +27,18 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
    A false claim disqualifies that player for the round.
 6. The winner gets the pot minus the house cut (20% by default). If several players complete
    a line on the same ball, they split the prize. The room then resets.
+
+**🚀 Rocket (crash game)**
+1. One shared round for everyone. Players bet during a 7-second betting window.
+2. The rocket takes off and the multiplier climbs from 1.00x. Players press **CASH OUT** to win bet × multiplier,
+   or set **auto cash out** (for example 2.00x).
+3. When the rocket flies away, every bet that wasn't cashed out is lost. Then the next round opens.
+4. **House edge 3%** (`CRASH_HOUSE_EDGE`): players get back 97% of bets on average, whatever strategy they use.
+   About 4% of rounds crash instantly at 1.00x.
+5. **Provably fair:** each round's result is fixed before betting opens. Players see its hash (fingerprint)
+   up front, and the seed is revealed after the crash so anyone can check it.
+6. Limits: min/max bet and a **max win per bet** (`CRASH_MAX_WIN`) protect you from huge payouts.
+7. Server restart mid-flight: anyone who already cashed out keeps the win, and everyone else is refunded.
 
 **Wallet flow**
 - **Deposit:** the player sends money to your account, then enters the amount and transaction ID.
@@ -98,10 +110,10 @@ them from the bot, or with a quick SQL update. **Never enable DEV_MODE in produc
 ```bash
 npm test
 ```
-This runs a full simulated game with real signed Telegram auth (41 checks): auth forgery,
+This runs, with real signed Telegram auth: a full Bingo game (41 checks): auth forgery,
 deposits, duplicate references, entry fees, refunds, false BINGO, payouts, house cut,
-withdrawals and every admin feature. A second test (10 checks) kills the server mid-game
-and checks that every player is refunded on restart.
+withdrawals and every admin feature. crash recovery (10 checks), Rocket end-to-end (26 checks: bets, cash-outs, fairness, pause, restart),
+and a statistical check of Rocket's house edge over 200,000 simulated rounds.
 
 ## Deploying
 
@@ -123,7 +135,8 @@ See **[DEPLOY.md](DEPLOY.md)** for step-by-step guides (VPS, or DirectAdmin Node
 ```
 server/
   index.js    Express API + Socket.IO + static hosting
-  game.js     Room state machine (picking → countdown → playing → finished)
+  game.js     Bingo room state machine (picking → countdown → playing → finished)
+  crash.js    Rocket crash game (betting → flying → crashed), provably fair
   bingo.js    secure number shuffle
   db.js       SQLite schema + atomic wallet operations
   auth.js     Telegram initData HMAC validation
@@ -135,6 +148,8 @@ app.cjs           startup file for shared hosting (Passenger)
 ecosystem.config.cjs  pm2 config for a VPS
 deploy/           VPS setup + update scripts, Caddy config
 shared/cards.js   deterministic card generation + win check (used by server and client)
+shared/crash.js   multiplier curve + crash-point formula (server and client)
+shared/money.js   all money is stored in cents; helpers to convert/format
 client/src/       React mini app (Lobby, Room, Card, Wallet, Admin)
 test/simulate.js  end-to-end test
 ```

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { adminApi, toast, confirmBox, haptic } from './api.js';
 import { fmt, toCents } from '../../shared/money.js';
+import { fmtX } from '../../shared/crash.js';
 
 const fmtDate = (s) => new Date(s * 1000).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
 const name = (u) => [u.first_name, u.username && `@${u.username}`].filter(Boolean).join(' ') || u.user_id || u.id;
@@ -89,10 +90,13 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
 
       <div className="tiles">
         <Tile label="House earnings" value={c(r.houseEarnings)} accent />
+        <Tile label="· from Bingo" value={c(r.bingoEarnings)} />
+        <Tile label="· from Rocket" value={c(r.crashEarnings)} />
         <Tile label="Deposits" value={c(r.deposits)} />
         <Tile label="Withdrawals" value={c(r.withdrawals)} />
         <Tile label="Net cash in" value={c(r.deposits - r.withdrawals)} />
-        <Tile label="Games played" value={r.games} />
+        <Tile label="Bingo games" value={r.games} />
+        <Tile label="Rocket rounds (with bets)" value={r.crashRounds} />
         <Tile label="Total bets" value={c(r.totalBets)} />
         <Tile label="Active players" value={r.activePlayers} />
         <Tile label="New users" value={r.newUsers} />
@@ -108,6 +112,15 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
           {s.paused ? '▶️ Resume games' : '⏸ Pause games'}
         </button>
       </div>
+      {s.crash && (
+        <div className="tile rk-admin">
+          <div className="row-between">
+            <b>🚀 Rocket — round #{s.crash.round} · <span className={`pill ${s.crash.phase === 'flying' ? 'playing' : s.crash.phase}`}>{s.crash.phase}</span></b>
+            <span className="small">{s.crash.players} bettor(s) · bets {c(s.crash.betsTotal)} · paid {c(s.crash.paidOut)}</span>
+          </div>
+          <div className="rc-chips">{s.crash.last.map((p, i) => <span key={i} className={`x-chip ${p < 200 ? 'x-low' : p < 1000 ? 'x-mid' : 'x-high'}`}>{fmtX(p)}</span>)}</div>
+        </div>
+      )}
       <div className="table-wrap">
         <table>
           <thead><tr><th>Room</th><th>Status</th><th>Players</th><th>Prize</th><th>Called</th><th>Cards</th></tr></thead>
@@ -336,6 +349,47 @@ function PlayerDetail({ id, cfg, onBack }) {
 
 // ---------------- Games ----------------
 function Games({ cfg }) {
+  const [which, setWhich] = useState('bingo');
+  return (
+    <div className="admin-section">
+      <div className="seg small-seg">
+        <button className={which === 'bingo' ? 'active' : ''} onClick={() => setWhich('bingo')}>🎱 Bingo</button>
+        <button className={which === 'rocket' ? 'active' : ''} onClick={() => setWhich('rocket')}>🚀 Rocket</button>
+      </div>
+      {which === 'bingo' ? <BingoGames cfg={cfg} /> : <RocketRounds cfg={cfg} />}
+    </div>
+  );
+}
+
+function RocketRounds({ cfg }) {
+  const [data] = usePoll(adminApi.crashRounds, 5000);
+  if (!data) return <div className="muted">Loading…</div>;
+  if (!data.items.length) return <div className="empty">No rounds yet.</div>;
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Time</th><th>Crash</th><th>Players</th><th>Bets</th><th>Paid out</th><th>House</th><th>Seed (fairness)</th></tr></thead>
+        <tbody>
+          {data.items.map((r) => (
+            <tr key={r.id}>
+              <td className="muted">{r.id}</td>
+              <td className="nowrap">{fmtDate(r.created_at)}</td>
+              <td><span className={`x-chip ${r.crash_point < 200 ? 'x-low' : r.crash_point < 1000 ? 'x-mid' : 'x-high'}`}>{fmtX(r.crash_point)}</span></td>
+              <td>{r.players}</td>
+              <td>{fmt(r.bets_total)}</td>
+              <td>{fmt(r.payout_total)}</td>
+              <td className={r.bets_total - r.payout_total >= 0 ? 'pos' : 'neg'}>{fmt(r.bets_total - r.payout_total)}</td>
+              <td className="mono small muted" title={r.seed}>{r.seed.slice(0, 12)}…</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted small" style={{ padding: '0 10px' }}>Amounts in {cfg.currency}. Rounds where nobody bet show 0.</p>
+    </div>
+  );
+}
+
+function BingoGames({ cfg }) {
   const [data] = usePoll(adminApi.games, 10000);
   if (!data) return <div className="muted">Loading…</div>;
   if (!data.items.length) return <div className="empty">No games played yet.</div>;

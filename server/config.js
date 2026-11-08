@@ -45,6 +45,17 @@ export const config = {
   resultShowSec: num(process.env.RESULT_SHOW_SEC, 8),
   houseCut: num(process.env.HOUSE_CUT, 0.2),
 
+  // Rocket (crash game). Amounts in ETB in .env, cents internally.
+  crash: {
+    enabled: process.env.CRASH_ENABLED !== 'false',
+    houseEdge: num(process.env.CRASH_HOUSE_EDGE, 0.03),
+    minBet: cents(process.env.CRASH_MIN_BET, 5),
+    maxBet: cents(process.env.CRASH_MAX_BET, 5000),
+    maxWin: cents(process.env.CRASH_MAX_WIN, 100000),
+    betSec: num(process.env.CRASH_BET_SEC, 7),
+    maxMultiplier: Math.round(num(process.env.CRASH_MAX_MULTIPLIER, 1000) * 100), // x100
+  },
+
   // Wallet
   currency: process.env.CURRENCY || 'ETB',
   paymentInfo: process.env.PAYMENT_INFO || 'Telebirr: 09XXXXXXXX (Your Name)',
@@ -54,6 +65,9 @@ export const config = {
   minWithdraw: cents(process.env.MIN_WITHDRAW, 50),
   maxPendingDeposits: num(process.env.MAX_PENDING_DEPOSITS, 3),
   maxPendingWithdrawals: num(process.env.MAX_PENDING_WITHDRAWALS, 2),
+
+  // Name shown in the app header
+  appName: process.env.APP_NAME || 'Bingo',
 
   // Shown on the Rules screen
   supportContact: process.env.SUPPORT_CONTACT || '',
@@ -85,6 +99,8 @@ export function checkConfig() {
     warnings.push('DEV_MODE is ON — anyone can log in as any user. Never use this in production.');
   }
   if (config.houseCut < 0 || config.houseCut >= 1) errors.push('HOUSE_CUT must be between 0 and 0.99.');
+  if (config.crash.houseEdge < 0 || config.crash.houseEdge >= 0.5) errors.push('CRASH_HOUSE_EDGE must be between 0 and 0.5.');
+  if (config.crash.minBet <= 0 || config.crash.maxBet < config.crash.minBet) errors.push('CRASH_MIN_BET / CRASH_MAX_BET are invalid.');
   if (!config.stakes.length || config.stakes.some((s) => !Number.isInteger(s) || s <= 0)) errors.push('STAKES must be positive amounts.');
   for (const w of warnings) console.warn(`⚠️  ${w}`);
   if (errors.length) {

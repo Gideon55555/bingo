@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Rules from './Rules.jsx';
 import { fmt } from '../../shared/money.js';
+import { fmtX } from '../../shared/crash.js';
 import { useCountdown } from './hooks.js';
 
 const STATUS = {
@@ -29,7 +30,7 @@ function RoomCard({ r, cfg, onEnter }) {
 
 const seenRules = () => { try { return localStorage.getItem('rules_seen') === '1'; } catch { return false; } };
 
-export default function Lobby({ rooms, cfg, onEnter }) {
+export default function Lobby({ rooms, cfg, onEnter, crash, onRocket }) {
   const [showRules, setShowRules] = useState(() => !seenRules());
   const closeRules = () => {
     try { localStorage.setItem('rules_seen', '1'); } catch { /* ignore */ }
@@ -38,8 +39,23 @@ export default function Lobby({ rooms, cfg, onEnter }) {
   return (
     <div className="lobby">
       {showRules && <Rules cfg={cfg} onClose={closeRules} />}
+      {crash && (
+        <button className="rocket-card" onClick={onRocket}>
+          <div className="rc-left">
+            <div className="rc-title">🚀 Rocket</div>
+            <div className="small">Cash out before it flies away</div>
+            <div className="rc-chips">
+              {crash.last.map((p, i) => <span key={i} className={`x-chip ${p < 200 ? 'x-low' : p < 1000 ? 'x-mid' : 'x-high'}`}>{fmtX(p)}</span>)}
+            </div>
+          </div>
+          <div className="rc-right">
+            <span className={`pill ${crash.phase === 'flying' ? 'playing' : crash.phase}`}>{crash.phase === 'flying' ? 'LIVE' : crash.phase === 'betting' ? 'Betting' : crash.phase}</span>
+            <div className="join">Play →</div>
+          </div>
+        </button>
+      )}
       <div className="row-between">
-        <h2>Choose a room</h2>
+        <h2>🎱 Bingo rooms</h2>
         <button className="ghost sm" onClick={() => setShowRules(true)}>📖 Rules</button>
       </div>
       <p className="muted small">

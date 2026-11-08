@@ -7,6 +7,7 @@ import { config, checkConfig, ROOT } from './config.js';
 import { authenticate, requireAuth } from './auth.js';
 import { db, getUser, history, createDeposit, createWithdrawal, countPending, refundOpenRounds } from './db.js';
 import { GameManager } from './game.js';
+import { CrashGame } from './crash.js';
 import { startBot, stopBot, notifyAdmins, notifyUser } from './bot.js';
 import { createAdmin, isAdminId } from './admin.js';
 import { limit, allow } from './ratelimit.js';
@@ -33,6 +34,7 @@ const recovered = refundOpenRounds('refunded (game interrupted by server restart
 if (recovered.length) console.log(`[recovery] refunded ${recovered.length} entr(ies) from interrupted rounds`);
 
 const games = new GameManager(io, onBalanceChange);
+games.crash = config.crash.enabled ? new CrashGame(io, onBalanceChange, games) : null;
 const admin = createAdmin({ games, onBalanceChange });
 
 // ---------------- REST API ----------------
@@ -57,7 +59,12 @@ app.get('/api/config', (_req, res) =>
     minPlayers: config.minPlayers,
     callIntervalMs: config.callIntervalMs,
     supportContact: config.supportContact,
+    appName: config.appName,
     minAge: config.minAge,
+    crash: config.crash.enabled
+      ? { minBet: config.crash.minBet, maxBet: config.crash.maxBet, maxWin: config.crash.maxWin,
+          houseEdge: config.crash.houseEdge, maxMultiplier: config.crash.maxMultiplier, betSec: config.crash.betSec }
+      : null,
     devMode: config.devMode,
   }));
 
@@ -121,6 +128,7 @@ io.on('connection', (socket) => {
   socket.join(`user:${user.id}`);
   socket.join('lobby');
   socket.emit('lobby:all', games.lobby());
+  if (games.crash) socket.emit('crash:lobby', games.crash.lobbySummary());
   onBalanceChange(user.id);
 
   // Wrap handlers: rate-limit, and send thrown errors back to the client as ack errors
@@ -156,6 +164,20 @@ io.on('connection', (socket) => {
   });
 
   handle('bingo', ({ stake }) => games.get(stake).claim(user));
+
+  // ---- Rocket (crash game) ----
+  const crash = () => {
+    if (!games.crash) throw new Error('This game is not available');
+    return games.crash;
+  };
+  handle('crash:enter', () => {
+    socket.join(crash().channel);
+    return { state: crash().publicState(), me: crash().myBet(user.id) };
+  });
+  handle('crash:exit', () => { socket.leave('crash'); });
+  handle('crash:bet', ({ amount, auto }) => ({ me: crash().bet(getUser(user.id), amount, auto) }));
+  handle('crash:cancel', () => ({ me: crash().cancel(user) }));
+  handle('crash:cashout', () => ({ me: crash().myBet(user.id), cashed: !!crash().cashout(user) }));
 });
 
 // ---------------- Startup ----------------
@@ -184,6 +206,7 @@ async function main() {
     console.log(`Bingo server on port ${config.port} (${config.production ? 'production' : 'development'}, TZ ${config.timezone})`);
   });
 
+  games.crash?.start();
   scheduleBackups();
   if (recovered.length) tellRefunds(recovered, 'the game was interrupted by a server restart');
 }

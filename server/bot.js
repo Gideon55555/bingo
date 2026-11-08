@@ -109,7 +109,8 @@ export async function startBot({ actions, app }) {
   bot.command('stats', adminOnly((ctx) => {
     const s = actions.stats();
     const b = (x) =>
-      `Games: ${x.games}  ·  Bets: ${money(x.totalBets)}\n🏦 House earned: ${money(x.houseEarnings)}\n` +
+      `Bingo games: ${x.games}  ·  Rocket rounds: ${x.crashRounds}  ·  Bets: ${money(x.totalBets)}\n` +
+      `🏦 House earned: ${money(x.houseEarnings)} (Bingo ${money(x.bingoEarnings)}, Rocket ${money(x.crashEarnings)})\n` +
       `💰 Deposits: ${money(x.deposits)}  ·  🏧 Withdrawals: ${money(x.withdrawals)}\n` +
       `👥 Active players: ${x.activePlayers}  ·  New users: ${x.newUsers}`;
     const rooms = s.rooms.map((r) => `${fmt(r.stake)}: ${r.state}, ${r.players} players`).join('\n');

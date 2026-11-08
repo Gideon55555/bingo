@@ -53,6 +53,7 @@ export const adminApi = {
   user: (id) => adminRequest('GET', `/users/${encodeURIComponent(id)}`),
   transactions: (q = {}) => adminRequest('GET', `/transactions?${new URLSearchParams(q)}`),
   games: () => adminRequest('GET', '/games'),
+  crashRounds: () => adminRequest('GET', '/crash-rounds'),
   decide: (kind, id, approve) => adminRequest('POST', '/decide', { kind, id, approve }),
   adjust: (userId, amount, note) => adminRequest('POST', '/adjust', { userId, amount, note }),
   pause: () => adminRequest('POST', '/pause'),
