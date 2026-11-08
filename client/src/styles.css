@@ -666,3 +666,24 @@ input:focus { border-color: var(--gold); }
 input[type=checkbox], input[type=radio] { accent-color: var(--gold); }
 .room-card .stake, .stake { font-family: 'Score', 'Noto Sans Ethiopic', sans-serif; }
 @media (max-width: 380px) { .brand-name { display: none; } }
+
+/* Background: deep red instead of black (gold stays the money colour) */
+:root {
+  --black: #3d0710;
+  --bg: #3d0710;
+  --bg2: #52101b;
+  --panel: #5c1220;
+  --line: rgba(240, 196, 92, .35);
+}
+html, body { background: #3d0710; }
+body { background-image: radial-gradient(130% 70% at 50% -5%, #a3142a 0%, rgba(122, 12, 26, .55) 45%, transparent 75%),
+  linear-gradient(180deg, #5a0a16 0%, #3d0710 60%, #2c050b 100%); }
+.topbar { background: rgba(70, 8, 18, .92); }
+.tabs { background: #2c050b; }
+.balance, .lang-switch, .rules-btn, .seg, .ticker, .game-tile, .slide { background-color: #2a0509; }
+.tile-text { background: linear-gradient(180deg, #5c1220, #3a0811); }
+.gcard, .playsafe, .set-group, .room-card, .tile, .req, .invite-box, .pool-chip, .ludo-table, .banner-form, .banner-item { background: #52101b; }
+input, textarea, select { background: #2e060c; }
+.chip-btn { background: #52101b; }
+.deposit-fab .fab { border-color: #2c050b; }
+.overlay .result { background: linear-gradient(180deg, #5c1220, #2c050b); }
