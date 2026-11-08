@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 import { upsertUser, getUser } from './db.js';
 import { allow, hits } from './ratelimit.js';
+import { seen } from './risk.js';
 
 // Validated initData is cached briefly, so each request/socket doesn't redo the HMAC and JSON parse.
 const CACHE_MAX = 20000;
@@ -80,6 +81,7 @@ export function requireAuth(req, res, next) {
   const user = authenticate(initData, req.get('x-dev-user'));
   if (!user) { recordAuthFailure(req.ip); return res.status(401).json({ error: 'Unauthorized' }); }
   if (!allow(`apiu:${user.id}`, config.apiRateUser, 60 * 1000)) return res.status(429).json({ error: 'Too many requests. Please wait a moment and try again.' });
+  seen(user.id, { ip: req.ip, device: req.get('x-device') });
   req.user = user;
   next();
 }

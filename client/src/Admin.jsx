@@ -32,6 +32,7 @@ export default function Admin({ cfg, onLogout }) {
     ['requests', `💰 Requests${pendingCount ? ` (${pendingCount})` : ''}`],
     ['players', '👥 Players'],
     ['games', '🎱 Games'],
+    ['risk', '🚩 Risk'],
     ['broadcast', '📣 Broadcast'],
     ['log', '📜 Admin log'],
   ];
@@ -52,6 +53,7 @@ export default function Admin({ cfg, onLogout }) {
           {tab === 'games' && <Games cfg={cfg} />}
           {tab === 'broadcast' && <Broadcast users={stats.users} />}
           {tab === 'log' && <AdminLog />}
+          {tab === 'risk' && <Risk cfg={cfg} />}
         </>
       )}
     </div>
@@ -262,6 +264,9 @@ function Requests({ cfg, onChange }) {
               <div className="small">{name(t)} <span className="muted">· id {t.user_id}</span></div>
               <div className="small">
                 {t.type === 'deposit' ? <>Ref: <b className="mono">{t.reference}</b></> : <>Send to: <b className="mono">{t.phone}</b></>}
+                {t.flags?.length > 0 && (
+                  <div className="risk-flags">{t.flags.map((f) => <div key={f}>🚩 {f}</div>)}</div>
+                )}
                 {t.approvals && JSON.parse(t.approvals).length > 0 && (
                   <div className="warn small">☑️ Approved by {JSON.parse(t.approvals).map((a) => a.name).join(', ')} — needs a second admin</div>
                 )}
@@ -384,6 +389,14 @@ function PlayerDetail({ id, cfg, onBack }) {
     } catch (e) { toast(e.message); } finally { setBusy(false); }
   };
 
+  const toggleFreeze = async () => {
+    const on = !data.user.frozen;
+    let reason = '';
+    if (on) { reason = window.prompt('Why are you freezing this account? (shown in the admin log)') ?? null; if (reason === null) return; }
+    else if (!(await confirmBox('Un-freeze this account? They can play and withdraw again.'))) return;
+    try { await adminApi.freeze(id, on, reason); toast(on ? 'Account frozen' : 'Account un-frozen'); reload(); } catch (e) { toast(e.message); }
+  };
+
   if (err) return <div className="admin-section"><button className="ghost sm" onClick={onBack}>← Back</button><p>{err}</p></div>;
   if (!data) return <div className="muted">Loading…</div>;
   const u = data.user;
@@ -397,6 +410,13 @@ function PlayerDetail({ id, cfg, onBack }) {
         </div>
         <div className="huge">{fmt(u.balance)} <small>{cfg.currency}</small></div>
       </div>
+      {(u.frozen || data.flags?.length > 0) && (
+        <div className="risk-flags">
+          {u.frozen ? <div>🧊 Frozen{u.frozen_reason ? ` — ${u.frozen_reason}` : ''}</div> : null}
+          {data.flags.filter((f) => f !== 'Account is frozen').map((f) => <div key={f}>🚩 {f}</div>)}
+        </div>
+      )}
+      <button className={u.frozen ? 'primary sm' : 'danger sm'} onClick={toggleFreeze}>{u.frozen ? '🔓 Un-freeze account' : '🧊 Freeze account (no play, no withdrawals)'}</button>
       <div className="tiles">
         <Tile label="Deposited" value={fmt(u.deposited ?? 0)} />
         <Tile label="Withdrawn" value={fmt(u.withdrawn ?? 0)} />
@@ -412,6 +432,16 @@ function PlayerDetail({ id, cfg, onBack }) {
         <button className="danger sm" disabled={busy} onClick={() => adjust(-1)}>－ Subtract</button>
       </div>
       <p className="muted small">The player gets a Telegram message about the change.</p>
+
+      {data.linked?.length > 0 && (
+        <>
+          <h3>Other accounts on the same {data.linked.some((l) => l.via === 'device') ? 'phone / network' : 'network'}</h3>
+          <div className="small muted">Same network (IP) is common for mobile users and is not proof by itself. Same phone is a strong sign.</div>
+          <div className="linked">
+            {data.linked.map((l) => <span key={`${l.id}-${l.via}`} className={`chip ${l.via === 'device' ? 'bad' : ''}`}>{l.via === 'device' ? '📱' : '🌐'} {l.name} <span className="muted">({l.id})</span>{l.frozen ? ' 🧊' : ''}</span>)}
+          </div>
+        </>
+      )}
 
       <h3>History</h3>
       <TxTable items={data.history} />
@@ -704,6 +734,54 @@ function AdminLog() {
         </tbody>
       </table>
       {more && <button className="ghost" onClick={() => load(items[items.length - 1].id)}>Load older</button>}
+    </div>
+  );
+}
+
+/** Fraud & collusion signals. */
+function Risk({ cfg }) {
+  const [data, reload] = usePoll(adminApi.risk, 30000);
+  const freeze = async (u) => {
+    const reason = window.prompt(`Freeze ${u.name}? Reason (shown in the admin log):`);
+    if (reason === null) return;
+    try { await adminApi.freeze(u.id, true, reason); toast(`${u.name} frozen`); reload(); } catch (e) { toast(e.message); }
+  };
+  const Who = ({ u }) => <span className="nowrap"><b>{u.name}</b> <span className="muted small">{u.id}</span>{u.frozen ? ' 🧊' : <button className="link-btn" onClick={() => freeze(u)}>freeze</button>}</span>;
+  if (!data) return <div className="muted">Loading…</div>;
+  return (
+    <div className="admin-section">
+      <p className="muted small">Warning signs, not proof — check the player's history before acting. Accounts that used the same phone are
+        already blocked from sitting at the same Ludo / pool / Kerenbula table.</p>
+
+      <h3>📱 Several accounts on one phone ({data.sharedDevices.length})</h3>
+      {!data.sharedDevices.length ? <div className="empty">None found.</div> : (
+        <div className="table-wrap"><table><thead><tr><th>Phone</th><th>Accounts</th><th>Last seen</th></tr></thead><tbody>
+          {data.sharedDevices.map((d) => (
+            <tr key={d.device}><td className="mono small">{d.device}…</td><td>{d.users.map((u) => <div key={u.id}><Who u={u} /></div>)}</td><td className="nowrap">{fmtDate(d.lastAt)}</td></tr>
+          ))}
+        </tbody></table></div>
+      )}
+
+      <h3>🤝 Pairs who keep playing each other, one side winning (last 30 days)</h3>
+      {!data.pairs.length ? <div className="empty">None found.</div> : (
+        <div className="table-wrap"><table><thead><tr><th>Keeps winning</th><th>Keeps losing</th><th>Matches</th><th>Win %</th><th>Staked</th><th></th></tr></thead><tbody>
+          {data.pairs.map((p) => (
+            <tr key={`${p.winner.id}-${p.loser.id}`} className={p.samePhone ? 'neg' : ''}>
+              <td><Who u={p.winner} /></td><td><Who u={p.loser} /></td><td>{p.games}</td><td>{p.winnerShare}%</td>
+              <td>{fmt(p.staked)} {cfg.currency}</td><td className="small">{p.samePhone ? '📱 same phone!' : ''} {Object.entries(p.byGame).map(([g, n]) => `${g} ${n}`).join(', ')}</td>
+            </tr>
+          ))}
+        </tbody></table></div>
+      )}
+
+      <h3>💸 Deposited and cashed out without really playing</h3>
+      {!data.lowPlay.length ? <div className="empty">None found.</div> : (
+        <div className="table-wrap"><table><thead><tr><th>Player</th><th>Deposited</th><th>Withdrawn / requested</th><th>Played</th></tr></thead><tbody>
+          {data.lowPlay.map((r) => (
+            <tr key={r.user.id}><td><Who u={r.user} /></td><td>{fmt(r.deposited)}</td><td>{fmt(r.withdrawn)}</td><td>{fmt(r.wagered)} ({Math.round((r.wagered / Math.max(1, r.deposited)) * 100)}%)</td></tr>
+          ))}
+        </tbody></table></div>
+      )}
     </div>
   );
 }

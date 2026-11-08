@@ -15,6 +15,7 @@ import { tr } from './i18n.js';
 import { publicMessage } from './security.js';
 import { metrics } from './monitor.js';
 import { verifyTotp } from './totp.js';
+import { sharedDevices, suspiciousPairs, lowPlayCashouts, userFlags, linkedAccounts, setFrozen } from './risk.js';
 
 export const isAdminId = (id) => config.adminIds.includes(String(id));
 /** Normalise "who did it": { id, name, ip }. Accepts a plain name for older callers. */
@@ -32,13 +33,15 @@ export function createAdmin({ games, onBalanceChange }) {
     ludoGames: () => listLudoGames(50),
     kenoRounds: () => listKenoRounds(50),
     crashRounds: () => listCrashRounds(50),
-    pending: () => pendingTx(),
+    pending: () => pendingTx().map((t) => (t.type === 'withdraw' ? { ...t, flags: userFlags(t.user_id) } : t)),
+    risk: () => ({ sharedDevices: sharedDevices(), pairs: suspiciousPairs(), lowPlay: lowPlayCashouts() }),
+    freeze: (userId, on, reason, who) => setFrozen(userId, on, reason, who),
     findUser,
     userDetail(q) {
       const u = findUser(q);
       if (!u) throw new Error('User not found');
       const { rows } = listUsers({ search: u.id, limit: 1 });
-      return { user: rows.find((r) => r.id === u.id) || u, history: history(u.id) };
+      return { user: rows.find((r) => r.id === u.id) || u, history: history(u.id), flags: userFlags(u.id), linked: linkedAccounts(u.id) };
     },
     listUsers,
     listTransactions,
@@ -239,6 +242,8 @@ function adminRouter(actions) {
   r.post('/pause', wrap((req) => actions.pause(req.who)));
   r.post('/resume', wrap((req) => { actions.resume(req.who); return { ok: true }; }));
   r.post('/broadcast', wrap((req) => actions.broadcast(req.body.text, req.who)));
+  r.get('/risk', wrap(() => actions.risk()));
+  r.post('/freeze', wrap((req) => actions.freeze(String(req.body.userId), !!req.body.on, String(req.body.reason || '').slice(0, 200), req.who)));
   r.get('/log', wrap((req) => ({ items: actions.adminLog({ limit: Math.min(Number(req.query.limit) || 200, 500), before: Number(req.query.before) || null }) })));
   r.post('/logout', wrap((req) => { sessions.delete(req.get('x-admin-session')); return { ok: true }; }));
   r.get('/broadcast', wrap(() => actions.broadcastStatus() || {}));

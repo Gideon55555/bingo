@@ -6,7 +6,17 @@ const initData = tg?.initData || '';
 // Dev only: open http://localhost:5173/?dev_user=1 in a normal browser (server needs DEV_MODE=true)
 const devUser = new URLSearchParams(location.search).get('dev_user') || '';
 
+// A random id kept on this phone — lets the server spot several accounts played from one device.
+const deviceId = (() => {
+  try {
+    let d = localStorage.getItem('dev_id');
+    if (!d) { d = (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/[^A-Za-z0-9]/g, '').slice(0, 32); localStorage.setItem('dev_id', d); }
+    return d;
+  } catch { return ''; }
+})();
+
 const headers = () => ({
+  ...(deviceId ? { 'x-device': deviceId } : {}),
   'Content-Type': 'application/json',
   Authorization: `tma ${initData}`,
   ...(devUser ? { 'x-dev-user': devUser } : {}),
@@ -30,7 +40,7 @@ export const api = {
 
 // WebSocket first (one round-trip faster to connect); if the host or network blocks WebSockets,
 // it falls back to HTTP long-polling automatically.
-export const socket = io({ auth: { initData, devUser }, autoConnect: false, transports: ['websocket', 'polling'], tryAllTransports: true });
+export const socket = io({ auth: { initData, devUser, device: deviceId }, autoConnect: false, transports: ['websocket', 'polling'], tryAllTransports: true });
 export const inTelegram = !!initData;
 
 // ---------- Admin API ----------
@@ -57,6 +67,8 @@ export const adminApi = {
     return data;
   },
   logout: () => adminRequest('POST', '/logout').catch(() => {}),
+  risk: () => adminRequest('GET', '/risk'),
+  freeze: (userId, on, reason) => adminRequest('POST', '/freeze', { userId, on, reason }),
   log: (before) => adminRequest('GET', `/log${before ? `?before=${before}` : ''}`),
   stats: () => adminRequest('GET', '/stats'),
   pending: () => adminRequest('GET', '/pending'),

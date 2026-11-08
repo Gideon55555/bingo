@@ -12,6 +12,7 @@ import {
   rack, Sim, judge, canPlaceCue, respot, cloneBalls, SOLIDS, STRIPES,
   cutthroatSets, rackCutthroat, judgeCutthroat, aliveFromBalls,
 } from '../shared/pool.js';
+import { assertNotFrozen, assertNotSamePerson } from './risk.js';
 import { tr } from './i18n.js';
 
 const money = (c) => `${fmt(c)} ${config.currency}`;
@@ -241,6 +242,8 @@ export class PoolManager {
     if (this.userLoc.has(uid)) throw new Error('You are already at a pool table');
     const t = this.tables.get(`${Number(stake)}:${Number(size)}`);
     if (!t) throw new Error('No such table');
+    assertNotFrozen(uid);
+    assertNotSamePerson(uid, t.waiting.map((w) => w.uid)); // no playing yourself from a second account
     if (!t.roundId) t.roundId = openRound(t.stake, 'pool');
     if (!debit(uid, t.stake, 'bet', `Pool ${fmt(t.stake)} entry (${t.size} players)`, t.roundId)) throw new Error('Insufficient balance. Please deposit first.');
     this.onBalanceChange(uid);

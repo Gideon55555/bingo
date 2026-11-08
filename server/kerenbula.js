@@ -19,6 +19,7 @@ import { fmt } from '../shared/money.js';
 import {
   Sim, freshBalls, freshPins, canRelease, pinPoints, closestPlayer, frameScore, RED, WHITE, MIDLINE, JACK,
 } from '../shared/kerenbula.js';
+import { assertNotFrozen, assertNotSamePerson } from './risk.js';
 import { tr } from './i18n.js';
 
 const cfg = () => config.kerenbula;
@@ -253,6 +254,8 @@ export class KerenbulaManager {
     if (this.userLoc.has(uid)) throw new Error('You are already at a Kerenbula table');
     const t = this.tables.get(Number(stake));
     if (!t) throw new Error('No such table');
+    assertNotFrozen(uid);
+    assertNotSamePerson(uid, t.waiting.map((w) => w.uid)); // no playing yourself from a second account
     if (!t.roundId) t.roundId = openRound(t.stake, 'kerenbula');
     if (!debit(uid, t.stake, 'bet', `Kerenbula ${fmt(t.stake)} entry`, t.roundId)) throw new Error('Insufficient balance. Please deposit first.');
     this.onBalanceChange(uid);

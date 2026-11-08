@@ -13,6 +13,7 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 import { debit, credit, openRound, refundRound, settleLudo } from './db.js';
 import { notifyUser } from './bot.js';
+import { assertNotFrozen, assertNotSamePerson } from './risk.js';
 import { tr } from './i18n.js';
 import { fmt } from '../shared/money.js';
 import { COLORS, SEATS_FOR, legalMoves, applyMove, hasWon, bestMove } from '../shared/ludo.js';
@@ -265,6 +266,8 @@ export class LudoManager {
     if (this.manager?.paused) throw new Error('Games are paused for maintenance. Please try again later.');
     if (this.userLoc.has(uid)) throw new Error('You are already at a Ludo table');
     const t = this.table(stake, size);
+    assertNotFrozen(uid);
+    assertNotSamePerson(uid, t.waiting.map((w) => w.uid)); // no playing yourself from a second account
     if (!t.roundId) t.roundId = openRound(t.stake, 'ludo');
     if (!debit(uid, t.stake, 'bet', `Ludo ${fmt(t.stake)} entry (${t.size} players)`, t.roundId)) {
       throw new Error('Insufficient balance. Please deposit first.');

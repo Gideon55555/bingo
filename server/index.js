@@ -8,6 +8,7 @@ import { config, checkConfig, ROOT } from './config.js';
 import { authenticate, requireAuth, failedTooOften, recordAuthFailure } from './auth.js';
 import { securityHeaders, errorHandler, publicMessage, socketIp } from './security.js';
 import { serveStatic } from './static.js';
+import { seen, isFrozen, assertNotFrozen } from './risk.js';
 import { startMonitor, health } from './monitor.js';
 import { db, setUserLang, getUser, history, createDeposit, createWithdrawal, countPending, refundOpenRounds } from './db.js';
 import { GameManager } from './game.js';
@@ -141,6 +142,7 @@ app.post('/api/deposit', requireAuth, walletLimit, async (req, res) => {
 });
 
 app.post('/api/withdraw', requireAuth, walletLimit, (req, res) => {
+  if (isFrozen(req.user.id)) return res.status(403).json({ error: 'Your account is under review. Please contact support.' });
   const amount = Math.floor(Number(req.body.amount)); // cents
   const phone = String(req.body.phone || '').replace(/[\s-]/g, '');
   if (!Number.isFinite(amount) || amount < config.minWithdraw)
@@ -169,6 +171,7 @@ io.use((socket, next) => {
   const user = authenticate(initData, devUser);
   if (!user) { recordAuthFailure(ip); return next(new Error('Unauthorized')); }
   socket.data.user = user;
+  seen(user.id, { ip, device: socket.handshake.auth?.device });
   next();
 });
 
@@ -210,6 +213,8 @@ io.on('connection', (socket) => {
       if (typeof ack !== 'function') ack = () => {};
       if (!payload || typeof payload !== 'object') payload = {};
       if (!allow(`sock:${user.id}`, config.socketRate, 10 * 1000)) return ack({ ok: false, error: 'Slow down a little 🙂' });
+      // Frozen accounts can look around but not put money in play
+      if (isFrozen(user.id) && /(:join|:bet|:buy|card:pick)$/.test(event)) return ack({ ok: false, error: 'Your account is under review. Please contact support.' });
       try {
         ack({ ok: true, ...(fn(payload) || {}) });
       } catch (e) {
