@@ -3,6 +3,7 @@ import { api, socket, tg, withEndsAt } from './api.js';
 import { t, useLang, getLang, setLang, crashName } from './i18n.js';
 import Home from './Home.jsx';
 import Wallet from './Wallet.jsx';
+import { AgeGate, RealityCheck } from './Responsible.jsx';
 
 // Each game is its own download: the home screen appears fast, then the games load quietly in the
 // background (see prefetch below) so opening one is still instant.
@@ -158,6 +159,8 @@ export default function App() {
         </Suspense>
       </main>
 
+      {!user.ageConfirmed && <AgeGate cfg={cfg} onConfirmed={() => setUser({ ...user, ageConfirmed: true })} />}
+      <RealityCheck minutes={user.reminderMin} cfg={cfg} />
       {game && showRules && <GameRules game={game} cfg={cfg} onClose={() => { markRulesSeen(game); setShowRules(false); }} />}
 
       {inGame && !tg?.initData && <button className="floating-back" onClick={goBack}>{stake !== null ? `← ${t('bingoRooms')}` : t('backToGames')}</button>}

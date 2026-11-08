@@ -1,3 +1,4 @@
+import { PlaySafe } from './Responsible.jsx';
 import React, { useEffect, useState } from 'react';
 import { api, haptic, toast } from './api.js';
 import { fmt, toCents } from '../../shared/money.js';
@@ -73,6 +74,8 @@ export default function Wallet({ cfg, balance }) {
         )}
         <button className="primary" disabled={busy}>{busy ? t('sending') : mode === 'deposit' ? t('submitDeposit') : t('requestWithdraw')}</button>
       </form>
+
+      <PlaySafe cfg={cfg} />
 
       <h3>{t('history')}</h3>
       <div className="history">

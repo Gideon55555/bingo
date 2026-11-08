@@ -33,6 +33,7 @@ export const config = {
   // limits are generous and the real per-player limits are per Telegram user.
   apiRateIp: num(process.env.API_RATE_IP, 3000),        // API requests per minute per IP
   apiRateUser: num(process.env.API_RATE_USER, 120),     // API requests per minute per player
+  walletRate: num(process.env.WALLET_RATE, 5),          // deposit/withdraw requests per 10 minutes per player
   connRateIp: num(process.env.CONN_RATE_IP, 600),       // new socket connections per minute per IP
   authFailRateIp: num(process.env.AUTH_FAIL_RATE_IP, 60), // failed logins per minute per IP before blocking
   maxSocketsPerUser: num(process.env.MAX_SOCKETS_PER_USER, 5),
@@ -40,6 +41,8 @@ export const config = {
   // Browser admin panel 2-step login: base32 secret from `npm run admin:2fa` (empty = password only)
   adminTotpSecret: (process.env.ADMIN_TOTP_SECRET || '').replace(/\s/g, ''),
   adminSessionHours: num(process.env.ADMIN_SESSION_HOURS, 12),
+  // Players must confirm they are 18+ before playing or depositing (always on in production)
+  requireAgeConfirm: process.env.AGE_CONFIRM ? process.env.AGE_CONFIRM === 'true' : process.env.NODE_ENV === 'production',
   // Withdrawals of this amount or more need a second, different admin (only when ADMIN_IDS has 2+ admins)
   withdrawSecondApproval: cents(process.env.WITHDRAW_SECOND_APPROVAL, 5000),
   port: num(process.env.PORT, 3000),

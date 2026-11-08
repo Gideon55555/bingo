@@ -9,6 +9,7 @@ import { authenticate, requireAuth, failedTooOften, recordAuthFailure } from './
 import { securityHeaders, errorHandler, publicMessage, socketIp } from './security.js';
 import { serveStatic } from './static.js';
 import { seen, isFrozen, assertNotFrozen } from './risk.js';
+import * as rg from './rg.js';
 import { startMonitor, health } from './monitor.js';
 import { db, setUserLang, getUser, history, createDeposit, createWithdrawal, countPending, refundOpenRounds } from './db.js';
 import { GameManager } from './game.js';
@@ -111,7 +112,23 @@ app.get('/api/config', (_req, res) =>
     devMode: config.devMode,
   }));
 
-app.get('/api/me', requireAuth, (req, res) => res.json({ user: { ...req.user, isAdmin: isAdminId(req.user.id) } }));
+app.get('/api/me', requireAuth, (req, res) => {
+  const l = rg.getLimits(req.user.id);
+  res.json({ user: { ...req.user, isAdmin: isAdminId(req.user.id), ageConfirmed: l.ageConfirmed, excludedUntil: l.excludedUntil, reminderMin: l.reminderMin } });
+});
+
+// ---- Responsible gambling ----
+const rgRoute = (fn) => (req, res) => { try { res.json(fn(req)); } catch (e) { res.status(400).json({ error: publicMessage(e) }); } };
+app.get('/api/rg', requireAuth, rgRoute((req) => rg.getLimits(req.user.id)));
+app.get('/api/rg/today', requireAuth, rgRoute((req) => rg.todaySummary(req.user.id)));
+app.post('/api/rg/age', requireAuth, rgRoute((req) => { rg.confirmAge(req.user.id); return rg.getLimits(req.user.id); }));
+app.post('/api/rg/limits', requireAuth, rgRoute((req) => rg.setLimits(req.user.id, { day: req.body.day, week: req.body.week })));
+app.post('/api/rg/reminder', requireAuth, rgRoute((req) => rg.setReminder(req.user.id, req.body.minutes)));
+app.post('/api/rg/exclude', requireAuth, rgRoute((req) => {
+  const r = rg.selfExclude(req.user.id, req.body.days);
+  console.log(`[rg] ${req.user.id} self-excluded until ${new Date(r.excludedUntil * 1000).toISOString()}`);
+  return r;
+}));
 
 app.post('/api/lang', requireAuth, (req, res) => { setUserLang(req.user.id, req.body.lang); res.json({ ok: true }); });
 
@@ -119,7 +136,7 @@ app.get('/api/history', requireAuth, (req, res) => res.json({ items: history(req
 
 const money = (n) => fmtMoney(n, config.currency);
 const perUser = (req) => req.user.id;
-const walletLimit = limit('wallet', 5, 10 * 60 * 1000, perUser); // 5 requests / 10 min / user
+const walletLimit = limit('wallet', config.walletRate, 10 * 60 * 1000, perUser); // deposit/withdraw requests per 10 min per player
 
 app.post('/api/deposit', requireAuth, walletLimit, async (req, res) => {
   const amount = Math.floor(Number(req.body.amount)); // cents
@@ -130,6 +147,7 @@ app.post('/api/deposit', requireAuth, walletLimit, async (req, res) => {
     return res.status(400).json({ error: `Maximum deposit is ${money(config.maxDeposit)}` });
   if (!/^[A-Z0-9\-_.]{4,64}$/.test(reference))
     return res.status(400).json({ error: 'Enter the transaction ID exactly as it appears in your payment SMS' });
+  try { rg.checkDeposit(req.user.id, amount); } catch (e) { return res.status(400).json({ error: e.message, rg: true }); }
   if (countPending(req.user.id, 'deposit') >= config.maxPendingDeposits)
     return res.status(400).json({ error: 'You already have deposits waiting for approval. Please wait for them first.' });
   try {
@@ -214,7 +232,11 @@ io.on('connection', (socket) => {
       if (!payload || typeof payload !== 'object') payload = {};
       if (!allow(`sock:${user.id}`, config.socketRate, 10 * 1000)) return ack({ ok: false, error: 'Slow down a little 🙂' });
       // Frozen accounts can look around but not put money in play
-      if (isFrozen(user.id) && /(:join|:bet|:buy|card:pick)$/.test(event)) return ack({ ok: false, error: 'Your account is under review. Please contact support.' });
+      if (/(:join|:bet|:buy|card:pick)$/.test(event)) {
+        if (isFrozen(user.id)) return ack({ ok: false, error: 'Your account is under review. Please contact support.' });
+        const block = rg.playBlock(user.id); // not confirmed 18+, or on a self-chosen break
+        if (block) return ack({ ok: false, error: block, rg: true });
+      }
       try {
         ack({ ok: true, ...(fn(payload) || {}) });
       } catch (e) {

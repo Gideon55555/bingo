@@ -36,6 +36,12 @@ export const api = {
   deposit: (amount, reference) => request('POST', '/api/deposit', { amount, reference }),
   withdraw: (amount, phone) => request('POST', '/api/withdraw', { amount, phone }),
   setLang: (lang) => request('POST', '/api/lang', { lang }),
+  rg: () => request('GET', '/api/rg'),
+  rgToday: () => request('GET', '/api/rg/today'),
+  confirmAge: () => request('POST', '/api/rg/age'),
+  setLimits: (day, week) => request('POST', '/api/rg/limits', { day, week }),
+  setReminder: (minutes) => request('POST', '/api/rg/reminder', { minutes }),
+  selfExclude: (days) => request('POST', '/api/rg/exclude', { days }),
 };
 
 // WebSocket first (one round-trip faster to connect); if the host or network blocks WebSockets,
