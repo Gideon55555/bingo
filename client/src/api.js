@@ -59,6 +59,7 @@ export const adminApi = {
   kenoRounds: () => adminRequest('GET', '/keno-rounds'),
   ludoGames: () => adminRequest('GET', '/ludo-games'),
   poolGames: () => adminRequest('GET', '/pool-games'),
+  kerenbulaGames: () => adminRequest('GET', '/kerenbula-games'),
   decide: (kind, id, approve) => adminRequest('POST', '/decide', { kind, id, approve }),
   adjust: (userId, amount, note) => adminRequest('POST', '/adjust', { userId, amount, note }),
   pause: () => adminRequest('POST', '/pause'),

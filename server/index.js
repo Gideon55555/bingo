@@ -11,6 +11,7 @@ import { CrashGame } from './crash.js';
 import { KenoGame } from './keno.js';
 import { LudoManager } from './ludo.js';
 import { PoolManager } from './pool.js';
+import { KerenbulaManager } from './kerenbula.js';
 import { startBot, stopBot, notifyAdmins, notifyUser } from './bot.js';
 import { createAdmin, isAdminId } from './admin.js';
 import { limit, allow } from './ratelimit.js';
@@ -42,6 +43,7 @@ games.crash = config.crash.enabled ? new CrashGame(io, onBalanceChange, games) :
 games.keno = config.keno.enabled ? new KenoGame(io, onBalanceChange, games) : null;
 games.ludo = config.ludo.enabled ? new LudoManager(io, onBalanceChange, games) : null;
 games.pool = config.pool.enabled ? new PoolManager(io, onBalanceChange, games) : null;
+games.kerenbula = config.kerenbula.enabled ? new KerenbulaManager(io, onBalanceChange, games) : null;
 const admin = createAdmin({ games, onBalanceChange });
 
 // ---------------- REST API ----------------
@@ -75,6 +77,9 @@ app.get('/api/config', (_req, res) =>
       : null,
     pool: config.pool.enabled
       ? { stakes: config.pool.stakes, sizes: config.pool.sizes, houseCut: config.pool.houseCut, shotSec: config.pool.shotSec, maxMisses: config.pool.maxMisses }
+      : null,
+    kerenbula: config.kerenbula.enabled
+      ? (({ stakes, houseCut, target, maxFrames, pinPoints, rollSec, maxMisses }) => ({ stakes, houseCut, target, maxFrames, pinPoints, rollSec, maxMisses }))(config.kerenbula)
       : null,
     ludo: config.ludo.enabled
       ? { stakes: config.ludo.stakes, houseCut: config.ludo.houseCut, tokens: config.ludo.tokens, turnSec: config.ludo.turnSec,
@@ -160,6 +165,11 @@ io.on('connection', (socket) => {
     socket.emit('pool:home', games.pool.lobby());
     const loc = games.pool.userLoc.get(String(user.id));
     if (loc?.game) socket.join(`pool:${loc.game}`);
+  }
+  if (games.kerenbula) {
+    socket.emit('kb:home', games.kerenbula.lobby());
+    const loc = games.kerenbula.userLoc.get(String(user.id));
+    if (loc?.game) socket.join(`kb:${loc.game}`);
   }
   onBalanceChange(user.id);
 
@@ -255,6 +265,26 @@ io.on('connection', (socket) => {
   handle('pool:join', ({ stake, size }) => ({ me: pool().join(getUser(user.id), stake, size || 2) }));
   handle('pool:leave', () => ({ me: pool().leave(user) }));
   handle('pool:shoot', (shot) => pool().game(user.id).shoot(user.id, shot));
+
+  // ---- ከረንቡላ Kerenbula ----
+  const kb = () => {
+    if (!games.kerenbula) throw new Error('This game is not available');
+    return games.kerenbula;
+  };
+  handle('kb:enter', () => {
+    socket.join('kb-lobby');
+    const me = kb().locationOf(user.id);
+    let game = null;
+    if (me?.game) {
+      const g = kb().games.get(me.game);
+      if (g) { socket.join(g.channel); game = g.stateFor(user.id); }
+    }
+    return { lobby: kb().lobby(), me, game };
+  });
+  handle('kb:exit', () => { socket.leave('kb-lobby'); });
+  handle('kb:join', ({ stake }) => ({ me: kb().join(getUser(user.id), stake) }));
+  handle('kb:leave', () => ({ me: kb().leave(user) }));
+  handle('kb:roll', (r) => kb().game(user.id).roll(user.id, r));
 
   // ---- Keno ----
   const keno = () => {

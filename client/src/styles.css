@@ -408,3 +408,13 @@ textarea { width: 100%; resize: vertical; }
 .rules-sec.win { border-left: 4px solid var(--ok); }
 
 .pool-chip.out { opacity: .4; }
+
+/* ---------------- Kerenbula ---------------- */
+.kb .pool-canvas { aspect-ratio: 112 / 212; }
+.kb-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.kb-score { font-size: 22px; font-weight: 900; min-width: 28px; }
+.kb-dots { display: flex; gap: 3px; }
+.kb-dot { width: 13px; height: 13px; border-radius: 50%; box-shadow: inset -2px -2px 3px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.25); }
+.kb-dot.gone { opacity: .18; }
+.kb-hand { position: absolute; left: 0; right: 0; top: 6%; text-align: center; font-size: 26px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+.kb .pool-msg { background: color-mix(in srgb, #2563eb 22%, var(--bg2)); }

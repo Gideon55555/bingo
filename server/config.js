@@ -94,6 +94,19 @@ export const config = {
     delayScale: num(process.env.POOL_DELAY_SCALE, 1), // < 1 only for automated tests
   },
 
+  // ከረንቡላ Kerenbula (1 vs 1, hand-rolled table bocce with pins)
+  kerenbula: {
+    enabled: process.env.KERENBULA_ENABLED !== 'false',
+    stakes: list(process.env.KERENBULA_STAKES || '10,20,50,100').map(toCents),
+    houseCut: num(process.env.KERENBULA_HOUSE_CUT, 0.1),
+    target: num(process.env.KERENBULA_TARGET, 11),      // first to this many points (checked at the end of a frame)
+    maxFrames: num(process.env.KERENBULA_MAX_FRAMES, 7), // after this, the leader wins (a tie plays one more frame)
+    pinPoints: num(process.env.KERENBULA_PIN_POINTS, 4),
+    rollSec: num(process.env.KERENBULA_ROLL_SEC, 25),
+    maxMisses: num(process.env.KERENBULA_MAX_MISSES, 3),
+    delayScale: num(process.env.KERENBULA_DELAY_SCALE, 1), // < 1 only for automated tests
+  },
+
   // Wallet
   currency: process.env.CURRENCY || 'ETB',
   paymentInfo: process.env.PAYMENT_INFO || 'Telebirr: 09XXXXXXXX (Your Name)',

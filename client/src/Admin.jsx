@@ -95,6 +95,7 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
         <Tile label="· from Keno" value={c(r.kenoEarnings)} />
         <Tile label="· from Ludo" value={c(r.ludoEarnings)} />
         <Tile label="· from Pool" value={c(r.poolEarnings)} />
+        <Tile label="· from Kerenbula" value={c(r.kerenbulaEarnings)} />
         <Tile label="Deposits" value={c(r.deposits)} />
         <Tile label="Withdrawals" value={c(r.withdrawals)} />
         <Tile label="Net cash in" value={c(r.deposits - r.withdrawals)} />
@@ -103,6 +104,7 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
         <Tile label="Keno draws (with tickets)" value={r.kenoRounds} />
         <Tile label="Ludo games" value={r.ludoGames} />
         <Tile label="Pool matches" value={r.poolGames} />
+        <Tile label="Kerenbula matches" value={r.kerenbulaGames} />
         <Tile label="Total bets" value={c(r.totalBets)} />
         <Tile label="Active players" value={r.activePlayers} />
         <Tile label="New users" value={r.newUsers} />
@@ -145,6 +147,15 @@ function Overview({ stats: s, cfg, reload, goRequests }) {
             <span className="small">{s.pool.waiting.map((w) => `${fmt(w.stake)}: ${w.waiting} waiting`).join(' · ') || 'no one waiting'}</span>
           </div>
           {s.pool.games.map((g) => <div key={g.id} className="small muted">#{g.id} · {fmt(g.stake)} · {g.players} · {g.shots} shots · {g.minutes} min</div>)}
+        </div>
+      )}
+      {s.kerenbula && (
+        <div className="tile rk-admin">
+          <div className="row-between">
+            <b>🔴 Kerenbula — {s.kerenbula.games.length} match(es) in progress</b>
+            <span className="small">{s.kerenbula.waiting.map((w) => `${fmt(w.stake)}: ${w.waiting} waiting`).join(' · ') || 'no one waiting'}</span>
+          </div>
+          {s.kerenbula.games.map((g) => <div key={g.id} className="small muted">#{g.id} · {fmt(g.stake)} · {g.players} · frame {g.frame} · {g.rolls} rolls · {g.minutes} min</div>)}
         </div>
       )}
       {s.keno && (
@@ -392,9 +403,10 @@ function Games({ cfg }) {
         <button className={which === 'keno' ? 'active' : ''} onClick={() => setWhich('keno')}>🎯 Keno</button>
         <button className={which === 'ludo' ? 'active' : ''} onClick={() => setWhich('ludo')}>🎲 Ludo</button>
         <button className={which === 'pool' ? 'active' : ''} onClick={() => setWhich('pool')}>🎱 Pool</button>
+        <button className={which === 'kerenbula' ? 'active' : ''} onClick={() => setWhich('kerenbula')}>🔴 Kerenbula</button>
       </div>
       {which === 'bingo' ? <BingoGames cfg={cfg} /> : which === 'rocket' ? <RocketRounds cfg={cfg} />
-        : which === 'keno' ? <KenoRounds cfg={cfg} /> : which === 'ludo' ? <LudoGames cfg={cfg} /> : <PoolGames cfg={cfg} />}
+        : which === 'keno' ? <KenoRounds cfg={cfg} /> : which === 'ludo' ? <LudoGames cfg={cfg} /> : which === 'kerenbula' ? <KerenbulaGames cfg={cfg} /> : <PoolGames cfg={cfg} />}
     </div>
   );
 }
@@ -583,6 +595,39 @@ function Broadcast({ users }) {
           {job.failed > 0 && !job.running && <div className="muted small">Failures are usually players who blocked the bot.</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+function KerenbulaGames({ cfg }) {
+  const [data] = usePoll(adminApi.kerenbulaGames, 10000);
+  if (!data) return <div className="muted">Loading…</div>;
+  if (!data.items.length) return <div className="empty">No Kerenbula matches yet.</div>;
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Time</th><th>Table</th><th>Players (score)</th><th>Winner</th><th>How</th><th>Frames</th><th>Paid</th><th>House</th><th>Length</th></tr></thead>
+        <tbody>
+          {data.items.map((g) => {
+            const w = g.players.find((p) => p.userId === g.winner_id);
+            return (
+              <tr key={g.id}>
+                <td className="muted">{g.id}</td>
+                <td className="nowrap">{fmtDate(g.created_at)}</td>
+                <td>{fmt(g.stake)}</td>
+                <td>{g.players.map((p) => `${p.name} (${p.color} ${p.score})`).join(' vs ')}</td>
+                <td>{w?.name || '—'}</td>
+                <td className="small">{g.how}</td>
+                <td>{g.frames}</td>
+                <td>{fmt(g.payout)}</td>
+                <td className="pos">{fmt(g.house)}</td>
+                <td className="nowrap">{Math.round(g.duration_sec / 60)} min</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="muted small" style={{ padding: '0 10px' }}>Amounts in {cfg.currency}.</p>
     </div>
   );
 }

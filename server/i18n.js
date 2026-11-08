@@ -24,6 +24,9 @@ const M = {
     poolStarted: '🎱 የፑል ጨዋታዎ ከ{names} ጋር ተጀምሯል! መተግበሪያውን ይክፈቱ — የምት ሰዓቱ እየሄደ ነው።',
     poolWon: '🏆 የፑል ጨዋታውን አሸንፈዋል! {amount} ወደ ቀሪ ሂሳብዎ ተጨምሯል።',
     poolLost: 'የፑል ጨዋታው አልቋል — {name} አሸንፏል። በሚቀጥለው መልካም ዕድል!',
+    kbStarted: '🔴 የከረንቡላ ጨዋታዎ ከ{name} ጋር ተጀምሯል! መተግበሪያውን ይክፈቱ — ሰዓቱ እየሄደ ነው።',
+    kbWon: '🏆 የከረንቡላ ጨዋታውን አሸንፈዋል! {amount} ወደ ቀሪ ሂሳብዎ ተጨምሯል።',
+    kbLost: 'የከረንቡላ ጨዋታው አልቋል — {name} አሸንፏል። በሚቀጥለው መልካም ዕድል!',
   },
   en: {
     welcome: 'Welcome! 🎮 Play Bingo, Aviator, Keno, Ludo and Pool. Tap the button below to start.',
@@ -46,6 +49,9 @@ const M = {
     poolStarted: '🎱 Your pool match against {names} has started! Open the app — the shot clock is running.',
     poolWon: '🏆 You won the pool match! +{amount} added to your balance.',
     poolLost: 'Pool match over — {name} won. Better luck next time!',
+    kbStarted: '🔴 Your Kerenbula match against {name} has started! Open the app — the clock is running.',
+    kbWon: '🏆 You won the Kerenbula match! +{amount} added to your balance.',
+    kbLost: 'Kerenbula match over — {name} won. Better luck next time!',
   },
 };
 

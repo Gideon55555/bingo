@@ -1,4 +1,4 @@
-# 🎱 Telegram Bingo + ✈️ Aviator + 🎯 Keno + 🎲 Ludo + 🎱 8-Ball Pool Mini App
+# 🎱 Telegram Bingo + ✈️ Aviator + 🎯 Keno + 🎲 Ludo + 🎱 8-Ball Pool + 🔴 ከረንቡላ Kerenbula Mini App
 
 A multiplayer 75-ball bingo game that runs inside Telegram, with a player wallet.
 Players send you money (Telebirr, bank and so on), submit the transaction ID in the app,
@@ -88,6 +88,20 @@ Telegram ──/start──> Bot (grammY) ──"Play" button──> Mini App (R
    balls; last one with balls left wins). Off by default, because players can secretly team up against a third
    player in real-money Cutthroat.
 
+**🔴 ከረንቡላ Kerenbula (1 vs 1, skill)** · Ethiopian table bocce with pins, any number of matches at once
+1. Tables per stake (`KERENBULA_STAKES`). The winner takes the pot minus 10% (`KERENBULA_HOUSE_CUT`).
+2. No cue and no pockets: every ball is rolled by hand. 9 balls: 1 blue (the jack), 4 red, 4 white. Three pins stand
+   in a line across the centre (red in the middle, white on each side).
+3. Each frame: the blue ball is rolled first and must stop past the midline (otherwise the opponent rolls it).
+   Then bocce order: the player who is not closest to the blue ball keeps rolling until closer or out of balls.
+4. Pins: knocked over by the **blue** ball (because your ball hit it there) = **+4** for you. Hit directly by a red or
+   white ball = **−4 per pin** for that ball's owner (−12 for all three). Knocked pins stay down until the frame ends.
+5. Frame end: the closest player scores 1 point per ball closer than the opponent's best ball.
+   **First to 11** wins (`KERENBULA_TARGET`); after 7 frames the leader wins (`KERENBULA_MAX_FRAMES`), a tie plays on.
+6. Controls: slide your hand along the bottom line, touch the table to aim, pull the hand bar down and let go. A ring
+   shows roughly where the ball would stop. Every roll is simulated on the server with deterministic shared physics.
+7. 25-second roll clock (`KERENBULA_ROLL_SEC`): running out loses that ball; 3 in a row forfeits. Restart = refund.
+
 **Wallet flow**
 - **Deposit:** the player sends money to your account, then enters the amount and transaction ID.
   All admins get a bot message with **Approve / Reject** buttons. Approving credits the balance.
@@ -165,7 +179,8 @@ a statistical check of the crash game's house edge over 200,000 simulated rounds
 Keno end-to-end (24 checks), Keno math (exact paytable returns + draw fairness over 100,000 draws),
 Ludo rules (17 checks), Ludo end-to-end (21 checks: bots play full 2- and 4-player games, timeouts, forfeits, refunds),
 pool physics + rules (22 checks) pool end-to-end (16 checks: bots play complete matches with real aiming, several matches at once),
-and a 3-player Cutthroat match.
+a 3-player Cutthroat match, Kerenbula physics + scoring (13 checks) and Kerenbula end-to-end
+(16 checks: bots play complete matches, pin points and fouls, cheating attempts, two matches at once, idle forfeits).
 
 ## Deploying
 
@@ -192,6 +207,7 @@ server/
   keno.js     Keno shared draws (betting → drawing → results), provably fair
   ludo.js     Ludo tables, matchmaking, turns/timers, forfeits, payouts
   pool.js     8-ball pool tables, server-simulated shots, shot clock, payouts
+  kerenbula.js  Kerenbula tables, frames, bocce roll order, pin scoring, roll clock, payouts
   bingo.js    secure number shuffle
   db.js       SQLite schema + atomic wallet operations
   auth.js     Telegram initData HMAC validation
@@ -208,6 +224,7 @@ client/src/flight.js  60fps canvas animation (plane, curve, stars, fly-away)
 shared/keno.js    Keno paytable + ticket rules (server and client)
 shared/ludo.js    Ludo board geometry + rules (server and client)
 shared/pool.js    pool physics (deterministic) + 8-ball rules + aiming guide
+shared/kerenbula.js  Kerenbula hand-roll physics with pins (deterministic) + scoring
 shared/money.js   all money is stored in cents; helpers to convert/format
 client/src/       React mini app (Lobby, Room, Card, Wallet, Admin)
 test/simulate.js  end-to-end test

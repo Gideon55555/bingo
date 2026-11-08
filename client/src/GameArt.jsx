@@ -145,4 +145,44 @@ export function PoolArt() {
   );
 }
 
-export const GAME_ART = { aviator: AviatorArt, bingo: BingoArt, keno: KenoArt, ludo: LudoArt, pool: PoolArt };
+/** Kerenbula: wooden table seen from above, three pins, blue jack among red and white balls, a hand releasing a ball. */
+export function KerenbulaArt() {
+  const ball = (x, y, c, r = 6.5) => (
+    <g key={`${x}-${y}`}>
+      <ellipse cx={x + 0.8} cy={y + 1.6} rx={r} ry={r * 0.8} fill="rgba(0,0,0,.35)" />
+      <circle cx={x} cy={y} r={r} fill={c} />
+      <circle cx={x - r * 0.35} cy={y - r * 0.4} r={r * 0.32} fill="rgba(255,255,255,.55)" />
+    </g>
+  );
+  const pin = (x, y, c) => (
+    <g key={x}>
+      <ellipse cx={x + 0.8} cy={y + 1.2} rx="2.6" ry="2" fill="rgba(0,0,0,.4)" />
+      <circle cx={x} cy={y} r="2.6" fill={c} stroke="rgba(0,0,0,.4)" strokeWidth=".5" />
+      <circle cx={x - 0.6} cy={y - 0.6} r="1" fill="#fff" opacity=".8" />
+    </g>
+  );
+  return (
+    <svg viewBox="0 0 100 100" className="game-art" preserveAspectRatio="xMidYMid slice">
+      <defs><radialGradient id="kbfelt" cx=".5" cy=".45" r=".75"><stop offset="0" stopColor="#1c9a55" /><stop offset="1" stopColor="#0a6233" /></radialGradient></defs>
+      <rect width="100" height="100" fill="#7a4a20" />
+      {[8, 14, 20, 80, 86, 92].map((x) => <line key={x} x1={x} y1="0" x2={x} y2="100" stroke="rgba(0,0,0,.12)" strokeWidth=".6" />)}
+      <rect x="9" y="5" width="82" height="95" rx="3" fill="url(#kbfelt)" />
+      <line x1="9" y1="40" x2="91" y2="40" stroke="rgba(255,255,255,.3)" strokeWidth=".8" strokeDasharray="2.5 2.5" />
+      <circle cx="50" cy="40" r="14" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth=".8" />
+      {ball(30, 18, '#f4f1e8')}{ball(64, 22, '#dc2626')}
+      {pin(41, 40, '#f6f3ea')}{pin(50, 40, '#e23b3b')}{pin(59, 40, '#f6f3ea')}
+      {ball(52, 27, '#2563eb', 7)}
+      {ball(73, 50, '#f4f1e8')}{ball(26, 52, '#dc2626')}
+      <path d="M50 92 L50 62" stroke="rgba(255,255,255,.7)" strokeWidth="1" strokeDasharray="2 2" />
+      {ball(50, 62, '#dc2626')}
+      {/* hand */}
+      <g transform="translate(50 86)">
+        <ellipse cx="0" cy="6" rx="12" ry="9" fill="#a8693c" />
+        {[-8, -3, 2, 7].map((x, i) => <rect key={i} x={x - 2.2} y={-6 + Math.abs(i - 1.5) * 1.5} width="4.4" height="12" rx="2.2" fill="#b97a4a" />)}
+        <ellipse cx="-12" cy="4" rx="3" ry="6" transform="rotate(-30 -12 4)" fill="#b97a4a" />
+      </g>
+    </svg>
+  );
+}
+
+export const GAME_ART = { aviator: AviatorArt, bingo: BingoArt, keno: KenoArt, ludo: LudoArt, pool: PoolArt, kerenbula: KerenbulaArt };

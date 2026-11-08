@@ -108,8 +108,8 @@ export async function startBot({ actions, app }) {
   bot.command('stats', adminOnly((ctx) => {
     const s = actions.stats();
     const b = (x) =>
-      `Bingo games: ${x.games}  ·  ${config.crash.name} rounds: ${x.crashRounds}  ·  Keno draws: ${x.kenoRounds}  ·  Ludo games: ${x.ludoGames}  ·  Pool matches: ${x.poolGames}  ·  Bets: ${money(x.totalBets)}\n` +
-      `🏦 House earned: ${money(x.houseEarnings)} (Bingo ${money(x.bingoEarnings)}, ${config.crash.name} ${money(x.crashEarnings)}, Keno ${money(x.kenoEarnings)}, Ludo ${money(x.ludoEarnings)}, Pool ${money(x.poolEarnings)})\n` +
+      `Bingo games: ${x.games}  ·  ${config.crash.name} rounds: ${x.crashRounds}  ·  Keno draws: ${x.kenoRounds}  ·  Ludo games: ${x.ludoGames}  ·  Pool matches: ${x.poolGames}  ·  Kerenbula matches: ${x.kerenbulaGames}  ·  Bets: ${money(x.totalBets)}\n` +
+      `🏦 House earned: ${money(x.houseEarnings)} (Bingo ${money(x.bingoEarnings)}, ${config.crash.name} ${money(x.crashEarnings)}, Keno ${money(x.kenoEarnings)}, Ludo ${money(x.ludoEarnings)}, Pool ${money(x.poolEarnings)}, Kerenbula ${money(x.kerenbulaEarnings)})\n` +
       `💰 Deposits: ${money(x.deposits)}  ·  🏧 Withdrawals: ${money(x.withdrawals)}\n` +
       `👥 Active players: ${x.activePlayers}  ·  New users: ${x.newUsers}`;
     const rooms = s.rooms.map((r) => `${fmt(r.stake)}: ${r.state}, ${r.players} players`).join('\n');

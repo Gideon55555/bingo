@@ -96,6 +96,36 @@ function content(game, cfg, lang) {
     }
     return base;
   }
+  if (game === 'kerenbula') {
+    const k = cfg.kerenbula;
+    return am ? {
+      how: ['ጠረጴዛው ኪስ የለውም፣ ዱላም የለም — ሁሉም ኳሶች በእጅ ይንከባለላሉ። 9 ኳሶች አሉ፦ 1 ሰማያዊ፣ 4 ቀይ (የአንዱ ተጫዋች)፣ 4 ነጭ (የሌላው)። በጠረጴዛው መሃል 3 ፒኖች ቆመዋል — ቀዩ በመሃል፣ ነጮቹ በጎኑ።',
+        'ለመወርወር፦ እጅዎን ከታች መስመሩ ላይ ያንቀሳቅሱ፣ ለማነጣጠር ጠረጴዛውን ይንኩ፣ በቀኝ ያለውን እጅ ወደ ታች ጎትተው ይልቀቁ። ቢጫው ክብ ኳሱ በግምት የት እንደሚቆም ያሳያል።',
+        'እያንዳንዱ ዙር በሰማያዊው ኳስ ይጀምራል፤ ከመሃል መስመሩ ማለፍ አለበት፣ ካላለፈ ተጋጣሚው ይወረውረዋል። ሰማያዊውን የወረወረው የመጀመሪያውን ቀለም ኳስ ይወረውራል።',
+        'ከዚያ እንደ ቦቼ፦ ከሰማያዊው ኳስ የራቀ ተጫዋች ይበልጥ እስኪቀርብ ወይም ኳሶቹ እስኪያልቁ ድረስ መወርወሩን ይቀጥላል።',
+        'የራስዎን ኳስ በሰማያዊው ኳስ ላይ መትተው ሰማያዊውን ወደ ፒኖቹ መላክ ይችላሉ (ከጠርዙ ተመልሶም ቢሆን)።'],
+      win: [`ሰማያዊው ኳስ የሚጥለው እያንዳንዱ ፒን፦ ለወረወረው ተጫዋች +${k.pinPoints}።`,
+        'ሁሉም 8 ኳሶች ሲወረወሩ፦ ለሰማያዊው የቀረበ ኳስ ያለው ተጫዋች ከተጋጣሚው ምርጥ ኳስ በላይ ለቀረበ ለእያንዳንዱ ኳሱ 1 ነጥብ ያገኛል።',
+        `መጀመሪያ ${k.target} ነጥብ የደረሰ ያሸንፋል (በዙር መጨረሻ ይታያል)። ከ${k.maxFrames} ዙሮች በኋላ የሚመራው ያሸንፋል፤ እኩል ከሆነ አንድ ተጨማሪ ዙር ይጫወታል።`],
+      penalties: [`ጥፋት፦ የራስዎ ቀይ ወይም ነጭ ኳስ ፒንን በቀጥታ ከመታ፣ ለእያንዳንዱ ፒን −${k.pinPoints} (ሦስቱም ከወደቁ −${k.pinPoints * 3})። የተጋጣሚዎን ኳስ ወደ ፒኖቹ ከገፉት ቅጣቱ የእሱ ነው።`,
+        'ሰማያዊው ኳስ ራሱ ሲወረወር ፒን ከጣለ ነጥብ የለም — ፒኖቹ ተመልሰው ይቆማሉ። የወደቁ ፒኖች እስከ ዙሩ መጨረሻ ወድቀው ይቆያሉ።',
+        `ለእያንዳንዱ ውርወራ ${k.rollSec} ሰከንድ። ሰዓቱ ካለቀ ያ ኳስ ይቃጠላል፤ በተከታታይ ${k.maxMisses} ጊዜ ካለቀ ይሰረዛሉ።`, 'በጨዋታ መሃል መውጣት እንደ መሸነፍ ይቆጠራል።'],
+      payouts: [`አሸናፊው ከጠቅላላው ገንዘብ ${100 - pct(k.houseCut)}% ይወስዳል።`, 'እያንዳንዱ ውርወራ በአገልጋዩ ይሰላል — ማንም ውጤቱን ማጭበርበር አይችልም።', 'ጨዋታው በቴክኒክ ችግር ከተቋረጠ ሁሉም ገንዘብ ይመለሳል።'],
+    } : {
+      how: ['No pockets and no cue — every ball is rolled by hand. There are 9 balls: 1 blue, 4 red (one player), 4 white (the other). Three pins stand in the middle of the table — red in the centre, white on each side.',
+        'To roll: slide your hand along the bottom line, touch the table to aim, then pull the hand on the right down and let go. The yellow ring shows roughly where the ball would stop.',
+        'Each frame starts with the blue ball; it must pass the middle line, otherwise your opponent rolls it. Whoever rolled the blue ball rolls the first coloured ball.',
+        'Then it’s like bocce: the player farther from the blue ball keeps rolling until they are closer or out of balls.',
+        'You can roll your ball into the blue ball to send it into the pins (even off a cushion).'],
+      win: [`Each pin knocked over by the blue ball: +${k.pinPoints} for the player who rolled.`,
+        'When all 8 balls are rolled, the player closest to the blue ball scores 1 point for each of their balls closer than the opponent’s best ball.',
+        `First to ${k.target} points wins (checked at the end of a frame). After ${k.maxFrames} frames the leader wins; a tie plays one more frame.`],
+      penalties: [`Foul: if your own red or white ball hits a pin directly, −${k.pinPoints} per pin (all three = −${k.pinPoints * 3}). Knock your opponent’s ball into the pins and the penalty is theirs.`,
+        'Pins knocked over by the blue ball’s first roll don’t count — they’re stood back up. Knocked pins stay down until the frame ends.',
+        `${k.rollSec} seconds per roll. If time runs out that ball is lost; ${k.maxMisses} times in a row and you forfeit.`, 'Leaving in the middle of a match counts as resigning.'],
+      payouts: [`The winner takes ${100 - pct(k.houseCut)}% of the pot.`, 'Every roll is calculated on the server — nobody can fake a result.', 'If a match is interrupted by a technical problem, everyone is refunded.'],
+    };
+  }
   return { how: [], win: [], penalties: [], payouts: [] };
 }
 

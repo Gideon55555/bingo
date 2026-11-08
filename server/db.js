@@ -83,6 +83,22 @@ CREATE TABLE IF NOT EXISTS ludo_games (
   created_at   INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
+CREATE TABLE IF NOT EXISTS kerenbula_games (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  round_id     INTEGER,
+  stake        INTEGER NOT NULL,
+  pot          INTEGER NOT NULL,
+  payout       INTEGER NOT NULL,
+  house        INTEGER NOT NULL,
+  winner_id    TEXT,
+  players      TEXT NOT NULL,           -- JSON [{userId, name, color, score, out}]
+  frames       INTEGER NOT NULL,
+  rolls        INTEGER NOT NULL,
+  how          TEXT,
+  duration_sec INTEGER NOT NULL,
+  created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
 CREATE TABLE IF NOT EXISTS pool_games (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   round_id     INTEGER,
@@ -310,6 +326,25 @@ export const settlePool = db.transaction((roundId, winnerId, payout, record) => 
   if (roundId) stmts.closeRound.run('finished', roundId);
 });
 
+/** Kerenbula: pay the winner, record the match and close the money round — all or nothing. */
+export const settleKerenbula = db.transaction((roundId, winnerId, payout, record) => {
+  if (winnerId && payout > 0) {
+    stmts.credit.run(payout, String(winnerId));
+    tx({ user_id: winnerId, type: 'win', amount: payout, status: 'done', note: record.note, round_id: roundId });
+  }
+  db.prepare(`INSERT INTO kerenbula_games (round_id, stake, pot, payout, house, winner_id, players, frames, rolls, how, duration_sec)
+    VALUES (@round_id, @stake, @pot, @payout, @house, @winner_id, @players, @frames, @rolls, @how, @duration_sec)`).run({
+    round_id: roundId, stake: record.stake, pot: record.pot, payout: record.payout, house: record.house,
+    winner_id: winnerId ? String(winnerId) : null, players: JSON.stringify(record.players), frames: record.frames,
+    rolls: record.rolls, how: record.how, duration_sec: record.duration_sec,
+  });
+  if (roundId) stmts.closeRound.run('finished', roundId);
+});
+
+export const listKerenbulaGames = (limit = 50) =>
+  db.prepare('SELECT * FROM kerenbula_games ORDER BY id DESC LIMIT ?').all(limit)
+    .map((g) => ({ ...g, players: JSON.parse(g.players) }));
+
 export const listPoolGames = (limit = 50) =>
   db.prepare('SELECT * FROM pool_games ORDER BY id DESC LIMIT ?').all(limit)
     .map((g) => ({ ...g, players: JSON.parse(g.players) }));
@@ -359,7 +394,7 @@ export const refundRound = db.transaction((roundId, label, reason, status = 'ref
 });
 
 const roundLabel = (r) => (r.game === 'crash' ? config.crash.name : r.game === 'keno' ? 'Keno'
-  : r.game === 'ludo' ? `Ludo ${fmt(r.stake)}` : r.game === 'pool' ? `8-Ball Pool ${fmt(r.stake)}` : `Bingo ${fmt(r.stake)}`);
+  : r.game === 'ludo' ? `Ludo ${fmt(r.stake)}` : r.game === 'pool' ? `8-Ball Pool ${fmt(r.stake)}` : r.game === 'kerenbula' ? `Kerenbula ${fmt(r.stake)}` : `Bingo ${fmt(r.stake)}`);
 
 /** Called on startup and shutdown: refund every round that never finished. */
 export function refundOpenRounds(reason = 'interrupted (server restart)') {
@@ -388,13 +423,15 @@ export function getStats() {
       + scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM crash_rounds WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM keno_rounds WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(house),0) FROM ludo_games WHERE created_at >= ?', since)
-      + scalar('SELECT COALESCE(SUM(house),0) FROM pool_games WHERE created_at >= ?', since),
+      + scalar('SELECT COALESCE(SUM(house),0) FROM pool_games WHERE created_at >= ?', since)
+      + scalar('SELECT COALESCE(SUM(house),0) FROM kerenbula_games WHERE created_at >= ?', since),
     games: scalar('SELECT COUNT(*) FROM games WHERE created_at >= ?', since),
     totalBets: scalar('SELECT COALESCE(SUM(pot),0) FROM games WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(bets_total),0) FROM crash_rounds WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(bets_total),0) FROM keno_rounds WHERE created_at >= ?', since)
       + scalar('SELECT COALESCE(SUM(pot),0) FROM ludo_games WHERE created_at >= ?', since)
-      + scalar('SELECT COALESCE(SUM(pot),0) FROM pool_games WHERE created_at >= ?', since),
+      + scalar('SELECT COALESCE(SUM(pot),0) FROM pool_games WHERE created_at >= ?', since)
+      + scalar('SELECT COALESCE(SUM(pot),0) FROM kerenbula_games WHERE created_at >= ?', since),
     bingoEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM games WHERE created_at >= ?', since),
     crashEarnings: scalar('SELECT COALESCE(SUM(bets_total - payout_total),0) FROM crash_rounds WHERE created_at >= ?', since),
     crashRounds: scalar('SELECT COUNT(*) FROM crash_rounds WHERE players > 0 AND created_at >= ?', since),
@@ -404,6 +441,8 @@ export function getStats() {
     ludoGames: scalar('SELECT COUNT(*) FROM ludo_games WHERE created_at >= ?', since),
     poolEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM pool_games WHERE created_at >= ?', since),
     poolGames: scalar('SELECT COUNT(*) FROM pool_games WHERE created_at >= ?', since),
+    kerenbulaEarnings: scalar('SELECT COALESCE(SUM(house),0) FROM kerenbula_games WHERE created_at >= ?', since),
+    kerenbulaGames: scalar('SELECT COUNT(*) FROM kerenbula_games WHERE created_at >= ?', since),
     activePlayers: scalar("SELECT COUNT(DISTINCT user_id) FROM transactions WHERE type='bet' AND created_at >= ?", since),
     newUsers: scalar('SELECT COUNT(*) FROM users WHERE created_at >= ?', since),
   });

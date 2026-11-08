@@ -10,6 +10,7 @@ import Crash from './Crash.jsx';
 import Keno from './Keno.jsx';
 import Ludo from './Ludo.jsx';
 import Pool from './Pool.jsx';
+import Kerenbula from './Kerenbula.jsx';
 import GameRules, { rulesSeen, markRulesSeen } from './GameRules.jsx';
 import { fmt } from '../../shared/money.js';
 
@@ -34,7 +35,7 @@ export default function App() {
   const [balance, setBalance] = useState(0);
   const [rooms, setRooms] = useState([]);
   const [tab, setTab] = useState(new URLSearchParams(location.search).get('admin') ? 'admin' : 'play');
-  const [game, setGame] = useState(null);       // null | 'aviator' | 'bingo' | 'keno' | 'ludo' | 'pool'
+  const [game, setGame] = useState(null);       // null | 'aviator' | 'bingo' | 'keno' | 'ludo' | 'pool' | 'kerenbula'
   const [stake, setStake] = useState(null);     // bingo room inside the bingo screen
   const [showRules, setShowRules] = useState(false);
   const [live, setLive] = useState({});         // lobby summaries for the home tiles
@@ -64,10 +65,11 @@ export default function App() {
     const onBal = ({ balance }) => setBalance(balance);
     const onErr = (e) => setError(e.message === 'Unauthorized' ? 'openFromBot' : e.message);
     const put = (k) => (v) => setLive((p) => ({ ...p, [k]: v }));
-    const onCrash = put('aviator'), onKeno = put('keno'), onLudo = put('ludo'), onPool = put('pool');
+    const onCrash = put('aviator'), onKeno = put('keno'), onLudo = put('ludo'), onPool = put('pool'), onKb = put('kerenbula');
     // A Ludo or pool game started while you're elsewhere in the app → jump straight to it
     const onLudoMe = (m) => { if (m?.game) { setStake(null); setGame('ludo'); } };
     const onPoolMe = (m) => { if (m?.game) { setStake(null); setGame('pool'); } };
+    const onKbMe = (m) => { if (m?.game) { setStake(null); setGame('kerenbula'); } };
     socket.on('lobby:all', onAll);
     socket.on('lobby', onOne);
     socket.on('balance', onBal);
@@ -77,6 +79,8 @@ export default function App() {
     socket.on('pool:home', onPool);
     socket.on('ludo:me', onLudoMe);
     socket.on('pool:me', onPoolMe);
+    socket.on('kb:home', onKb);
+    socket.on('kb:me', onKbMe);
     socket.on('connect_error', onErr);
     socket.on('connect', () => setError(''));
     socket.on('server:restart', () => setError('restarting'));
@@ -90,6 +94,8 @@ export default function App() {
       socket.off('pool:home', onPool);
       socket.off('ludo:me', onLudoMe);
       socket.off('pool:me', onPoolMe);
+      socket.off('kb:home', onKb);
+      socket.off('kb:me', onKbMe);
       socket.off('connect_error', onErr);
     };
   }, []);
@@ -108,7 +114,7 @@ export default function App() {
   if (!cfg || !user) return <div className="center muted">{t('loading')}</div>;
 
   const gameName = game === 'aviator' ? crashName(cfg) : game ? t(`g_${game}`) : null;
-  const icons = { aviator: '✈️', bingo: '🔢', keno: '🎯', ludo: '🎲', pool: '🎱' };
+  const icons = { aviator: '✈️', bingo: '🔢', keno: '🎯', ludo: '🎲', pool: '🎱', kerenbula: '🔴' };
 
   return (
     <div className="app">
@@ -123,7 +129,8 @@ export default function App() {
       {error && <div className="banner">{errText}</div>}
 
       <main>
-        {game === 'pool' ? <Pool cfg={cfg} balance={balance} />
+        {game === 'kerenbula' ? <Kerenbula cfg={cfg} balance={balance} />
+          : game === 'pool' ? <Pool cfg={cfg} balance={balance} />
           : game === 'ludo' ? <Ludo cfg={cfg} balance={balance} />
           : game === 'keno' ? <Keno cfg={cfg} balance={balance} />
           : game === 'aviator' ? <Crash cfg={cfg} balance={balance} />

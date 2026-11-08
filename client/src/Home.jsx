@@ -18,8 +18,9 @@ export default function Home({ cfg, live, rooms, onOpen }) {
     },
     cfg.ludo && { id: 'ludo', name: t('g_ludo'), tag: t('tag_ludo'), status: live.ludo?.playing ? { text: t('playingNow', { n: live.ludo.playing }), cls: 'hot' } : { text: t('st_pvp'), cls: 'open' } },
     cfg.pool && { id: 'pool', name: t('g_pool'), tag: t('tag_pool'), status: live.pool?.playing ? { text: t('playingNow', { n: live.pool.playing }), cls: 'hot' } : { text: t('st_skill'), cls: 'open' } },
+    cfg.kerenbula && { id: 'kerenbula', name: t('g_kerenbula'), tag: t('tag_kerenbula'), status: live.kerenbula?.playing ? { text: t('playingNow', { n: live.kerenbula.playing }), cls: 'hot' } : { text: t('st_skill'), cls: 'open' } },
   ].filter(Boolean);
-  const paused = live.aviator?.paused || live.ludo?.paused || live.pool?.paused || rooms[0]?.paused;
+  const paused = live.aviator?.paused || live.ludo?.paused || live.pool?.paused || live.kerenbula?.paused || rooms[0]?.paused;
 
   return (
     <div className="home">
