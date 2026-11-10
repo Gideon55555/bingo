@@ -4,7 +4,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import sharp from 'sharp';
 import { config } from './config.js';
 import { db, logAdmin } from './db.js';
 
@@ -37,8 +36,20 @@ function isImage(buf) {
   return buf.subarray(0, 4).toString() === 'RIFF' && buf.subarray(8, 12).toString() === 'WEBP'; // WebP
 }
 
+// The image library is loaded on first upload, not at startup: it has no build for some platforms
+// (e.g. an Android phone running Termux), and the rest of the app must still run there.
+let sharpLib;
+async function loadSharp() {
+  if (sharpLib === undefined) {
+    try { sharpLib = (await import('sharp')).default; } catch { sharpLib = null; }
+  }
+  if (!sharpLib) throw new Error('Banner uploads are not available on this server (image library missing)');
+  return sharpLib;
+}
+
 export async function addBanner(buf, meta, who) {
   if (!Buffer.isBuffer(buf) || !isImage(buf)) throw new Error('Upload a JPG, PNG or WebP image');
+  const sharp = await loadSharp();
   let out;
   try {
     out = await sharp(buf, { limitInputPixels: 40_000_000, failOn: 'error' })
