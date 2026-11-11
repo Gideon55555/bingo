@@ -61,7 +61,8 @@ try {
   const pr = await emit(s, 'pool:practice');
   assert.ok(pr.ok && pr.me.game); ok('pool practice starts instantly against the bot');
   const pst = await Promise.race([poolDone, sleep(120000).then(() => null)]);
-  assert.ok(pst?.result && pst.practice); assert.ok(botShots - myShots > 0, 'bot took shots');
+  assert.ok(pst?.result && pst.practice); // (rarely the test player runs the table or wins on its first visit before the bot ever shoots)
+  assert.ok(botShots - myShots > 0 || pst.result.winner === pst.me, 'bot took shots');
   ok(`pool practice played to the end (${pst.result.winnerName} won, ${myShots} of my shots, ${botShots - myShots} by the bot)`);
   s.removeAllListeners('pool:state'); s.removeAllListeners('pool:shot');
 
