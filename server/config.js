@@ -180,7 +180,7 @@ export const config = {
   // NEVER enable in production.
   devMode: process.env.DEV_MODE === 'true',
   // Demo Bingo players with play money, for testing and demos only. Refused when NODE_ENV=production.
-  demo: { players: process.env.DEMO_PLAYERS === 'true', count: num(process.env.DEMO_PLAYERS_COUNT, 10) },
+  demo: { players: process.env.DEMO_PLAYERS === 'true', bingo: num(process.env.DEMO_BINGO, 15), aviator: num(process.env.DEMO_AVIATOR, 20), keno: num(process.env.DEMO_KENO, 45) },
 };
 
 /** Refuse to start with dangerous settings in production. */
