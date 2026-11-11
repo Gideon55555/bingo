@@ -278,6 +278,14 @@ export class GameManager {
     this.io.emit('lobby:all', this.lobby());
   }
 
+  /** Bingo switched off in Admin → Settings: refund everyone still waiting; running games finish normally. */
+  closeBingo() {
+    let refunded = 0;
+    for (const r of this.rooms.values()) refunded += r.cancelAndRefund('game switched off by admin');
+    this.io.emit('lobby:all', this.lobby());
+    return refunded;
+  }
+
   /** Stop new games. Rounds not yet started are refunded; running games finish normally. */
   pause() {
     this.paused = true;

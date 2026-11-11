@@ -115,6 +115,21 @@ try {
   await save({ 'kerenbula.enabled': true, 'crash.enabled': false });
   assert.equal((await emit(b, 'kb:join', { stake: 1000 })).ok, true); await emit(b, 'kb:leave'); ok('switched back on → works again');
   assert.equal((await emit(b, 'crash:bet', { amount: 1000 })).ok, false); ok('Aviator switched off → bets refused');
+  // Bingo can be hidden too: waiting players get their money back, and it comes back when switched on
+  {
+    const before = bal(7602), stake = (await call('GET', '/api/config', null, {})).data.stakes.at(-1);
+    assert.equal((await emit(b, 'card:pick', { stake, card: 5 })).ok, true);
+    assert.equal(bal(7602), before - stake);
+    await save({ bingoEnabled: false });
+    assert.equal(bal(7602), before); ok('switching Bingo off refunds the player who had bought a cartela');
+    assert.equal((await call('GET', '/api/config', null, {})).data.bingo, false); ok('Bingo disappears from the app');
+    assert.equal((await emit(b, 'card:pick', { stake, card: 5 })).ok, false); ok('…and cartelas can\'t be bought');
+    await save({ bingoEnabled: true });
+    assert.equal((await emit(b, 'card:pick', { stake, card: 5 })).ok, true); await emit(b, 'card:unpick', { stake, card: 5 });
+    assert.equal(bal(7602), before); ok('Bingo switched back on → works again');
+    const g = (await call('GET', '/api/admin/settings')).data.groups[0];
+    assert.equal(g.id, 'games'); assert.equal(g.fields.length, 7); ok('all 7 game switches are together at the top of Settings');
+  }
 
   console.log('Wallet text & bonuses');
   await save({ paymentInfo: 'Telebirr: 0911 22 33 44 (Gedion)', minDeposit: 20, 'growth.signupBonus': 25, 'growth.referralBonus': 15, 'growth.dailyReward': 3 });

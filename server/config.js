@@ -61,6 +61,7 @@ export const config = {
 
   // Game
   stakes: list(process.env.STAKES || '10,20,50,100').map(toCents), // cents
+  bingoEnabled: process.env.BINGO_ENABLED !== 'false',   // admin can hide Bingo like any other game
   cardCount: num(process.env.CARD_COUNT, 100),
   maxCards: Math.max(1, num(process.env.BINGO_MAX_CARDS, 3)), // cards one player may hold per round
   minPlayers: num(process.env.MIN_PLAYERS, 2),

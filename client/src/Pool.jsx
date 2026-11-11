@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { socket, emit, haptic, toast, confirmBox, takeJoin } from './api.js';
 import { SocialBar, InviteBox } from './Social.jsx';
 import { fmt } from '../../shared/money.js';
-import { SOLIDS, STRIPES, BALL_COLORS, R, W, H, HEAD_LINE } from '../../shared/pool.js';
+import { SOLIDS, STRIPES, BALL_COLORS, R, W, H, HEAD_LINE, groupOf } from '../../shared/pool.js';
 import { startPoolRender, toTable, Sim, canPlaceCue } from './poolRender.js';
 import { sfx } from './sound.js';
 import { t, useLang, trServer } from './i18n.js';
@@ -14,6 +14,16 @@ function MiniBall({ n, gone }) {
     <span className={`mini-pool ${gone ? 'gone' : ''}`}
       style={{ background: stripe ? `linear-gradient(#f8f8f2 25%, ${c} 25% 75%, #f8f8f2 75%)` : c }}><b>{n}</b></span>
   );
+}
+
+/** Balls I may legally hit first (null = any ball). Used for the gold rings and the red "wrong ball" guide. */
+function legalTargets(st) {
+  const p = st.players[st.me];
+  if (!p || st.breakShot || p.set || st.mode === 'cutthroat') return null;
+  const on = st.balls.filter((b) => b.n !== 0 && !b.in).map((b) => b.n);
+  if (!p.group) return on.filter((n) => n !== 8);
+  const mine = on.filter((n) => groupOf(n) === p.group);
+  return mine.length ? mine : [8];
 }
 
 export default function Pool({ cfg, balance }) {
@@ -51,6 +61,7 @@ export default function Pool({ cfg, balance }) {
     view.canAim = myTurn;
     view.ballInHand = st.ballInHand;
     view.breakShot = st.breakShot;
+    view.targets = legalTargets(st);
     if (myTurn && st.ballInHand && !view.cuePlaced) {
       // default cue spot for ball in hand: where it was, or the break spot
       const c = st.balls[0];
@@ -72,9 +83,11 @@ export default function Pool({ cfg, balance }) {
       view.canAim = false;
       view.cueDrag = null;
       const sim = new Sim(before, shot);
+      let lastClick = 0;
       view.replay = {
         sim, after, start: performance.now(), finished: false,
-        onPot: (n) => { haptic(n === 0 ? 'error' : 'light'); sfx('thud'); },
+        onPot: (n) => { haptic(n === 0 ? 'error' : 'medium'); sfx('thud'); },
+        onHit: (speed) => { const now = performance.now(); if (speed > 18 && now - lastClick > 70) { lastClick = now; sfx('ball'); } },
         onDone: () => {
           view.balls = after;
           setTimeout(() => { view.replay = null; }, 50);
@@ -124,7 +137,7 @@ export default function Pool({ cfg, balance }) {
       view.cueDrag = { x: cue.x, y: cue.y, valid: true };
     } else {
       dragging.current = 'aim';
-      setAim(p);
+      aimDrag.current = { x0: e.clientX, y0: e.clientY, last: p, moved: false };
     }
     e.currentTarget.setPointerCapture(e.pointerId);
   };
@@ -134,9 +147,30 @@ export default function Pool({ cfg, balance }) {
     if (dragging.current === 'cue') {
       const x = Math.min(W - R, Math.max(R, p.x)), y = Math.min(H - R, Math.max(R, p.y));
       view.cueDrag = { x, y, valid: canPlaceCue(view.balls, x, y, view.breakShot) };
-    } else setAim(p);
+    } else {
+      // Drag anywhere to turn the cue (your finger never hides the shot). Further from the white ball = finer.
+      const d = aimDrag.current;
+      if (!d.moved) {
+        if (Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 8) return;
+        d.moved = true; d.last = p;
+        return;
+      }
+      const cue = view.cuePlaced || view.balls[0];
+      const rx = d.last.x - cue.x, ry = d.last.y - cue.y;
+      const turn = (rx * (p.y - d.last.y) - ry * (p.x - d.last.x)) / Math.max(rx * rx + ry * ry, 30 * 30);
+      rotate(turn);
+      d.last = p;
+    }
   };
   const onPointerUp = () => {
+    if (dragging.current === 'aim' && aimDrag.current && !aimDrag.current.moved) {
+      // a tap points the cue there; a tap on a ball aims straight at it
+      const p = aimDrag.current.last;
+      const ball = view.balls.find((b) => b.n !== 0 && !b.in && Math.hypot(b.x - p.x, b.y - p.y) < R * 1.9);
+      setAim(ball || p);
+      haptic('light');
+    }
+    aimDrag.current = null;
     if (dragging.current === 'cue' && view.cueDrag) {
       if (view.cueDrag.valid) view.cuePlaced = { x: view.cueDrag.x, y: view.cueDrag.y };
       else toast(view.breakShot ? t('breakPlace') : t('cantPlace'));
@@ -149,12 +183,30 @@ export default function Pool({ cfg, balance }) {
     const dx = p.x - cue.x, dy = p.y - cue.y;
     if (Math.hypot(dx, dy) > 1) view.aim = { dx, dy };
   }
-  const nudge = (deg) => {
-    const a = (deg * Math.PI) / 180;
+  const aimDrag = useRef(null);
+  function rotate(a) {
     const { dx, dy } = view.aim;
     view.aim = { dx: dx * Math.cos(a) - dy * Math.sin(a), dy: dx * Math.sin(a) + dy * Math.cos(a) };
-    haptic('light');
+  }
+
+  // ---------- fine-aim dial under the table: slide it for tiny corrections ----------
+  const dial = useRef(null);
+  const ticks = useRef(null);
+  const onDialDown = (e) => {
+    if (!view.canAim) return;
+    dial.current = { x: e.clientX, off: dial.current?.off || 0, buzz: 0 };
+    e.currentTarget.setPointerCapture(e.pointerId);
   };
+  const onDialMove = (e) => {
+    const d = dial.current;
+    if (!d || d.x == null) return;
+    const dx = e.clientX - d.x;
+    d.x = e.clientX; d.off += dx; d.buzz += Math.abs(dx);
+    rotate((dx * 0.05 * Math.PI) / 180);            // 20 px = 1°
+    if (ticks.current) ticks.current.style.backgroundPositionX = `${d.off}px`;
+    if (d.buzz > 12) { d.buzz = 0; haptic('light'); }
+  };
+  const onDialUp = () => { if (dial.current) dial.current.x = null; };
 
   // ---------- power bar: pull down, release to shoot ----------
   const powerDrag = useRef(null);
@@ -179,6 +231,8 @@ export default function Pool({ cfg, balance }) {
     const shot = { dx: view.aim.dx, dy: view.aim.dy, power };
     if (view.ballInHand) shot.cue = view.cuePlaced;
     view.canAim = false;
+    view.strike = { at: performance.now(), power };
+    haptic('heavy');
     run(async () => { try { await emit('pool:shoot', shot); } catch (e) { view.canAim = true; throw e; } });
   };
 
@@ -188,22 +242,34 @@ export default function Pool({ cfg, balance }) {
   // ================= Match =================
   if (game) {
     const myTurn = game.turn === game.me && game.phase === 'aim';
+    const duo = game.players.length === 2;
     const chip = (i) => {
       const p = game.players[i];
       const active = game.turn === i && game.phase !== 'over';
       const set = p.set || (p.group ? (p.group === 'solids' ? SOLIDS : STRIPES) : null);
+      const total = (game.shotSec || cfg.pool.shotSec) * 1000;
       return (
-        <div key={i} className={`pool-chip ${active ? 'active' : ''} ${p.out || p.eliminated ? 'out' : ''}`}>
-          <div className="lc-name">{p.name}{i === game.me ? ` (${t('you')})` : ''}</div>
-          <div className="pool-group">
-            {set ? set.map((n) => <MiniBall key={n} n={n} gone={game.balls.find((b) => b.n === n).in} />)
-              : <span className="muted small">{game.breakShot ? (active ? t('breaking') : '') : t('openTable')}</span>}
-            {set && !p.set && p.left === 0 && <MiniBall n={8} />}
+        <div key={i} className={`p8-player ${active ? 'active' : ''} ${i === game.me ? 'me' : ''} ${p.out || p.eliminated ? 'out' : ''}`}>
+          <div className="p8-av">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle cx="22" cy="22" r="19" className="trk" />
+              {active && !rolling && game.deadlineLeftMs != null && (
+                <circle cx="22" cy="22" r="19" className="run"
+                  key={`${game.turn}-${game.balls.map((b) => b.in ? 1 : 0).join('')}-${game.deadlineLeftMs > 0}`}
+                  style={{ animationDuration: `${total}ms`, animationDelay: `-${Math.max(0, total - game.deadlineLeftMs)}ms` }} />
+              )}
+            </svg>
+            <span>{p.name?.startsWith('🤖') ? '🤖' : (Array.from((p.name || '?').trim())[0] || '?').toUpperCase()}</span>
           </div>
-          {p.misses > 0 && <div className="small warn">{t('timeoutsN', { n: p.misses, max: game.maxMisses })}</div>}
-          {active && !rolling && game.deadlineLeftMs != null && (
-            <div className="lc-timer"><span key={`${game.turn}-${game.balls.map((b) => b.in ? 1 : 0).join('')}-${game.deadlineLeftMs > 0}`} style={{ animationDuration: `${game.deadlineLeftMs}ms` }} /></div>
-          )}
+          <div className="p8-info">
+            <div className="p8-name">{i === game.me ? t('you') : p.name}{p.group && <small> · {t(p.group)}</small>}</div>
+            <div className="p8-rack">
+              {set ? set.map((n) => <MiniBall key={n} n={n} gone={game.balls.find((b) => b.n === n).in} />)
+                : <span className="muted small">{game.breakShot ? (active ? t('breaking') : '') : t('openTable')}</span>}
+              {set && !p.set && p.left === 0 && <MiniBall n={8} />}
+            </div>
+            {p.misses > 0 && <div className="small warn">{t('timeoutsN', { n: p.misses, max: game.maxMisses })}</div>}
+          </div>
         </div>
       );
     };
@@ -218,29 +284,33 @@ export default function Pool({ cfg, balance }) {
       if (game.phase !== 'over') await emit('pool:leave');
       setGame(null); enter();
     };
+    const title = game.phase === 'over' ? '' : myTurn && !rolling ? t('p8YourTurn') : '';
     return (
-      <div className="pool">
-        <div className="row-between ludo-top">
+      <div className="pool p8">
+        <div className="row-between p8-top">
           {game.practice ? <span className="practice-badge">{t('practiceBadge')}</span>
-            : <span className="small">{t('prize')} <b className="accent">{fmt(game.prize)} {cfg.currency}</b></span>}
+            : <span className="p8-prize">🏆 <b>{fmt(game.prize)}</b> {cfg.currency}</span>}
           <button className="ghost sm" onClick={leave}>{game.phase === 'over' ? t('tables') : t('leave')}</button>
         </div>
-        <div className="pool-chips">{game.players.map((_, i) => chip(i))}</div>
-        {msg && <div className="pool-msg">{msg}</div>}
+        <div className={`p8-players ${duo ? 'duo' : ''}`}>{game.players.map((_, i) => chip(i))}</div>
+        <div className={`p8-status ${title ? 'go' : ''} ${msg ? 'foul' : ''}`}>
+          {msg ? <span>⚠️ {msg}</span> : <>{title && <b>{title}</b>}<span>{hint}</span></>}
+        </div>
         <div className="pool-play">
-          <canvas ref={canvasRef} className="pool-canvas"
+          <canvas ref={canvasRef} className="pool-canvas p8-canvas"
             onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} />
-          <div className={`pool-power ${myTurn ? '' : 'off'}`}
+          <div className={`pool-power p8-power ${myTurn ? '' : 'off'} ${powerUi > 0 ? 'pulling' : ''}`}
             onPointerDown={onPowerDown} onPointerMove={onPowerMove} onPointerUp={onPowerUp} onPointerCancel={onPowerUp}>
             <div className="pp-fill" style={{ transform: `scaleY(${powerUi})` }} />
-            <div className="pp-cue" style={{ transform: `translateY(${powerUi * 70}%)` }} />
-            <div className="pp-label">{powerUi > 0 ? `${Math.round(powerUi * 100)}%` : t('pull')}</div>
+            <div className="pp-marks" />
+            <div className="pp-cue" style={{ transform: `translateY(${powerUi * 62}%)` }} />
+            <div className="pp-label">{powerUi > 0 ? `${Math.round(powerUi * 100)}%` : <>{t('pull')}<i>▼</i></>}</div>
           </div>
         </div>
-        <div className="pool-under">
-          <button className="ghost sm" disabled={!myTurn} onClick={() => nudge(-0.4)}>◀ {t('fine')}</button>
-          <div className="pool-hint">{hint}</div>
-          <button className="ghost sm" disabled={!myTurn} onClick={() => nudge(0.4)}>{t('fine')} ▶</button>
+        <div className={`p8-dial ${myTurn ? '' : 'off'}`}
+          onPointerDown={onDialDown} onPointerMove={onDialMove} onPointerUp={onDialUp} onPointerCancel={onDialUp}>
+          <div className="p8-ticks" ref={ticks} />
+          <span>◀ {t('p8Fine')} ▶</span>
         </div>
 
         {game.phase === 'over' && game.result && (
@@ -294,7 +364,7 @@ export default function Pool({ cfg, balance }) {
       {sizes.length === 1 ? (
         <div className="pool-tables">
           {lobby.tables.map((tb) => (
-            <button key={tb.stake} className="ludo-table pool-table" disabled={busy || lobby.paused} onClick={() => joinTable(tb)}>
+            <button key={tb.stake} className="ludo-table pool-table p8-table" disabled={busy || lobby.paused} onClick={() => joinTable(tb)}>
               <div className="pt-amt">{fmt(tb.stake)} <small>{cfg.currency}</small></div>
               <div className="lt-prize">{t('winX', { amount: fmt(tb.prize) })}</div>
               <div className="lt-wait">{tb.waiting ? t('oneWaiting') : t('join')}</div>

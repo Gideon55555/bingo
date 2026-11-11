@@ -15,6 +15,15 @@ db.exec(`CREATE TABLE IF NOT EXISTS settings (
 const F = (key, label, type, opts = {}) => ({ key, label, type, ...opts });
 /** group → fields. key = path inside `config` (dots for nested). */
 export const SCHEMA = [
+  { id: 'games', label: '🎮 Games shown to players', fields: [
+    F('bingoEnabled', '🔢 Bingo', 'bool', { help: 'Off = hidden from players. Anyone waiting for a game to start is refunded; games already running finish normally.' }),
+    F('crash.enabled', '✈️ Aviator', 'bool'),
+    F('keno.enabled', '🎯 Keno', 'bool'),
+    F('ludo.enabled', '🎲 Ludo', 'bool'),
+    F('pool.enabled', '🎱 8-Ball Pool', 'bool'),
+    F('kerenbula.enabled', '🔴 Kerenbula', 'bool'),
+    F('hunt.enabled', '👮 Dibibkosh', 'bool'),
+  ] },
   { id: 'general', label: '🏠 General', fields: [
     F('appName', 'App name (top of the screen)', 'text', { max: 30, help: 'Empty = "Games"' }),
     F('supportContact', 'Support contact', 'text', { max: 80, help: 'e.g. @YourSupport or a phone number' }),
@@ -48,7 +57,6 @@ export const SCHEMA = [
     F('resultShowSec', 'Results shown for (seconds)', 'int', { min: 3, max: 60 }),
   ] },
   { id: 'crash', label: '✈️ Aviator', fields: [
-    F('crash.enabled', 'Game is on', 'bool'),
     F('crash.name', 'Name', 'text', { max: 20 }),
     F('crash.houseEdge', 'House edge', 'percent', { min: 0, max: 20, help: '3% = players get back 97% on average' }),
     F('crash.minBet', 'Minimum bet', 'money', { min: 1, max: 100000 }),
@@ -58,7 +66,6 @@ export const SCHEMA = [
     F('crash.maxMultiplier', 'Highest multiplier', 'mult', { min: 2, max: 10000 }),
   ] },
   { id: 'keno', label: '🎯 Keno', fields: [
-    F('keno.enabled', 'Game is on', 'bool'),
     F('keno.minBet', 'Minimum ticket', 'money', { min: 1, max: 100000 }),
     F('keno.maxBet', 'Maximum ticket', 'money', { min: 1, max: 1000000 }),
     F('keno.maxWin', 'Maximum win per ticket', 'money', { min: 1, max: 10000000 }),
@@ -66,7 +73,6 @@ export const SCHEMA = [
     F('keno.ballMs', 'Seconds between drawn numbers', 'seconds', { min: 0.3, max: 5 }),
   ] },
   { id: 'ludo', label: '🎲 Ludo', fields: [
-    F('ludo.enabled', 'Game is on', 'bool'),
     F('ludo.stakes', 'Table entry fees', 'moneyList', { min: 1, max: 100000, maxItems: 8 }),
     F('ludo.houseCut', 'House cut from the pot', 'percent', { min: 0, max: 50 }),
     F('ludo.tokens', 'Tokens per player', 'int', { min: 1, max: 4 }),
@@ -74,14 +80,12 @@ export const SCHEMA = [
     F('ludo.maxMisses', 'Missed turns before forfeit', 'int', { min: 1, max: 10 }),
   ] },
   { id: 'pool', label: '🎱 8-Ball Pool', fields: [
-    F('pool.enabled', 'Game is on', 'bool'),
     F('pool.stakes', 'Table entry fees', 'moneyList', { min: 1, max: 100000, maxItems: 8 }),
     F('pool.houseCut', 'House cut from the pot', 'percent', { min: 0, max: 50 }),
     F('pool.shotSec', 'Seconds per shot', 'int', { min: 10, max: 120 }),
     F('pool.maxMisses', 'Timeouts before forfeit', 'int', { min: 1, max: 10 }),
   ] },
   { id: 'hunt', label: '👮 Dibibkosh', fields: [
-    F('hunt.enabled', 'Game is on', 'bool'),
     F('hunt.stakes', 'Table entry fees', 'moneyList', { min: 1, max: 100000, maxItems: 8 }),
     F('hunt.houseCut', 'House cut from the pot', 'percent', { min: 0, max: 50 }),
     F('hunt.moveSec', 'Seconds to pick each move', 'int', { min: 2, max: 10 }),
@@ -89,7 +93,6 @@ export const SCHEMA = [
     F('hunt.surprise', 'How often the cop guesses at random instead of predicting', 'percent', { min: 0, max: 100 }),
   ] },
   { id: 'kerenbula', label: '🔴 Kerenbula', fields: [
-    F('kerenbula.enabled', 'Game is on', 'bool'),
     F('kerenbula.stakes', 'Table entry fees', 'moneyList', { min: 1, max: 100000, maxItems: 8 }),
     F('kerenbula.houseCut', 'House cut from the pot', 'percent', { min: 0, max: 50 }),
     F('kerenbula.target', 'Points to win', 'int', { min: 3, max: 50 }),

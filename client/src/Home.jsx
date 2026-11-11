@@ -19,7 +19,7 @@ function Promo({ cfg, user, onOpen, onWallet }) {
 
   const builtIn = useMemo(() => [
     cfg.crash && { id: 'b-aviator', target: 'aviator', art: 'aviator', title: t('promoAviator', { x: Math.round(cfg.crash.maxMultiplier / 100) }), subtitle: t('promoAviatorSub'), cta: t('playNow') },
-    { id: 'b-bingo', target: 'bingo', art: 'bingo', title: t('promoBingo', { n: cfg.maxCards || 1 }), subtitle: t('promoBingoSub'), cta: t('playNow') },
+    cfg.bingo !== false && { id: 'b-bingo', target: 'bingo', art: 'bingo', title: t('promoBingo', { n: cfg.maxCards || 1 }), subtitle: t('promoBingoSub'), cta: t('playNow') },
     cfg.growth?.signupBonus > 0 && { id: 'b-signup', target: 'wallet', art: 'keno', title: t('promoSignup', { amount: `${fmt(cfg.growth.signupBonus)} ${cfg.currency}` }), subtitle: t('promoSignupSub'), cta: t('deposit') },
     cfg.hunt && { id: 'b-hunt', target: 'hunt', art: 'hunt', title: t('promoHunt'), subtitle: t('promoHuntSub'), cta: t('playNow') },
     cfg.kerenbula && { id: 'b-kb', target: 'kerenbula', art: 'kerenbula', title: t('promoKb'), subtitle: t('promoKbSub'), cta: t('playNow') },
@@ -35,7 +35,7 @@ function Promo({ cfg, user, onOpen, onWallet }) {
       const url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(t('refShareText'))}`;
       return tg?.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, '_blank');
     }
-    if (target === 'aviator' ? cfg.crash : target === 'bingo' || cfg[target]) onOpen(target);
+    if (target === 'aviator' ? cfg.crash : target === 'bingo' ? cfg.bingo !== false : cfg[target]) onOpen(target);
   };
   const scrollTo = (k) => {
     const el = track.current;
@@ -119,7 +119,7 @@ export default function Home({ cfg, live, rooms, onOpen, onWallet, user }) {
       id: 'aviator', cat: 'luck', name: crashName(cfg), tag: t('tag_aviator'),
       status: live.aviator?.phase === 'flying' ? { text: t('live'), cls: 'hot' } : { text: t('st_betting'), cls: 'open' },
     },
-    { id: 'bingo', cat: 'luck', name: t('g_bingo'), tag: t('tag_bingo'), status: bingoPlayers ? { text: t('playingNow', { n: bingoPlayers }), cls: 'hot' } : { text: t('st_open'), cls: 'open' } },
+    cfg.bingo !== false && { id: 'bingo', cat: 'luck', name: t('g_bingo'), tag: t('tag_bingo'), status: bingoPlayers ? { text: t('playingNow', { n: bingoPlayers }), cls: 'hot' } : { text: t('st_open'), cls: 'open' } },
     cfg.keno && {
       id: 'keno', cat: 'luck', name: t('g_keno'), tag: t('tag_keno'),
       status: live.keno?.phase === 'drawing' ? { text: t('st_drawing'), cls: 'hot' } : { text: t('st_open'), cls: 'open' },

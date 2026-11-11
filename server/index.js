@@ -82,6 +82,7 @@ onSettingsChanged((keys) => {
   if (has(/^hunt\.stakes$/)) games.hunt.syncTables();
   for (const g of ['ludo', 'pool', 'kerenbula', 'hunt']) if (keys.includes(`${g}.enabled`) && !config[g].enabled) games[g].pauseNow(); // refund anyone waiting
   for (const g of ['crash', 'keno']) if (keys.includes(`${g}.enabled`) && config[g].enabled) games[g].start();
+  if (keys.includes('bingoEnabled') && !config.bingoEnabled) games.closeBingo();
   if (has(/^(houseCut|minPlayers|stakes)$/)) io.emit('lobby:all', games.lobby());
   for (const g of ['ludo', 'pool', 'kerenbula', 'hunt']) games[g].emitLobby();
   io.emit('config:changed'); // phones reload the settings (prices, names, games on/off…)
@@ -110,6 +111,7 @@ app.use('/api/admin', admin.router);
 
 app.get('/api/config', (_req, res) =>
   res.json({
+    bingo: config.bingoEnabled,
     stakes: config.stakes,
     cardCount: config.cardCount,
     maxCards: config.maxCards,
@@ -344,6 +346,7 @@ io.on('connection', (socket) => {
   });
 
   handle('card:pick', ({ stake, card }) => {
+    if (!config.bingoEnabled) throw new Error('This game is switched off right now');
     games.get(stake).pick(getUser(user.id), card);
   });
 
