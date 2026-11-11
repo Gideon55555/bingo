@@ -152,6 +152,7 @@ export default function App() {
 
   return (
     <div className="app">
+      {cfg.demo && <div className="demo-ribbon">{t('demoRibbon')}</div>}
       <header className="topbar">
         <div className="tibeb" />
         <div className="topbar-row">

@@ -792,3 +792,5 @@ input, textarea, select { background: #2e060c; }
 .p8-table .pt-amt small, .p8-table .lt-prize { color: var(--gold-hi); }
 .p8-table .lt-wait { color: #d8ffe6; }
 @media (prefers-reduced-motion: reduce) { .p8-status b, .p8-power:not(.off), .p8-power .pp-label i { animation: none; } }
+
+.demo-ribbon { background: #f3c14b; color: #2a0509; text-align: center; font-size: 11px; font-weight: 800; padding: 2px 8px; letter-spacing: .3px; }

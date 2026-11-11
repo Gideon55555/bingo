@@ -31,6 +31,7 @@ import { scheduleBackups } from './backup.js';
 import { fmtMoney } from '../shared/money.js';
 import { tr } from './i18n.js';
 import { onSettingsChanged } from './settings.js';
+import { startDemoPlayers } from './demo.js';
 
 checkConfig();
 
@@ -96,6 +97,7 @@ setReferralHandler((from, inviterId) => {
   if (growth.recordReferral(from, inviterId, { wasNew })) console.log(`[growth] ${from.id} joined via ${inviterId}'s link`);
 });
 startMonitor({ io, games });
+startDemoPlayers(games);
 
 // ---------------- REST API ----------------
 app.use(express.json({ limit: '20kb' }));
@@ -146,6 +148,7 @@ app.get('/api/config', (_req, res) =>
       ? { minBet: config.keno.minBet, maxBet: config.keno.maxBet, maxWin: config.keno.maxWin, betSec: config.keno.betSec }
       : null,
     devMode: config.devMode,
+    demo: config.demo.players && !config.production,
     botUsername: botUsername(),
     growth: { signupBonus: config.growth.signupBonus, referralBonus: config.growth.referralBonus, dailyReward: config.growth.dailyReward },
   }));

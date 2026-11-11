@@ -179,6 +179,8 @@ export const config = {
   // Dev mode lets you open the app in a normal browser without Telegram.
   // NEVER enable in production.
   devMode: process.env.DEV_MODE === 'true',
+  // Demo Bingo players with play money, for testing and demos only. Refused when NODE_ENV=production.
+  demo: { players: process.env.DEMO_PLAYERS === 'true', count: num(process.env.DEMO_PLAYERS_COUNT, 10) },
 };
 
 /** Refuse to start with dangerous settings in production. */
@@ -187,6 +189,7 @@ export function checkConfig() {
   const warnings = [];
   if (config.production) {
     if (config.devMode) errors.push('DEV_MODE=true is not allowed in production (anyone could log in as anyone).');
+    if (config.demo.players) errors.push('DEMO_PLAYERS=true is not allowed in production (demo players are for testing with play money only).');
     if (!config.botToken) errors.push('BOT_TOKEN is required.');
     if (!config.webAppUrl.startsWith('https://')) errors.push('WEBAPP_URL must be your public https:// address.');
     if (!config.adminIds.length) warnings.push('ADMIN_IDS is empty — nobody can approve deposits from the bot.');
