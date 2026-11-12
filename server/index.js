@@ -3,6 +3,7 @@ import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { Server } from 'socket.io';
 import { config, checkConfig, ROOT } from './config.js';
 import { authenticate, requireAuth, failedTooOften, recordAuthFailure } from './auth.js';
@@ -108,7 +109,7 @@ app.use('/api', limit('api', config.apiRateIp, 60 * 1000)); // per IP (generous:
 const VERSION = (() => {
   const at = (f) => { try { return fs.statSync(f).mtime.toISOString().slice(0, 16).replace('T', ' '); } catch { return null; } };
   let commit = null;
-  try { commit = execSync('git log -1 --format=%h\ %s', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* no git */ }
+  try { commit = execFileSync('git', ['log', '-1', '--format=%h %s'], { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* no git */ }
   return { commit, built: at(path.join(ROOT, 'dist', 'index.html')) };
 })();
 console.log(`Version: ${VERSION.commit || 'unknown'} · app built ${VERSION.built || 'never — run "npm run build"'}`);
