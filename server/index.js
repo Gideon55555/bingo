@@ -129,7 +129,7 @@ app.get('/api/config', (_req, res) =>
     appName: config.appName,
     minAge: config.minAge,
     crash: config.crash.enabled
-      ? { minBet: config.crash.minBet, maxBet: config.crash.maxBet, maxWin: config.crash.maxWin,
+      ? { minBet: config.crash.minBet, maxBet: config.crash.maxBet, maxWin: config.crash.maxWin, maxBets: config.crash.maxBets,
           houseEdge: config.crash.houseEdge, maxMultiplier: config.crash.maxMultiplier, betSec: config.crash.betSec,
           name: config.crash.name }
       : null,
@@ -371,7 +371,7 @@ io.on('connection', (socket) => {
   });
   handle('crash:exit', () => { socket.leave('crash'); });
   handle('crash:bet', ({ amount, auto }) => isOn('crash') || ({ me: crash().bet(getUser(user.id), amount, auto) }));
-  handle('crash:cancel', () => ({ me: crash().cancel(user) }));
+  handle('crash:cancel', ({ id } = {}) => ({ me: crash().cancel(user, id) }));
   // ---- Ludo ----
   const ludo = () => {
     if (!games.ludo) throw new Error('This game is not available');
@@ -470,7 +470,7 @@ io.on('connection', (socket) => {
   handle('keno:buy', ({ picks, amount }) => isOn('keno') || ({ me: keno().buy(getUser(user.id), picks, amount) }));
   handle('keno:cancel', ({ id } = {}) => ({ me: keno().cancel(user, id) }));
 
-  handle('crash:cashout', () => ({ me: crash().myBet(user.id), cashed: !!crash().cashout(user) }));
+  handle('crash:cashout', ({ id } = {}) => { const cashed = crash().cashout(user, id); return { me: crash().myBet(user.id), cashed: !!cashed }; });
 });
 
 // ---------------- Startup ----------------

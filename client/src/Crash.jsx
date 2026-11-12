@@ -13,7 +13,8 @@ const colorFor = (p) => (p < 200 ? 'x-low' : p < 1000 ? 'x-mid' : 'x-high');
 export default function Crash({ cfg, balance }) {
   useLang();
   const [st, setSt] = useState(null);
-  const [me, setMe] = useState(null);
+  const [mine, setMine] = useState([]);   // my bets this round (any number of them)
+  const setMe = (m) => setMine(Array.isArray(m) ? m : m ? [m] : []);
   const [amount, setAmount] = useState(() => loadPref('rk_amount', String(Math.max(10, cfg.crash.minBet / 100))));
   const [autoOn, setAutoOn] = useState(() => loadPref('rk_auto_on', '0') === '1');
   const [auto, setAuto] = useState(() => loadPref('rk_auto', '2.00'));
@@ -83,22 +84,27 @@ export default function Crash({ cfg, balance }) {
   }, [hasStage]);
 
   const phase = st?.phase;
-  engine.myAmount = me && !me.cashedAt ? me.amount : 0;
+  const liveBets = mine.filter((b) => !b.cashedAt);
+  const cashedBets = mine.filter((b) => b.cashedAt);
+  const totalBet = mine.reduce((a, b) => a + b.amount, 0);
+  const totalWon = cashedBets.reduce((a, b) => a + b.win, 0);
+  engine.myAmount = liveBets.reduce((a, b) => a + b.amount, 0);
 
   // ---------- reactions to phase changes ----------
   useEffect(() => {
-    if (phase === 'crashed') { haptic(me && !me.cashedAt ? 'error' : 'light'); sfx('crash'); }
-    if (phase === 'flying' && me) haptic('medium');
+    if (phase === 'crashed') { haptic(liveBets.length ? 'error' : 'light'); sfx('crash'); }
+    if (phase === 'flying' && mine.length) haptic('medium');
     if (phase === 'betting' && queued) { setQueued(false); placeBet(); }
   }, [phase, st?.round]);
 
   useEffect(() => {
-    if (!me?.cashedAt) return;
-    setFlash(`+${fmt(me.win)} ${cfg.currency} at ${fmtX(me.cashedAt)}`);
+    if (!cashedBets.length) return;
+    const lastOne = cashedBets[cashedBets.length - 1];
+    setFlash(cashedBets.length > 1 ? `+${fmt(totalWon)} ${cfg.currency}` : `+${fmt(lastOne.win)} ${cfg.currency} at ${fmtX(lastOne.cashedAt)}`);
     haptic('success'); sfx('cash');
     const t = setTimeout(() => setFlash(null), 3500);
     return () => clearTimeout(t);
-  }, [me?.cashedAt]);
+  }, [cashedBets.length]);
 
   // ---------- actions ----------
   const amountCents = toCents(amount);
@@ -116,8 +122,8 @@ export default function Crash({ cfg, balance }) {
       haptic('medium');
     });
   }
-  const cancel = () => run(async () => { await emit('crash:cancel'); setMe(null); });
-  const cashout = () => run(async () => { const r = await emit('crash:cashout'); setMe(r.me); });
+  const cancel = (id) => run(async () => { const r = await emit('crash:cancel', id ? { id } : {}); setMe(r.me); haptic('light'); });
+  const cashout = (id) => run(async () => { const r = await emit('crash:cashout', id ? { id } : {}); setMe(r.me); });
   const setAmt = (cents) => {
     const c = Math.min(cfg.crash.maxBet, Math.max(cfg.crash.minBet, Math.round(cents)));
     setAmount(String(c / 100));
@@ -127,11 +133,11 @@ export default function Crash({ cfg, balance }) {
 
   // ---------- main button ----------
   let btn;
-  const live = me && !me.cashedAt && phase === 'flying';
+  const live = liveBets.length > 0 && phase === 'flying';
+  const maxBets = cfg.crash.maxBets || 100;
   if (phase === 'paused') btn = <button key="paused" className="rk-btn" disabled>{t('pausedMaint')}</button>;
-  else if (phase === 'betting' && me) btn = <button key="cancel" className="rk-btn cancel" disabled={busy} onClick={cancel}>{t('cancel')}<small>{t('waitingTakeoff')}</small></button>;
-  else if (phase === 'betting') btn = <button key="bet" className="rk-btn bet" disabled={busy || !(amountCents > 0)} onClick={placeBet}>{t('bet')}<small>{fmt(amountCents)} {cfg.currency}</small></button>;
-  else if (live) btn = <button key="cash" className="rk-btn cash" disabled={busy} onPointerDown={cashout}>{t('cashOut')}<small ref={cashRef}>{fmt(me.amount)} {cfg.currency}</small></button>;
+  else if (phase === 'betting') btn = <button key="bet" className="rk-btn bet" disabled={busy || !(amountCents > 0) || mine.length >= maxBets} onClick={placeBet}>{mine.length ? t('betAgain') : t('bet')}<small>{fmt(amountCents)} {cfg.currency}{autoX100 ? ` · ${t('autoX', { x: fmtX(autoX100) })}` : ''}</small></button>;
+  else if (live) btn = <button key="cash" className="rk-btn cash" disabled={busy} onPointerDown={() => cashout()}>{liveBets.length > 1 ? t('cashOutAll', { n: liveBets.length }) : t('cashOut')}<small ref={cashRef}>{fmt(engine.myAmount)} {cfg.currency}</small></button>;
   else if (queued) btn = <button key="unqueue" className="rk-btn cancel" onClick={() => setQueued(false)}>{t('cancel')}<small>{t('betNextRound')}</small></button>;
   else btn = <button key="queue" className="rk-btn bet" disabled={!(amountCents > 0)} onClick={() => { setQueued(true); haptic('light'); }}>{t('bet')}<small>{t('nextRound')} · {fmt(amountCents)} {cfg.currency}</small></button>;
 
@@ -164,9 +170,9 @@ export default function Crash({ cfg, balance }) {
 
       <div className="rk-panel">
         <div className="rk-amount">
-          <button onClick={() => setAmt(amountCents / 2)} disabled={!!me && phase !== 'crashed'}>½</button>
+          <button onClick={() => setAmt(amountCents / 2)} disabled={false}>½</button>
           <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))} />
-          <button onClick={() => setAmt(amountCents * 2)} disabled={!!me && phase !== 'crashed'}>2×</button>
+          <button onClick={() => setAmt(amountCents * 2)} disabled={false}>2×</button>
         </div>
         <div className="rk-presets">
           {[10, 50, 100, 500].map((v) => <button key={v} onClick={() => setAmt(v * 100)}>{v}</button>)}
@@ -177,13 +183,25 @@ export default function Crash({ cfg, balance }) {
           <input inputMode="decimal" value={auto} disabled={!autoOn} onChange={(e) => setAuto(e.target.value.replace(/[^\d.]/g, ''))} />x
         </label>
         {btn}
-        {me && (
-          <div className="muted small center-text" style={{ marginTop: 6 }}>
-            {t('yourBet', { amount: `${fmt(me.amount)} ${cfg.currency}` })}{me.auto ? ` · ${t('autoX', { x: fmtX(me.auto) })}` : ''}
-            {me.cashedAt ? ` · ${t('wonAt', { amount: fmt(me.win), x: fmtX(me.cashedAt) })}` : phase === 'crashed' ? ` · ${t('lost')}` : ''}
+        {mine.length > 0 && (
+          <div className="kn-mine rk-mine">
+            <div className="row-between small">
+              <b>{t('myBets', { n: mine.length, amount: `${fmt(totalBet)} ${cfg.currency}` })}</b>
+              {phase === 'betting' && mine.length > 1 && <button className="kn-x all" disabled={busy} onClick={() => cancel()}>{t('cancelAll')}</button>}
+              {phase !== 'betting' && totalWon > 0 && <b className="rk-won">+{fmt(totalWon)}</b>}
+            </div>
+            {mine.map((b) => (
+              <div key={b.id} className={`kn-tk ${b.cashedAt ? 'won' : phase === 'crashed' ? 'lost' : ''}`}>
+                <span className="kn-tk-nums"><b>{fmt(b.amount)} {cfg.currency}</b>{b.auto ? <i>{t('autoX', { x: fmtX(b.auto) })}</i> : null}</span>
+                {phase === 'betting' ? <button className="kn-x" disabled={busy} onClick={() => cancel(b.id)} aria-label={t('cancel')}>✕</button>
+                  : b.cashedAt ? <b className="kn-tk-res">+{fmt(b.win)} · {fmtX(b.cashedAt)}</b>
+                  : phase === 'flying' ? <button className="rk-cash1" disabled={busy} onPointerDown={() => cashout(b.id)}>{t('cashOut')}</button>
+                  : <b className="kn-tk-res">{t('lost')}</b>}
+              </div>
+            ))}
           </div>
         )}
-        {!me && balance < amountCents && <div className="warn small center-text">{t('balanceLow')}</div>}
+        {phase === 'betting' && balance < amountCents && <div className="warn small center-text">{t('balanceLow')}</div>}
       </div>
 
       <div className="rk-bets">

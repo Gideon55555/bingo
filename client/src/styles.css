@@ -836,3 +836,11 @@ input, textarea, select { background: #2e060c; }
 .kn-tk.won .kn-tk-res { color: #ffd34d; }
 .kn-x { width: 26px; height: 26px; padding: 0; border-radius: 50%; background: rgba(255, 43, 67, .25); color: #ffd9de; font-size: 12px; font-weight: 800; flex: none; }
 .kn-x.all { width: auto; height: auto; padding: 3px 10px; border-radius: 999px; font-size: 11px; }
+
+/* Aviator: my bets */
+.rk-mine .kn-tk-nums { align-items: center; gap: 8px; font-size: 13px; }
+.rk-mine .kn-tk-nums i { background: rgba(255, 255, 255, .1); font-size: 11px; padding: 0 8px; }
+.rk-mine .kn-tk.lost { opacity: .55; }
+.rk-mine .kn-tk-res { min-width: 0; white-space: nowrap; }
+.rk-won { color: #ffd34d; }
+.rk-cash1 { padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; background: linear-gradient(180deg, #ffd34d, #ff9f1a); color: #3a2500; flex: none; }

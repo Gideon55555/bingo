@@ -39,7 +39,8 @@ export class CrashGame {
   startBetting() {
     clearTimeout(this.timer);
     clearInterval(this.ticker);
-    this.bets = new Map(); // userId -> { name, amount, auto, cashedAt, win }
+    this.bets = new Map(); // `${uid}:${betId}` -> { id, uid, name, amount, auto, cashedAt, win } (a player can place several)
+    this.betSeq = 0;
     this.roundId = null;
     if (this.manager?.paused || !config.crash.enabled) { // paused by admin, or game switched off
       this.phase = 'paused';
@@ -76,10 +77,10 @@ export class CrashGame {
     // Once a second, send the true flight time so every phone's animation stays in sync
     if (++this.tickCount % 10 === 0) this.io.to(this.channel).emit('crash:t', { e: Date.now() - this.startedAt });
     const m = this.current();
-    for (const [uid, b] of this.bets) {
+    for (const [key, b] of this.bets) {
       if (b.cashedAt) continue;
-      if (b.auto && b.auto <= m && b.auto < this.point) this.payout(uid, b.auto);
-      else if (Math.floor((b.amount * m) / 100) >= config.crash.maxWin) this.payout(uid, m); // max-win protection
+      if (b.auto && b.auto <= m && b.auto < this.point) this.payout(key, b.auto);
+      else if (Math.floor((b.amount * m) / 100) >= config.crash.maxWin) this.payout(key, m); // max-win protection
     }
   }
 
@@ -87,7 +88,7 @@ export class CrashGame {
     if (this.phase !== 'flying') return;
     clearInterval(this.ticker);
     // Auto cash-outs at or below the crash point win (this keeps the house edge exact).
-    for (const [uid, b] of this.bets) if (!b.cashedAt && b.auto && b.auto <= this.point) this.payout(uid, b.auto);
+    for (const [key, b] of this.bets) if (!b.cashedAt && b.auto && b.auto <= this.point) this.payout(key, b.auto);
 
     const betsTotal = [...this.bets.values()].reduce((s, b) => s + b.amount, 0);
     const payoutTotal = [...this.bets.values()].reduce((s, b) => s + (b.win || 0), 0);
@@ -103,9 +104,10 @@ export class CrashGame {
     this.timer = setTimeout(() => this.startBetting(), CRASHED_SHOW_MS);
   }
 
-  payout(uid, at100) {
-    const b = this.bets.get(uid);
+  payout(key, at100) {
+    const b = this.bets.get(key);
     if (!b || b.cashedAt) return null;
+    const uid = b.uid;
     const win = Math.min(Math.floor((b.amount * at100) / 100), config.crash.maxWin);
     b.cashedAt = at100;
     b.win = win;
@@ -121,7 +123,7 @@ export class CrashGame {
     const uid = String(user.id);
     if (this.manager?.paused) throw new Error('Games are paused for maintenance. Please try again later.');
     if (this.phase !== 'betting') throw new Error('Bets are closed — wait for the next round.');
-    if (this.bets.has(uid)) throw new Error('You already placed a bet this round.');
+    if (this.mine(uid).length >= config.crash.maxBets) throw new Error(`You can place up to ${config.crash.maxBets} bets per round`);
     amount = Math.floor(Number(amount));
     const { minBet, maxBet, maxMultiplier } = config.crash;
     if (!Number.isFinite(amount) || amount < minBet) throw new Error(`Minimum bet is ${fmt(minBet)} ${config.currency}`);
@@ -135,33 +137,40 @@ export class CrashGame {
 
     if (!this.roundId) this.roundId = openRound(0, 'crash');
     if (!debit(uid, amount, 'bet', `${LABEL} bet`, this.roundId)) throw new Error('Insufficient balance. Please deposit first.');
-    this.bets.set(uid, { name: user.first_name || user.username || 'Player', amount, auto, cashedAt: null, win: 0 });
+    const id = ++this.betSeq;
+    this.bets.set(`${uid}:${id}`, { id, uid, name: user.first_name || user.username || 'Player', amount, auto, cashedAt: null, win: 0 });
     this.onBalanceChange(uid);
     this.emitBetsSoon();
     return this.myBet(uid);
   }
 
-  cancel(user) {
+  mine(uid) { return [...(this.bets?.entries() || [])].filter(([, b]) => b.uid === String(uid)); }
+
+  /** Cancel one bet (id given) or all of the player's bets, before take-off — refunded. */
+  cancel(user, id) {
     const uid = String(user.id);
     if (this.phase !== 'betting') throw new Error('Too late to cancel — the round has started.');
-    const b = this.bets.get(uid);
-    if (!b) return null;
-    this.bets.delete(uid);
-    credit(uid, b.amount, 'refund', `${LABEL} bet cancelled`, this.roundId);
+    for (const [key, b] of this.mine(uid)) {
+      if (id != null && b.id !== Number(id)) continue;
+      this.bets.delete(key);
+      credit(uid, b.amount, 'refund', `${LABEL} bet cancelled`, this.roundId);
+    }
     this.onBalanceChange(uid);
     this.emitBetsSoon();
-    return null;
+    return this.myBet(uid);
   }
 
-  cashout(user) {
+  /** Cash out one bet (id given) or every bet still flying. */
+  cashout(user, id) {
     const uid = String(user.id);
     if (this.phase !== 'flying') throw new Error('Nothing to cash out right now.');
-    const b = this.bets.get(uid);
-    if (!b) throw new Error('You have no bet in this round.');
-    if (b.cashedAt) throw new Error('Already cashed out.');
+    const live = this.mine(uid).filter(([, b]) => !b.cashedAt && (id == null || b.id === Number(id)));
+    if (!this.mine(uid).length) throw new Error('You have no bet in this round.');
+    if (!live.length) throw new Error('Already cashed out.');
     const elapsed = Date.now() - this.startedAt;
     if (elapsed >= msFor(this.point)) throw new Error('Too late — it already crashed!');
-    return this.payout(uid, this.current());
+    const at = this.current();
+    return live.map(([key]) => this.payout(key, at)).filter(Boolean).length;
   }
 
   // ---------------- pause / shutdown ----------------
@@ -184,8 +193,7 @@ export class CrashGame {
 
   // ---------------- state for clients ----------------
   myBet(uid) {
-    const b = this.bets?.get(String(uid));
-    return b ? { amount: b.amount, auto: b.auto, cashedAt: b.cashedAt, win: b.win } : null;
+    return this.mine(uid).map(([, b]) => ({ id: b.id, amount: b.amount, auto: b.auto, cashedAt: b.cashedAt, win: b.win }));
   }
 
   publicState() {

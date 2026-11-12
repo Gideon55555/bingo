@@ -62,6 +62,7 @@ export const SCHEMA = [
     F('crash.houseEdge', 'House edge', 'percent', { min: 0, max: 20, help: '3% = players get back 97% on average' }),
     F('crash.minBet', 'Minimum bet', 'money', { min: 1, max: 100000 }),
     F('crash.maxBet', 'Maximum bet', 'money', { min: 1, max: 1000000 }),
+    F('crash.maxBets', 'Bets one player can place per round', 'int', { min: 1, max: 1000 }),
     F('crash.maxWin', 'Maximum win per bet', 'money', { min: 1, max: 10000000 }),
     F('crash.betSec', 'Betting time (seconds)', 'int', { min: 3, max: 60 }),
     F('crash.maxMultiplier', 'Highest multiplier', 'mult', { min: 2, max: 10000 }),

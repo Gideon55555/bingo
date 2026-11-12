@@ -81,7 +81,10 @@ try {
   assert.equal((await emit(s.A, 'crash:bet', { amount: 1000, auto: 100 })).ok, false); ok('auto cash-out below 1.01x rejected');
   assert.equal((await emit(s.C, 'crash:bet', { amount: 2000 })).ok, true);
   assert.equal(db.getUser('3003').balance, 98000); ok('bet charges balance');
-  assert.equal((await emit(s.C, 'crash:bet', { amount: 2000 })).ok, false); ok('only one bet per round');
+  let m2 = await emit(s.C, 'crash:bet', { amount: 500, auto: 300 });
+  assert.equal(m2.ok, true); assert.equal(m2.me.length, 2); assert.equal(db.getUser('3003').balance, 97500); ok('a player can place several bets in one round, with different amounts');
+  m2 = await emit(s.C, 'crash:cancel', { id: m2.me[1].id });
+  assert.equal(m2.me.length, 1); assert.equal(db.getUser('3003').balance, 98000); ok('one bet can be cancelled on its own');
   await emit(s.C, 'crash:cancel');
   assert.equal(db.getUser('3003').balance, 100000); ok('cancel during betting refunds');
 

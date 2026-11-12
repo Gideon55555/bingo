@@ -73,6 +73,7 @@ export const config = {
   // Rocket (crash game). Amounts in ETB in .env, cents internally.
   crash: {
     enabled: process.env.CRASH_ENABLED !== 'false',
+    maxBets: num(process.env.CRASH_MAX_BETS, 100),          // bets one player may place per round
     name: process.env.CRASH_NAME || 'Aviator',
     houseEdge: num(process.env.CRASH_HOUSE_EDGE, 0.03),
     minBet: cents(process.env.CRASH_MIN_BET, 5),
