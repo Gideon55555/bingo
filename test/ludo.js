@@ -12,7 +12,7 @@ const PORT = 3987;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-ludo-'));
 const URL = `http://localhost:${PORT}`;
 const env = {
-  ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
+  ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
   LUDO_TURN_SEC: '1', LUDO_DELAY_SCALE: '0.02', LUDO_STEP_MS: '2', LUDO_STAKES: '10,20', LUDO_HOUSE_CUT: '0.1',
   CRASH_ENABLED: 'false', KENO_ENABLED: 'false', SOCKET_RATE: '100000', DEV_MODE: 'false', NODE_ENV: '', ADMIN_IDS: '5001', ADMIN_PASSWORD: 'admin-password-1',
 };

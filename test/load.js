@@ -15,7 +15,7 @@ const PORT = 3995;
 const URL = `http://localhost:${PORT}`;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-load-'));
 const env = {
-  ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
+  ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
   DEV_MODE: 'false', NODE_ENV: '', ADMIN_PASSWORD: 'admin-password-1', CRASH_BET_SEC: '4', CRASH_MAX_MULTIPLIER: '3', LOAD_TEST: '1',
   SOCKET_RATE: '100000', API_RATE_IP: '1000000', CONN_RATE_IP: '1000000',
 };

@@ -195,7 +195,7 @@ if (db.pragma('user_version', { simple: true }) < 1) {
 
 const stmts = {
   upsertUser: db.prepare(`
-    INSERT INTO users (id, username, first_name) VALUES (@id, @username, @first_name)
+    INSERT INTO users (id, username, first_name, lang) VALUES (@id, @username, @first_name, 'en')
     ON CONFLICT(id) DO UPDATE SET username = excluded.username, first_name = excluded.first_name
   `),
   getUser: db.prepare('SELECT * FROM users WHERE id = ?'),
@@ -238,7 +238,7 @@ export function upsertUser(u) {
 }
 
 export const getUser = (id) => stmts.getUser.get(String(id));
-export const setUserLang = (id, lang) => db.prepare('UPDATE users SET lang = ? WHERE id = ?').run(lang === 'en' ? 'en' : 'am', String(id));
+export const setUserLang = (id, lang) => db.prepare('UPDATE users SET lang = ? WHERE id = ?').run(lang === 'am' ? 'am' : 'en', String(id));
 export const getTx = (id) => stmts.getTx.get(id);
 export const history = (userId) => stmts.history.all(String(userId));
 export const pendingTx = () => stmts.pending.all();

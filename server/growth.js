@@ -51,14 +51,18 @@ export function recordReferral(newUser, inviterId, { wasNew }) {
   return db.prepare('UPDATE users SET referred_by = ? WHERE id = ? AND referred_by IS NULL').run(inviterId, uid).changes > 0;
 }
 
+/** All of a player's approved deposits, in cents. */
+export const depositedTotal = (uid) =>
+  db.prepare("SELECT COALESCE(SUM(amount),0) s FROM transactions WHERE user_id = ? AND type = 'deposit' AND status = 'approved'").get(String(uid)).s;
+
 /**
- * After a deposit is approved: pay the inviter once, if this was the friend's first qualifying deposit.
+ * After a deposit is approved: pay the inviter once, when the friend's deposits add up to the required amount.
  * Returns { inviterId, amount } when a bonus was paid.
  */
 export const onDepositApproved = db.transaction((tx) => {
   if (!g().referralBonus) return null;
   const u = db.prepare('SELECT id, referred_by, ref_paid FROM users WHERE id = ?').get(String(tx.user_id));
-  if (!u?.referred_by || u.ref_paid || tx.amount < g().referralMinDeposit) return null;
+  if (!u?.referred_by || u.ref_paid || Math.max(tx.amount, depositedTotal(u.id)) < g().referralMinDeposit) return null;
   db.prepare('UPDATE users SET ref_paid = 1 WHERE id = ?').run(u.id);
   if (shareDevice(u.id, u.referred_by)) {
     logAdmin({ name: 'system' }, 'referral_blocked', u.id, `same phone as inviter ${u.referred_by}`);
@@ -103,7 +107,8 @@ export function withdrawable(uid) {
   const balance = getUser(uid)?.balance || 0;
   const toPlay = Math.max(0, r.bonus * g().bonusWager - Math.max(0, r.wagered));
   const locked = Math.min(r.bonus, toPlay, balance);
-  return { balance, locked, withdrawable: balance - locked, toPlay };
+  const needDeposit = Math.max(0, g().withdrawMinDeposit - depositedTotal(uid));   // still to deposit before any withdrawal
+  return { balance, locked, withdrawable: needDeposit ? 0 : balance - locked, toPlay, needDeposit, minDeposit: g().withdrawMinDeposit };
 }
 
 export function referralInfo(uid) {

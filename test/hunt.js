@@ -9,7 +9,7 @@ import { io } from 'socket.io-client';
 
 const TOKEN = '123456:HUNT_TOKEN', PORT = 3970, URL = `http://localhost:${PORT}`;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-hunt-'));
-const env = { ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
+const env = { ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
   DEV_MODE: 'false', NODE_ENV: '', SOCKET_RATE: '100000', HUNT_MOVE_SEC: '1', HUNT_DELAY_SCALE: '0.05', HUNT_STAKES: '10,20', CRASH_ENABLED: 'false', KENO_ENABLED: 'false' };
 Object.assign(process.env, env);
 const sign = (user) => {

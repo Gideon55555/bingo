@@ -12,7 +12,7 @@ const PORT = 3990;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-keno-'));
 const URL = `http://localhost:${PORT}`;
 const env = {
-  ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
+  ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
   KENO_BET_SEC: '1.5', KENO_BALL_MS: '60', KENO_RESULT_SEC: '1', KENO_MIN_BET: '5', KENO_MAX_BET: '2000',
   CRASH_ENABLED: 'false', DEV_MODE: 'false', NODE_ENV: '', ADMIN_IDS: '4001', ADMIN_PASSWORD: 'admin-password-1',
 };

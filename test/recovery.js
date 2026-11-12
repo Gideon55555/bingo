@@ -13,7 +13,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-rec-'));
 const DB = path.join(tmp, 'bingo.db');
 const URL = `http://localhost:${PORT}`;
 const env = {
-  ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: DB, BACKUP_DIR: path.join(tmp, 'backups'),
+  ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: DB, BACKUP_DIR: path.join(tmp, 'backups'),
   COUNTDOWN_SEC: '1', CALL_INTERVAL_MS: '2000', RESULT_SHOW_SEC: '1', DEV_MODE: 'false', NODE_ENV: '',
 };
 Object.assign(process.env, env);

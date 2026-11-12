@@ -11,7 +11,7 @@ const PORT = 3989;
 const URL = `http://localhost:${PORT}`;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-growth-'));
 const env = {
-  ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
+  ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
   DEV_MODE: 'false', NODE_ENV: '', ADMIN_PASSWORD: 'admin-password-1', CRASH_ENABLED: 'false', KENO_ENABLED: 'false',
   REFERRAL_BONUS: '10', REFERRAL_MIN_DEPOSIT: '50', DAILY_REWARD: '2', BONUS_WAGER: '1', WALLET_RATE: '100', MAX_PENDING_DEPOSITS: '20', MIN_WITHDRAW: '1',
 };

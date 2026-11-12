@@ -12,7 +12,7 @@ const TOKEN = '123456:TEST_TOKEN';
 const PORT = 3988;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-multi-'));
 const env = {
-  ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
+  ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
   COUNTDOWN_SEC: '1', CALL_INTERVAL_MS: '20', RESULT_SHOW_SEC: '1', MIN_PLAYERS: '2', STAKES: '10', HOUSE_CUT: '0.2', BINGO_MAX_CARDS: '3',
   CRASH_ENABLED: 'false', KENO_ENABLED: 'false', LUDO_ENABLED: 'false', POOL_ENABLED: 'false', KERENBULA_ENABLED: 'false',
   DEV_MODE: 'false', NODE_ENV: '', SOCKET_RATE: '100000',

@@ -13,7 +13,7 @@ const URL = `http://localhost:${PORT}`;
 const SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-admin-'));
 const env = {
-  ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
+  ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
   DEV_MODE: 'false', NODE_ENV: '', ADMIN_PASSWORD: 'admin-password-1', ADMIN_TOTP_SECRET: SECRET,
   ADMIN_IDS: '111,222', WITHDRAW_SECOND_APPROVAL: '100', CRASH_ENABLED: 'false', KENO_ENABLED: 'false',
 };

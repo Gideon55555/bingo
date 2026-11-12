@@ -89,7 +89,7 @@ export const config = {
     maxBet: cents(process.env.KENO_MAX_BET, 2000),
     maxWin: cents(process.env.KENO_MAX_WIN, 100000),
     betSec: num(process.env.KENO_BET_SEC, 40),
-    ballMs: num(process.env.KENO_BALL_MS, 600),
+    ballMs: num(process.env.KENO_BALL_MS, 1600),
     resultSec: num(process.env.KENO_RESULT_SEC, 7),
   },
 
@@ -143,10 +143,11 @@ export const config = {
 
   // Growth: referrals, daily reward. Amounts in ETB in .env (0 = off).
   growth: {
-    signupBonus: cents(process.env.SIGNUP_BONUS, 0),                // to every new player (once per phone)
-    referralBonus: cents(process.env.REFERRAL_BONUS, 10),           // to the inviter
+    signupBonus: cents(process.env.SIGNUP_BONUS, 300),                // to every new player (once per phone)
+    referralBonus: cents(process.env.REFERRAL_BONUS, 50),           // to the inviter
     referralFriendBonus: cents(process.env.REFERRAL_FRIEND_BONUS, 0), // to the new player
-    referralMinDeposit: cents(process.env.REFERRAL_MIN_DEPOSIT, 50),   // friend's first deposit must be at least this
+    referralMinDeposit: cents(process.env.REFERRAL_MIN_DEPOSIT, 100),  // the friend must have deposited this much in total
+    withdrawMinDeposit: cents(process.env.WITHDRAW_MIN_DEPOSIT, 100),  // a player must have deposited this much in total before any withdrawal (0 = off)
     dailyReward: cents(process.env.DAILY_REWARD, 2),
     bonusWager: num(process.env.BONUS_WAGER, 1),                       // bonus must be played this many times before withdrawal
   },

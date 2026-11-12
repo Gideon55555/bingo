@@ -794,3 +794,32 @@ input, textarea, select { background: #2e060c; }
 @media (prefers-reduced-motion: reduce) { .p8-status b, .p8-power:not(.off), .p8-power .pp-label i { animation: none; } }
 
 .demo-ribbon { background: #f3c14b; color: #2a0509; text-align: center; font-size: 11px; font-weight: 800; padding: 2px 8px; letter-spacing: .3px; }
+
+/* ---------------- Keno: slower, more dramatic draw ---------------- */
+.kn-tray.kn2 { background: radial-gradient(circle at 12% 50%, #7a1424, #3a0811 70%); border: 1px solid var(--line); transition: box-shadow .4s; }
+.kn-tray.kn2.live { box-shadow: 0 0 0 1px var(--gold), 0 0 22px rgba(233, 185, 73, .25); }
+.kn-tray.kn2.tense { animation: knTense .85s ease-in-out infinite; }
+@keyframes knTense { 50% { box-shadow: 0 0 0 2px var(--red-hot), 0 0 30px rgba(255, 43, 67, .6); } }
+.kn-stage { position: relative; width: 84px; height: 84px; flex: none; display: grid; place-items: center; border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 0, 0, .55), rgba(0, 0, 0, .15) 70%); box-shadow: inset 0 4px 14px rgba(0, 0, 0, .6); }
+.kn2 .kn-bigball { position: relative; width: 70px; height: 70px; font-size: 30px; font-family: 'Score', sans-serif; color: #2a0509;
+  background: radial-gradient(circle at 35% 28%, #fff, #f1e6d0 55%, #b9a582); animation: knDrop 1s cubic-bezier(.3, 0, .2, 1) both; }
+.kn2 .kn-bigball span { animation: knNum .45s .5s cubic-bezier(.2, 1.7, .4, 1) both; }
+.kn2 .kn-bigball.idle { animation: knIdle 1.6s ease-in-out infinite; }
+.kn2 .kn-bigball.idle span { animation: none; }
+.kn2 .kn-bigball.hit { background: radial-gradient(circle at 35% 28%, #fff, #f1e6d0 55%, #b9a582); animation: knDrop 1s cubic-bezier(.3, 0, .2, 1) both, knGold .3s .5s both; }
+.kn2 .kn-bigball.hit::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 3px solid var(--gold-hi); opacity: 0; animation: knBurst .8s .5s ease-out; }
+@keyframes knDrop { 0% { transform: translateY(-90px) rotate(-540deg) scale(.55); opacity: 0; } 55% { transform: translateY(0) rotate(-40deg) scale(1.08); opacity: 1; }
+  72% { transform: translateY(-9px) rotate(0) scale(1); } 86% { transform: translateY(0) scale(1.03, .96); } 100% { transform: none; opacity: 1; } }
+@keyframes knNum { from { opacity: 0; transform: scale(.2); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes knGold { to { background: radial-gradient(circle at 35% 28%, #fff8d6, #ffd34d 55%, #ff9f1a); box-shadow: 0 0 26px rgba(255, 211, 77, .9); } }
+@keyframes knBurst { 0% { opacity: .9; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.9); } }
+@keyframes knIdle { 50% { transform: translateY(-4px) rotate(8deg); } }
+/* the number lands on the tray and the board a beat after the ball shows it */
+.kn2 .kn-ball.on { animation: knLandBall .4s .75s both; }
+@keyframes knLandBall { from { background: rgba(255, 255, 255, .08); color: transparent; transform: scale(.5); } }
+.kn-board.kn2 .kn-cell.drawn { animation: knLand .45s .75s both; }
+.kn-board.kn2 .kn-cell.hit { animation: knLandHit .6s .75s both; }
+@keyframes knLand { from { background: var(--bg2); color: inherit; } 60% { transform: scale(1.18); } }
+@keyframes knLandHit { from { background: var(--btn); color: var(--btn-text); transform: none; box-shadow: none; } 50% { transform: scale(1.45); box-shadow: 0 0 22px rgba(255, 211, 77, .95); } }
+@media (prefers-reduced-motion: reduce) { .kn2 .kn-bigball, .kn2 .kn-bigball span, .kn-tray.kn2.tense, .kn2 .kn-ball.on, .kn-board.kn2 .kn-cell { animation: none !important; } }

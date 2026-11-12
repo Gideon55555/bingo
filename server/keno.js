@@ -85,15 +85,16 @@ export class KenoGame {
     this.phase = 'drawing';
     this.revealed = [];
     this.broadcast();
-    this.ballTimer = setInterval(() => {
+    // One ball at a time; the last three come slower, for suspense.
+    const next = () => {
+      if (this.phase !== 'drawing') return;
       const n = this.drawn[this.revealed.length];
       this.revealed.push(n);
       this.io.to(this.channel).emit('keno:ball', { n, i: this.revealed.length - 1 });
-      if (this.revealed.length >= KENO_DRAWN) {
-        clearInterval(this.ballTimer);
-        this.timer = setTimeout(() => this.settle(), 800);
-      }
-    }, config.keno.ballMs);
+      if (this.revealed.length >= KENO_DRAWN) { this.timer = setTimeout(() => this.settle(), Math.max(800, config.keno.ballMs)); return; }
+      this.ballTimer = setTimeout(next, config.keno.ballMs * (this.revealed.length >= KENO_DRAWN - 3 ? 1.7 : 1));
+    };
+    this.ballTimer = setTimeout(next, Math.min(900, config.keno.ballMs));
   }
 
   settle() {

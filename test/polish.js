@@ -9,7 +9,7 @@ import { encryptFile, decryptFile } from '../server/crypto-backup.js';
 const PORT = 3987;
 const URL = `http://localhost:${PORT}`;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-polish-'));
-const env = { ...process.env, PORT, BOT_TOKEN: '1:x', BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
+const env = { ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: '1:x', BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
   DEV_MODE: 'false', NODE_ENV: '', ADMIN_PASSWORD: 'admin-password-1', CRASH_ENABLED: 'false', KENO_ENABLED: 'false' };
 let passed = 0;
 const ok = (n) => { passed++; console.log('  ✓', n); };

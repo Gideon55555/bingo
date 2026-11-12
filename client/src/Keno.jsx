@@ -33,13 +33,16 @@ export default function Keno({ cfg, balance }) {
   const [showInfo, setShowInfo] = useState(false);
   const endsAt = useRef(0);
 
+  const picksRef = useRef(new Set());
   useEffect(() => {
     const apply = (s) => {
       if (s.phase === 'betting') endsAt.current = performance.now() + s.bettingLeftMs;
       setSt(s);
     };
     const onBall = ({ n, i }) => {
-      haptic('light'); sfx('tap');
+      sfx('tap');
+      // the number shows a moment after the ball drops in — that's when a hit is felt
+      setTimeout(() => { if (picksRef.current.has(n)) { haptic('success'); sfx('pick'); } else haptic('light'); }, 520);
       setSt((p) => (p && p.revealed.length === i ? { ...p, revealed: [...p.revealed, n] } : p));
     };
     const onPlayers = ({ players }) => setSt((p) => (p ? { ...p, players } : p));
@@ -65,6 +68,7 @@ export default function Keno({ cfg, balance }) {
   const drawnSet = useMemo(() => new Set(revealed), [revealed]);
   const shownPicks = me ? me.picks : picks;
   const pickSet = useMemo(() => new Set(shownPicks), [shownPicks]);
+  picksRef.current = pickSet;
   const hitsSoFar = countHits(shownPicks, revealed);
   const amountCents = toCents(amount);
   const locked = !!me && phase !== 'results';
@@ -109,7 +113,7 @@ export default function Keno({ cfg, balance }) {
   // ---- status line ----
   let status;
   if (phase === 'betting') status = <>{t('nextDrawIn')} <b><Countdown endsAt={endsAt.current} /></b> · {t('tickets', { n: st.players })}</>;
-  else if (phase === 'drawing') status = <><b>{t('drawingN', { n: revealed.length })}</b>{n ? <> · <b className="kn-hitcount">{t('youHitSoFar', { n: hitsSoFar })}</b></> : null}</>;
+  else if (phase === 'drawing') status = <><b>{revealed.length >= 17 && revealed.length < 20 ? t('kenoLast') : t('drawingN', { n: revealed.length })}</b>{n ? <> · <b className="kn-hitcount">{t('youHitSoFar', { n: hitsSoFar })}</b></> : null}</>;
   else if (phase === 'results') status = me ? (me.win > 0 ? <b>{t('hitWon', { h: me.hits, p: me.picks.length, amount: `${fmt(me.win)} ${cfg.currency}` })}</b> : <>{t('hitNoWin', { h: me.hits, p: me.picks.length })}</>) : <>{t('drawDone')}</>;
   else status = <>{t('pausedMaint')}</>;
 
@@ -126,8 +130,10 @@ export default function Keno({ cfg, balance }) {
     <div className="keno">
       <div className={`kn-status ${phase}`}>{status}</div>
 
-      <div className="kn-tray">
-        <div className={`kn-bigball ${last && pickSet.has(last) ? 'hit' : ''}`} key={last || 'none'}>{last || '?'}</div>
+      <div className={`kn-tray kn2 ${phase === 'drawing' ? 'live' : ''} ${phase === 'drawing' && revealed.length >= 17 && revealed.length < 20 ? 'tense' : ''}`}>
+        <div className="kn-stage">
+          <div className={`kn-bigball ${last ? '' : 'idle'} ${last && pickSet.has(last) ? 'hit' : ''}`} key={last || 'none'}><span>{last || '?'}</span></div>
+        </div>
         <div className="kn-drawn">
           {Array.from({ length: 20 }, (_, i) => {
             const b = revealed[i];
@@ -136,7 +142,7 @@ export default function Keno({ cfg, balance }) {
         </div>
       </div>
 
-      <div className={`kn-board ${locked ? 'locked' : ''}`}>
+      <div className={`kn-board kn2 ${locked ? 'locked' : ''}`}>
         {NUMS.map((x) => {
           const picked = pickSet.has(x);
           const drawn = drawnSet.has(x);

@@ -10,7 +10,7 @@ import { R, POCKETS, canPlaceCue } from '../shared/pool.js';
 
 const TOKEN = '123456:TEST_TOKEN', PORT = 3981, URL = `http://localhost:${PORT}`;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-ct-'));
-const env = { ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'b.db'), BACKUP_DIR: path.join(tmp, 'bk'),
+const env = { ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'b.db'), BACKUP_DIR: path.join(tmp, 'bk'),
   POOL_SIZES: '2,3', POOL_STAKES: '10', POOL_SHOT_SEC: '1', POOL_DELAY_SCALE: '0.01', SOCKET_RATE: '100000',
   CRASH_ENABLED: 'false', KENO_ENABLED: 'false', LUDO_ENABLED: 'false', NODE_ENV: '', DEV_MODE: 'false' };
 Object.assign(process.env, env);

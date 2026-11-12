@@ -67,7 +67,7 @@ const M = {
 
 export const langOf = (userId) => {
   const l = getUser(userId)?.lang;
-  return l === 'en' ? 'en' : 'am';
+  return l === 'am' ? 'am' : 'en'; // English is the default
 };
 
 /** Translate a message key for a user. vars fill in {placeholders}. */

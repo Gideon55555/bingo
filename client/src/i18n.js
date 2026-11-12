@@ -6,7 +6,7 @@ const D = {
     // general
     loading: 'በመጫን ላይ…', games: 'ጨዋታዎች', play: 'ተጫወት', wallet: 'ቦርሳ', rules: 'ደንቦች', back: 'ተመለስ',
     join: 'ተቀላቀል', leave: 'ውጣ', cancel: 'ሰርዝ', gotIt: 'ገባኝ፣ እንጫወት', players: 'ተጫዋቾች', prize: 'ሽልማት', pot: 'ጠቅላላ ገንዘብ',
-    you: 'እርስዎ', demoRibbon: 'ማሳያ — የሙከራ ገንዘብ ብቻ · የማሳያ ተጫዋቾች በርተዋል', paused: 'ጨዋታዎች ለጥገና ቆመዋል። እባክዎ ቆይተው ይመለሱ።', pausedShort: 'ለጥገና ቆሟል', live: 'በቀጥታ',
+    you: 'እርስዎ', needDeposit: 'ለማውጣት በመጀመሪያ በድምሩ ቢያንስ {min} ማስገባት አለብዎት (ገና {more} ይቀራል)።', kenoLast: 'የመጨረሻ ኳሶች…', demoRibbon: 'ማሳያ — የሙከራ ገንዘብ ብቻ · የማሳያ ተጫዋቾች በርተዋል', paused: 'ጨዋታዎች ለጥገና ቆመዋል። እባክዎ ቆይተው ይመለሱ።', pausedShort: 'ለጥገና ቆሟል', live: 'በቀጥታ',
     playingNow: '{n} እየተጫወቱ', openFromBot: 'እባክዎ ይህን መተግበሪያ ከቴሌግራም ቦት ይክፈቱ።',
     replacedConn: 'መተግበሪያው በሌላ ስልክ ወይም መስኮት ተከፍቷል — እዚህ ተቋርጧል። ለመቀጠል እንደገና ይክፈቱ።',
     restarting: 'አገልጋዩ ለጥገና እየተነሳ ነው — እንደገና በመገናኘት ላይ… ያልተጠናቀቀ ጨዋታ ገንዘብ ይመለሳል።',
@@ -114,7 +114,7 @@ const D = {
   en: {
     loading: 'Loading…', games: 'Games', play: 'Play', wallet: 'Wallet', rules: 'Rules', back: 'Back',
     join: 'Join', leave: 'Leave', cancel: 'Cancel', gotIt: 'Got it — let’s play', players: 'Players', prize: 'Prize', pot: 'Pot',
-    you: 'you', demoRibbon: 'DEMO — test money only · demo players are on', paused: 'Games are paused for maintenance. Please check back soon.', pausedShort: 'Paused', live: 'LIVE',
+    you: 'you', needDeposit: 'To withdraw, first deposit at least {min} in total ({more} more to go).', kenoLast: 'Final balls…', demoRibbon: 'DEMO — test money only · demo players are on', paused: 'Games are paused for maintenance. Please check back soon.', pausedShort: 'Paused', live: 'LIVE',
     playingNow: '{n} playing', openFromBot: 'Please open this app from the Telegram bot.',
     replacedConn: 'The app was opened on another device or window — this one was disconnected. Reopen it to continue.',
     restarting: 'Server is restarting for maintenance — reconnecting… Any unfinished game entry is refunded.',
@@ -274,13 +274,13 @@ const PATTERNS_AM = [
 
 // ---- language state ----
 const KEY = 'app_lang';
-let lang = (() => { try { return localStorage.getItem(KEY) || 'am'; } catch { return 'am'; } })();
+let lang = (() => { try { return localStorage.getItem(KEY) === 'am' ? 'am' : 'en'; } catch { return 'en'; } })(); // English unless the player chose Amharic
 const listeners = new Set();
 document.documentElement.lang = lang;
 
 export const getLang = () => lang;
 export function setLang(l) {
-  lang = l === 'en' ? 'en' : 'am';
+  lang = l === 'am' ? 'am' : 'en';
   try { localStorage.setItem(KEY, lang); } catch { /* ignore */ }
   document.documentElement.lang = lang;
   listeners.forEach((f) => f());

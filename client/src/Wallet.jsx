@@ -74,7 +74,8 @@ export default function Wallet({ cfg, balance }) {
             <input inputMode="decimal" placeholder={t('amountMin', { min: fmt(cfg.minWithdraw) })} value={amount}
               onChange={(e) => setAmount(cleanAmount(e.target.value))} required />
             <input inputMode="tel" placeholder={t('phoneReceive')} value={phone} onChange={(e) => setPhone(e.target.value)} required />
-            {lock?.locked > 0 && <div className="small warn">{t('bonusLocked', { amount: `${fmt(lock.withdrawable)} ${cfg.currency}`, toPlay: `${fmt(lock.toPlay)} ${cfg.currency}` })}</div>}
+            {lock?.needDeposit > 0 && <div className="small warn">{t('needDeposit', { min: `${fmt(lock.minDeposit)} ${cfg.currency}`, more: `${fmt(lock.needDeposit)} ${cfg.currency}` })}</div>}
+            {lock?.locked > 0 && !lock?.needDeposit && <div className="small warn">{t('bonusLocked', { amount: `${fmt(lock.withdrawable)} ${cfg.currency}`, toPlay: `${fmt(lock.toPlay)} ${cfg.currency}` })}</div>}
           </>
         )}
         <button className="primary" disabled={busy}>{busy ? t('sending') : mode === 'deposit' ? t('submitDeposit') : t('requestWithdraw')}</button>

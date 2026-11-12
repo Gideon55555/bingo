@@ -249,6 +249,7 @@ app.post('/api/withdraw', requireAuth, walletLimit, (req, res) => {
     return res.status(400).json({ error: `Minimum withdrawal is ${money(config.minWithdraw)}` });
   if (!/^\+?\d{9,15}$/.test(phone)) return res.status(400).json({ error: 'Enter a valid phone number' });
   const w = growth.withdrawable(req.user.id);
+  if (w.needDeposit > 0) return res.status(400).json({ error: `To withdraw, first deposit at least ${money(w.minDeposit)} in total (${money(w.needDeposit)} more to go).` });
   if (amount > w.withdrawable && amount <= w.balance) {
     return res.status(400).json({ error: `You can withdraw up to ${money(w.withdrawable)} now. Play ${money(w.toPlay)} more to unlock your bonus money.` });
   }

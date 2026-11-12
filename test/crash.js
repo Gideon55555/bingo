@@ -13,7 +13,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-crash-'));
 const DB = path.join(tmp, 'bingo.db');
 const URL = `http://localhost:${PORT}`;
 const env = {
-  ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: DB, BACKUP_DIR: path.join(tmp, 'b'),
+  ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: DB, BACKUP_DIR: path.join(tmp, 'b'),
   CRASH_BET_SEC: '1.5', CRASH_MIN_BET: '5', CRASH_MAX_BET: '1000', CRASH_MAX_WIN: '100000',
   DEV_MODE: 'false', NODE_ENV: '', ADMIN_IDS: '3001', ADMIN_PASSWORD: 'admin-password-1',
 };

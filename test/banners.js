@@ -9,7 +9,7 @@ import sharp from 'sharp';
 
 const PORT = 3973, URL = `http://localhost:${PORT}`, TOKEN = '123456:BAN_TOKEN';
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bingo-banners-'));
-const env = { ...process.env, PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
+const env = { ...process.env, SIGNUP_BONUS: '0', WITHDRAW_MIN_DEPOSIT: '0', PORT, BOT_TOKEN: TOKEN, BOT_DISABLED: 'true', DB_PATH: path.join(tmp, 'bingo.db'), BACKUP_DIR: path.join(tmp, 'b'),
   DEV_MODE: 'false', NODE_ENV: '', ADMIN_PASSWORD: 'admin-password-1', CRASH_ENABLED: 'false', KENO_ENABLED: 'false' };
 const admin = { 'x-admin-key': 'admin-password-1' };
 const sign = (user) => {
