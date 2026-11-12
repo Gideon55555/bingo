@@ -239,6 +239,11 @@ export async function startBot({ actions, app }) {
         { command: 'help', description: 'All commands' },
       ], { scope: { type: 'chat', chat_id: Number(admin) } }).catch(() => {});
     }
+    // The bot's own name in Telegram follows the app name (Telegram allows this only a few times a day)
+    if (config.appName) {
+      const cur = await bot.api.getMyName().catch(() => null);
+      if (cur && cur.name !== config.appName) await bot.api.setMyName(config.appName).catch((e) => console.error('setMyName failed', e.message));
+    }
     if (config.webAppUrl) {
       await bot.api.setChatMenuButton({
         menu_button: { type: 'web_app', text: 'Play', web_app: { url: config.webAppUrl } },

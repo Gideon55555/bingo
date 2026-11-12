@@ -4,7 +4,7 @@ import { getUser } from './db.js';
 
 const M = {
   am: {
-    welcome: 'እንኳን ደህና መጡ! 🎮 ቢንጎ፣ አቪዬተር፣ ኬኖ፣ ሉዶ፣ ፑል እና ከረንቡላ ይጫወቱ። ለመጀመር ከታች ያለውን ቁልፍ ይጫኑ።',
+    welcome: 'እንኳን ወደ Amigos Bingo በደህና መጡ! 🎮 ቢንጎ፣ አቪዬተር፣ ኬኖ፣ ሉዶ፣ ፑል እና ከረንቡላ ይጫወቱ። ለመጀመር ከታች ያለውን ቁልፍ ይጫኑ።',
     refBonus: '🎁 የጋበዙት ጓደኛ ገንዘብ አስገብቷል — {amount} የግብዣ ጉርሻ ወደ ሂሳብዎ ተጨምሯል!',
     inviteOpen: '🎮 ጓደኛዎ ለጨዋታ ጋብዞዎታል! ለመቀላቀል ከታች ያለውን ቁልፍ ይጫኑ።', inviteButton: '🎮 ጨዋታውን ተቀላቀል',
     playButton: '🎮 ይጫወቱ',
@@ -34,7 +34,7 @@ const M = {
     kbLost: 'የከረንቡላ ጨዋታው አልቋል — {name} አሸንፏል። በሚቀጥለው መልካም ዕድል!',
   },
   en: {
-    welcome: 'Welcome! 🎮 Play Bingo, Aviator, Keno, Ludo, Pool and Kerenbula. Tap the button below to start.',
+    welcome: 'Welcome to Amigos Bingo! 🎮 Play Bingo, Aviator, Keno, Ludo, Pool and Kerenbula. Tap the button below to start.',
     refBonus: '🎁 A friend you invited made a deposit — {amount} referral bonus added to your balance!',
     inviteOpen: '🎮 A friend invited you to a match! Tap the button below to join.', inviteButton: '🎮 Join the match',
     playButton: '🎮 Play',

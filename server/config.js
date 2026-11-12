@@ -164,7 +164,7 @@ export const config = {
   maxPendingWithdrawals: num(process.env.MAX_PENDING_WITHDRAWALS, 2),
 
   // Name shown in the app header
-  appName: process.env.APP_NAME || '',
+  appName: process.env.APP_NAME ?? 'Amigos Bingo',
 
   // Shown on the Rules screen
   supportContact: process.env.SUPPORT_CONTACT || '',
