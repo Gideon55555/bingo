@@ -88,6 +88,7 @@ export const config = {
     minBet: cents(process.env.KENO_MIN_BET, 5),
     maxBet: cents(process.env.KENO_MAX_BET, 2000),
     maxWin: cents(process.env.KENO_MAX_WIN, 100000),
+    maxTickets: num(process.env.KENO_MAX_TICKETS, 100),      // tickets one player may hold per draw
     betSec: num(process.env.KENO_BET_SEC, 40),
     ballMs: num(process.env.KENO_BALL_MS, 1600),
     resultSec: num(process.env.KENO_RESULT_SEC, 7),

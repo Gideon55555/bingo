@@ -50,7 +50,8 @@ export class KenoGame {
     this.history = recentKeno(10);
     this.roundNo = (this.history[0]?.id || 0) + 1;
     this.phase = 'idle';
-    this.tickets = new Map();
+    this.tickets = new Map(); // `${uid}:${ticketId}` → ticket (a player can hold several per draw)
+    this.ticketSeq = 0;
   }
 
   start() {
@@ -102,7 +103,8 @@ export class KenoGame {
     const payouts = [];
     let betsTotal = 0;
     let payoutTotal = 0;
-    for (const [uid, t] of this.tickets) {
+    for (const t of this.tickets.values()) {
+      const uid = t.uid;
       t.hits = countHits(t.picks, this.drawn);
       t.win = Math.min(payoutFor(t.amount, t.picks.length, t.hits), config.keno.maxWin);
       betsTotal += t.amount;
@@ -114,7 +116,7 @@ export class KenoGame {
       bets_total: betsTotal, payout_total: payoutTotal, players: this.tickets.size,
     });
     for (const { userId } of payouts) this.onBalanceChange(userId);
-    for (const uid of this.tickets.keys()) this.io.to(`user:${uid}`).emit('keno:me', this.myTicket(uid));
+    for (const uid of new Set([...this.tickets.values()].map((t) => t.uid))) this.io.to(`user:${uid}`).emit('keno:me', this.myTicket(uid));
 
     this.phase = 'results';
     this.result = {
@@ -134,7 +136,8 @@ export class KenoGame {
     const uid = String(user.id);
     if (this.manager?.paused) throw new Error('Games are paused for maintenance. Please try again later.');
     if (this.phase !== 'betting') throw new Error('Tickets are closed — wait for the next round.');
-    if (this.tickets.has(uid)) throw new Error('You already have a ticket this round. Cancel it to change numbers.');
+    const mine = [...this.tickets.values()].filter((t) => t.uid === uid).length;
+    if (mine >= config.keno.maxTickets) throw new Error(`You can hold up to ${config.keno.maxTickets} tickets per draw`);
     picks = cleanPicks(picks);
     amount = Math.floor(Number(amount));
     const { minBet, maxBet } = config.keno;
@@ -145,22 +148,25 @@ export class KenoGame {
     if (!debit(uid, amount, 'bet', `${LABEL} ticket (${picks.length} numbers)`, this.roundId)) {
       throw new Error('Insufficient balance. Please deposit first.');
     }
-    this.tickets.set(uid, { name: user.first_name || user.username || 'Player', picks, amount, hits: null, win: null });
+    const id = ++this.ticketSeq;
+    this.tickets.set(`${uid}:${id}`, { id, uid, name: user.first_name || user.username || 'Player', picks, amount, hits: null, win: null });
     this.onBalanceChange(uid);
     this.emitPlayersSoon();
     return this.myTicket(uid);
   }
 
-  cancel(user) {
+  /** Cancel one ticket (id given) or all of the player's tickets for this draw — refunded. */
+  cancel(user, id) {
     const uid = String(user.id);
     if (this.phase !== 'betting') throw new Error('Too late to cancel — the draw has started.');
-    const t = this.tickets.get(uid);
-    if (!t) return null;
-    this.tickets.delete(uid);
-    credit(uid, t.amount, 'refund', `${LABEL} ticket cancelled`, this.roundId);
+    for (const [key, t] of [...this.tickets]) {
+      if (t.uid !== uid || (id != null && t.id !== Number(id))) continue;
+      this.tickets.delete(key);
+      credit(uid, t.amount, 'refund', `${LABEL} ticket cancelled`, this.roundId);
+    }
     this.onBalanceChange(uid);
     this.emitPlayersSoon();
-    return null;
+    return this.myTicket(uid);
   }
 
   // ---------------- pause / shutdown ----------------
@@ -185,8 +191,8 @@ export class KenoGame {
 
   // ---------------- state ----------------
   myTicket(uid) {
-    const t = this.tickets.get(String(uid));
-    return t ? { picks: t.picks, amount: t.amount, hits: t.hits, win: t.win } : null;
+    uid = String(uid);
+    return [...this.tickets.values()].filter((t) => t.uid === uid).map((t) => ({ id: t.id, picks: t.picks, amount: t.amount, hits: t.hits, win: t.win }));
   }
 
   publicState() {

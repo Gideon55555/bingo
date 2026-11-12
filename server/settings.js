@@ -70,6 +70,7 @@ export const SCHEMA = [
     F('keno.minBet', 'Minimum ticket', 'money', { min: 1, max: 100000 }),
     F('keno.maxBet', 'Maximum ticket', 'money', { min: 1, max: 1000000 }),
     F('keno.maxWin', 'Maximum win per ticket', 'money', { min: 1, max: 10000000 }),
+    F('keno.maxTickets', 'Tickets one player can hold per draw', 'int', { min: 1, max: 1000 }),
     F('keno.betSec', 'Ticket sales time (seconds)', 'int', { min: 10, max: 300 }),
     F('keno.ballMs', 'Seconds between drawn numbers', 'seconds', { min: 0.3, max: 5 }),
   ] },

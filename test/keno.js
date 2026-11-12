@@ -70,8 +70,14 @@ try {
   const picksA = [3, 17, 22, 41, 58, 77];
   assert.equal((await emit(s.A, 'keno:buy', { picks: picksA, amount: 1000 })).ok, true);
   assert.equal(db.getUser('4001').balance, 99000); ok('ticket charges balance');
-  assert.equal((await emit(s.A, 'keno:buy', { picks: [1], amount: 1000 })).ok, false); ok('one ticket per round');
-  await emit(s.A, 'keno:cancel');
+  let r2 = await emit(s.A, 'keno:buy', { picks: [1, 2], amount: 500 });
+  assert.equal(r2.ok, true); assert.equal(r2.me.length, 2); assert.equal(db.getUser('4001').balance, 98500); ok('a player can buy several tickets for one draw');
+  r2 = await emit(s.A, 'keno:buy', { picks: [9], amount: 500 });
+  assert.equal(r2.me.length, 3); assert.equal(db.getUser('4001').balance, 98000);
+  r2 = await emit(s.A, 'keno:cancel', { id: r2.me[1].id });
+  assert.equal(r2.me.length, 2); assert.equal(db.getUser('4001').balance, 98500); ok('one ticket can be cancelled on its own');
+  r2 = await emit(s.A, 'keno:cancel');
+  assert.equal(r2.me.length, 0);
   assert.equal(db.getUser('4001').balance, 100000); ok('cancel refunds');
   await emit(s.A, 'keno:buy', { picks: picksA, amount: 1000 });
   const picksB = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];

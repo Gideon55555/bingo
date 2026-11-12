@@ -25,7 +25,9 @@ function Countdown({ endsAt }) {
 export default function Keno({ cfg, balance }) {
   useLang();
   const [st, setSt] = useState(null);
-  const [me, setMe] = useState(null);
+  const [mine, setMine] = useState([]);   // my tickets for this draw (any number of them)
+  const setMe = (m) => setMine(Array.isArray(m) ? m : m ? [m] : []);
+  const roundRef = useRef(null);
   const [picks, setPicks] = useState(() => { try { return JSON.parse(loadPref('kn_picks', '[]')); } catch { return []; } });
   const [amount, setAmount] = useState(() => loadPref('kn_amount', '10'));
   const [queued, setQueued] = useState(false);
@@ -37,6 +39,7 @@ export default function Keno({ cfg, balance }) {
   useEffect(() => {
     const apply = (s) => {
       if (s.phase === 'betting') endsAt.current = performance.now() + s.bettingLeftMs;
+      if (s.phase === 'betting' && roundRef.current !== s.round) { roundRef.current = s.round; setMine([]); } // new draw: old tickets are done
       setSt(s);
     };
     const onBall = ({ n, i }) => {
@@ -66,18 +69,23 @@ export default function Keno({ cfg, balance }) {
   const phase = st?.phase;
   const revealed = st?.revealed || [];
   const drawnSet = useMemo(() => new Set(revealed), [revealed]);
-  const shownPicks = me ? me.picks : picks;
+  const inPlay = mine.length > 0 && (phase === 'drawing' || phase === 'results');
+  const me = mine.length === 1 ? mine[0] : null;                       // the simple one-ticket case
+  const shownPicks = useMemo(() => (inPlay ? [...new Set(mine.flatMap((x) => x.picks))].sort((a, b) => a - b) : picks), [inPlay, mine, picks]);
   const pickSet = useMemo(() => new Set(shownPicks), [shownPicks]);
   picksRef.current = pickSet;
-  const hitsSoFar = countHits(shownPicks, revealed);
+  const hitsSoFar = inPlay ? Math.max(...mine.map((x) => countHits(x.picks, revealed))) : countHits(picks, revealed);
   const amountCents = toCents(amount);
-  const locked = !!me && phase !== 'results';
+  const locked = mine.length > 0 && phase === 'drawing';
+  const totalStake = mine.reduce((a, x) => a + x.amount, 0);
+  const totalWin = mine.reduce((a, x) => a + (x.win || 0), 0);
+  const settled = phase === 'results' && mine.length > 0 && mine.every((x) => x.win != null);
 
   // Results feedback + auto-buy queued ticket when betting opens
   useEffect(() => {
-    if (phase === 'results' && me?.win != null) { haptic(me.win > 0 ? 'success' : 'error'); if (me.win > 0) sfx('win'); }
+    if (settled) { haptic(totalWin > 0 ? 'success' : 'error'); if (totalWin > 0) sfx('win'); }
     if (phase === 'betting' && queued) { setQueued(false); buy(); }
-  }, [phase, st?.round]);
+  }, [phase, st?.round, settled]);
 
   const toggle = (n) => {
     if (locked) return;
@@ -102,29 +110,29 @@ export default function Keno({ cfg, balance }) {
     savePref('kn_amount', amount);
     return run(async () => { const r = await emit('keno:buy', { picks, amount: amountCents }); setMe(r.me); haptic('medium'); });
   }
-  const cancel = () => run(async () => { await emit('keno:cancel'); setMe(null); });
+  const cancel = (id) => run(async () => { const r = await emit('keno:cancel', id ? { id } : {}); setMe(r.me); haptic('light'); });
 
   if (!st) return <div className="center muted">{t('loading')}</div>;
 
-  const n = shownPicks.length;
+  const n = me && inPlay ? me.picks.length : picks.length;
   const table = PAYTABLE[n] || {};
   const last = revealed[revealed.length - 1];
 
   // ---- status line ----
   let status;
   if (phase === 'betting') status = <>{t('nextDrawIn')} <b><Countdown endsAt={endsAt.current} /></b> · {t('tickets', { n: st.players })}</>;
-  else if (phase === 'drawing') status = <><b>{revealed.length >= 17 && revealed.length < 20 ? t('kenoLast') : t('drawingN', { n: revealed.length })}</b>{n ? <> · <b className="kn-hitcount">{t('youHitSoFar', { n: hitsSoFar })}</b></> : null}</>;
-  else if (phase === 'results') status = me ? (me.win > 0 ? <b>{t('hitWon', { h: me.hits, p: me.picks.length, amount: `${fmt(me.win)} ${cfg.currency}` })}</b> : <>{t('hitNoWin', { h: me.hits, p: me.picks.length })}</>) : <>{t('drawDone')}</>;
+  else if (phase === 'drawing') status = <><b>{revealed.length >= 17 && revealed.length < 20 ? t('kenoLast') : t('drawingN', { n: revealed.length })}</b>{inPlay ? <> · <b className="kn-hitcount">{t('youHitSoFar', { n: hitsSoFar })}</b></> : null}</>;
+  else if (phase === 'results' && mine.length > 1) status = totalWin > 0 ? <b>{t('kenoWonTotal', { n: mine.length, amount: `${fmt(totalWin)} ${cfg.currency}` })}</b> : <>{t('kenoNoWinN', { n: mine.length })}</>;
+  else if (phase === 'results') status = me && me.win != null ? (me.win > 0 ? <b>{t('hitWon', { h: me.hits, p: me.picks.length, amount: `${fmt(me.win)} ${cfg.currency}` })}</b> : <>{t('hitNoWin', { h: me.hits, p: me.picks.length })}</>) : <>{t('drawDone')}</>;
   else status = <>{t('pausedMaint')}</>;
 
   // ---- main button ----
   let btn;
   if (phase === 'paused') btn = <button key="p" className="rk-btn" disabled>{t('pausedShort')}</button>;
-  else if (phase === 'betting' && me) btn = <button key="c" className="rk-btn cancel" disabled={busy} onClick={cancel}>{t('cancelTicket')}<small>{t('nNumbers', { n: me.picks.length, amount: `${fmt(me.amount)} ${cfg.currency}` })}</small></button>;
-  else if (phase === 'betting') btn = <button key="b" className="rk-btn bet" disabled={busy || !n || !(amountCents > 0)} onClick={buy}>{n ? t('buyTicket') : t('pickNumbers')}<small>{n ? t('nNumbers', { n, amount: `${fmt(amountCents)} ${cfg.currency}` }) : t('pickRange', { max: KENO_MAX_PICKS })}</small></button>;
+  else if (phase === 'betting') btn = <button key="b" className="rk-btn bet" disabled={busy || !picks.length || !(amountCents > 0) || mine.length >= (cfg.keno.maxTickets || 100)} onClick={buy}>{!picks.length ? t('pickNumbers') : mine.length ? t('buyAnother') : t('buyTicket')}<small>{picks.length ? t('nNumbers', { n: picks.length, amount: `${fmt(amountCents)} ${cfg.currency}` }) : t('pickRange', { max: KENO_MAX_PICKS })}</small></button>;
   else if (queued) btn = <button key="q" className="rk-btn cancel" onClick={() => setQueued(false)}>{t('cancel')}<small>{t('cancelNextTicket')}</small></button>;
-  else if (locked) btn = <button key="l" className="rk-btn" disabled>{t('ticketInPlay')}<small>{t('nNumbers', { n: me.picks.length, amount: `${fmt(me.amount)} ${cfg.currency}` })}</small></button>;
-  else btn = <button key="n" className="rk-btn bet" disabled={!n || !(amountCents > 0)} onClick={() => { setQueued(true); haptic('light'); }}>{t('buy')}<small>{t('forNextDraw', { n: n || 0, amount: `${fmt(amountCents)} ${cfg.currency}` })}</small></button>;
+  else if (locked) btn = <button key="l" className="rk-btn" disabled>{t('ticketInPlay')}<small>{t('myTickets', { n: mine.length, amount: `${fmt(totalStake)} ${cfg.currency}` })}</small></button>;
+  else btn = <button key="n" className="rk-btn bet" disabled={!picks.length || !(amountCents > 0)} onClick={() => { setQueued(true); haptic('light'); }}>{t('buy')}<small>{t('forNextDraw', { n: picks.length || 0, amount: `${fmt(amountCents)} ${cfg.currency}` })}</small></button>;
 
   return (
     <div className="keno">
@@ -146,7 +154,7 @@ export default function Keno({ cfg, balance }) {
         {NUMS.map((x) => {
           const picked = pickSet.has(x);
           const drawn = drawnSet.has(x);
-          const cls = picked && drawn ? 'hit' : picked ? (phase === 'results' && me ? 'miss' : 'picked') : drawn ? 'drawn' : '';
+          const cls = picked && drawn && (inPlay || !mine.length) ? 'hit' : picked ? (phase === 'results' && inPlay ? 'miss' : 'picked') : drawn ? 'drawn' : '';
           return <button key={x} className={`kn-cell ${cls}`} onClick={() => toggle(x)}>{x}</button>;
         })}
       </div>
@@ -168,7 +176,27 @@ export default function Keno({ cfg, balance }) {
           {[5, 10, 50, 100].map((v) => <button key={v} disabled={locked} onClick={() => setAmt(v * 100)}>{v}</button>)}
         </div>
         {btn}
-        {!me && balance < amountCents && <div className="warn small center-text">{t('balanceLow')}</div>}
+        {phase === 'betting' && balance < amountCents && <div className="warn small center-text">{t('balanceLow')}</div>}
+        {mine.length > 0 && (
+          <div className="kn-mine">
+            <div className="row-between small">
+              <b>{t('myTickets', { n: mine.length, amount: `${fmt(totalStake)} ${cfg.currency}` })}</b>
+              {phase === 'betting' && mine.length > 1 && <button className="kn-x all" disabled={busy} onClick={() => cancel()}>{t('cancelAll')}</button>}
+            </div>
+            {mine.map((x) => {
+              const h = phase === 'betting' ? null : countHits(x.picks, revealed);
+              return (
+                <div key={x.id} className={`kn-tk ${x.win > 0 ? 'won' : ''}`}>
+                  <span className="kn-tk-nums">{x.picks.map((v) => <i key={v} className={phase !== 'betting' && drawnSet.has(v) ? 'hit' : ''}>{v}</i>)}</span>
+                  <span className="kn-tk-amt">{fmt(x.amount)}</span>
+                  {phase === 'betting' ? <button className="kn-x" disabled={busy} onClick={() => cancel(x.id)} aria-label={t('cancelTicket')}>✕</button>
+                    : x.win != null && phase === 'results' ? <b className="kn-tk-res">{x.win > 0 ? `+${fmt(x.win)}` : '—'}</b>
+                    : <b className="kn-tk-res">{h}/{x.picks.length}</b>}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {n > 0 && (
@@ -176,8 +204,8 @@ export default function Keno({ cfg, balance }) {
           <h3>{t('payoutsFor', { n })}</h3>
           <div className="kn-paygrid">
             {Object.entries(table).sort((a, b) => Number(b[0]) - Number(a[0])).map(([hits, mult]) => {
-              const active = (phase === 'drawing' || phase === 'results') && Number(hits) === hitsSoFar;
-              const stake = me ? me.amount : amountCents;
+              const active = me && inPlay && Number(hits) === hitsSoFar;
+              const stake = me && inPlay ? me.amount : amountCents;
               return (
                 <div key={hits} className={`kn-payrow ${active ? 'active' : ''}`}>
                   <span>{t('hits', { n: hits })}</span>

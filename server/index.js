@@ -145,7 +145,7 @@ app.get('/api/config', (_req, res) =>
           maxMisses: config.ludo.maxMisses, stepMs: config.ludo.stepMs }
       : null,
     keno: config.keno.enabled
-      ? { minBet: config.keno.minBet, maxBet: config.keno.maxBet, maxWin: config.keno.maxWin, betSec: config.keno.betSec }
+      ? { minBet: config.keno.minBet, maxBet: config.keno.maxBet, maxWin: config.keno.maxWin, maxTickets: config.keno.maxTickets, betSec: config.keno.betSec }
       : null,
     devMode: config.devMode,
     demo: config.demo.players && !config.production,
@@ -468,7 +468,7 @@ io.on('connection', (socket) => {
   });
   handle('keno:exit', () => { socket.leave('keno'); });
   handle('keno:buy', ({ picks, amount }) => isOn('keno') || ({ me: keno().buy(getUser(user.id), picks, amount) }));
-  handle('keno:cancel', () => ({ me: keno().cancel(user) }));
+  handle('keno:cancel', ({ id } = {}) => ({ me: keno().cancel(user, id) }));
 
   handle('crash:cashout', () => ({ me: crash().myBet(user.id), cashed: !!crash().cashout(user) }));
 });

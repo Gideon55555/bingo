@@ -823,3 +823,16 @@ input, textarea, select { background: #2e060c; }
 @keyframes knLand { from { background: var(--bg2); color: inherit; } 60% { transform: scale(1.18); } }
 @keyframes knLandHit { from { background: var(--btn); color: var(--btn-text); transform: none; box-shadow: none; } 50% { transform: scale(1.45); box-shadow: 0 0 22px rgba(255, 211, 77, .95); } }
 @media (prefers-reduced-motion: reduce) { .kn2 .kn-bigball, .kn2 .kn-bigball span, .kn-tray.kn2.tense, .kn2 .kn-ball.on, .kn-board.kn2 .kn-cell { animation: none !important; } }
+
+/* Keno: my tickets */
+.kn-mine { display: grid; gap: 5px; margin-top: 4px; padding: 8px; border-radius: 12px; background: rgba(0, 0, 0, .22); border: 1px solid var(--line); max-height: 190px; overflow-y: auto; }
+.kn-tk { display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 8px; border-radius: 9px; background: rgba(255, 255, 255, .05); }
+.kn-tk.won { background: rgba(255, 211, 77, .16); box-shadow: inset 0 0 0 1px rgba(255, 211, 77, .6); }
+.kn-tk-nums { flex: 1; display: flex; flex-wrap: wrap; gap: 3px; }
+.kn-tk-nums i { font-style: normal; font-size: 11px; font-weight: 800; min-width: 20px; height: 20px; padding: 0 3px; border-radius: 10px; display: grid; place-items: center; background: rgba(255, 255, 255, .1); }
+.kn-tk-nums i.hit { background: #ffd34d; color: #3a2500; }
+.kn-tk-amt { font-size: 12px; font-weight: 700; color: var(--gold-hi); white-space: nowrap; }
+.kn-tk-res { font-size: 13px; min-width: 38px; text-align: right; }
+.kn-tk.won .kn-tk-res { color: #ffd34d; }
+.kn-x { width: 26px; height: 26px; padding: 0; border-radius: 50%; background: rgba(255, 43, 67, .25); color: #ffd9de; font-size: 12px; font-weight: 800; flex: none; }
+.kn-x.all { width: auto; height: auto; padding: 3px 10px; border-radius: 999px; font-size: 11px; }
