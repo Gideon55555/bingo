@@ -104,8 +104,16 @@ app.use(express.json({ limit: '20kb' }));
 app.use('/api', limit('api', config.apiRateIp, 60 * 1000)); // per IP (generous: many phones share one carrier IP)
 
 // Health check for uptime monitors / load balancers: 200 when healthy, 503 when not
+// Which code is running: the git commit the server started from and when the app was last built.
+const VERSION = (() => {
+  const at = (f) => { try { return fs.statSync(f).mtime.toISOString().slice(0, 16).replace('T', ' '); } catch { return null; } };
+  let commit = null;
+  try { commit = execSync('git log -1 --format=%h\ %s', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* no git */ }
+  return { commit, built: at(path.join(ROOT, 'dist', 'index.html')) };
+})();
+console.log(`Version: ${VERSION.commit || 'unknown'} · app built ${VERSION.built || 'never — run "npm run build"'}`);
 app.get('/healthz', (_req, res) => {
-  const h = health(shuttingDown);
+  const h = { ...health(shuttingDown), version: VERSION };
   res.status(h.ok ? 200 : 503).set('Cache-Control', 'no-store').json(h);
 });
 
